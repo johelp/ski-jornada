@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Profesor {
+  id               String   @id @default(uuid())
+  email            String   @unique
+  nombre           String
+  apellidos        String
+  password         String   @default("")
+  tipoJornada      String   @default("COMPLETA")
+  horasContrato    Int      @default(35)
+  role             String   @default("PROFESOR")
+  activo           Boolean  @default(true)
+  telefono         String?
+  horaRecordatorio String   @default("17:00")
+  createdAt        DateTime @default(now())
+
+  registros      RegistroJornada[]
+  solicitudes    SolicitudLibre[]
+  firmasRegistro FirmaRegistro[]
+  documentos     DocumentoLegajo[]
+}
+
+model ZonaFichaje {
+  id             String   @id @default(uuid())
+  nombre         String
+  descripcion    String   @default("")
+  secret         String   @default("")
+  lat            Float?
+  lng            Float?
+  radio          Int      @default(100)
+  validationMode String   @default("TOTP_GPS")
+  activa         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  registros RegistroJornada[]
+}
+
+model RegistroJornada {
+  id           String      @id @default(uuid())
+  profesorId   String
+  profesor     Profesor    @relation(fields: [profesorId], references: [id])
+  zonaId       String
+  zonaNombre   String
+  zona         ZonaFichaje @relation(fields: [zonaId], references: [id])
+  tipo         String
+  timestamp    DateTime    @default(now())
+  lat          Float?
+  lng          Float?
+  distancia    Int?
+  esIncidencia Boolean     @default(false)
+}
+
+model SolicitudLibre {
+  id             String    @id @default(uuid())
+  profesorId     String
+  profesor       Profesor  @relation(fields: [profesorId], references: [id])
+  fechaInicio    DateTime
+  fechaFin       DateTime
+  motivo         String
+  comentario     String?
+  estado         String    @default("PENDIENTE")
+  observacion    String?
+  aprobadoPor    String?
+  fechaRespuesta DateTime?
+  createdAt      DateTime  @default(now())
+}
+
+model FirmaRegistro {
+  id             String    @id @default(uuid())
+  profesorId     String
+  profesor       Profesor  @relation(fields: [profesorId], references: [id])
+  mes            String
+  estado         String    @default("PENDIENTE")
+  emailEnviadoAt DateTime?
+  pdfFirmadoPath String?
+  firmadoAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@unique([profesorId, mes])
+}
+
+model DocumentoLegajo {
+  id          String    @id @default(uuid())
+  profesorId  String
+  profesor    Profesor  @relation(fields: [profesorId], references: [id])
+  tipo        String
+  nombre      String
+  mes         String?
+  archivoPath String
+  subidoPor   String
+  estado      String    @default("PENDIENTE")
+  firmaPath   String?
+  firmadoAt   DateTime?
+  createdAt   DateTime  @default(now())
+}
