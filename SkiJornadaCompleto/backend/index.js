@@ -55,6 +55,16 @@ const upload = multer({
   },
 });
 
+// Para firmas de canvas (acepta PDF e imágenes)
+const uploadFirma = multer({
+  storage,
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (['application/pdf', 'image/png', 'image/jpeg'].includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Formato no permitido'));
+  },
+});
+
 app.use('/uploads', express.static(UPLOAD_DIR));
 
 // ============ EMAIL ============
@@ -371,6 +381,36 @@ app.post('/api/fichaje/fichar', auth, async (req, res) => {
   }
 });
 
+app.post('/api/fichaje/salida', auth, async (req, res) => {
+  try {
+    const ahora = new Date();
+    const inicioDia = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+    const finDia    = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 23, 59, 59, 999);
+    const registrosHoy = await prisma.registroJornada.findMany({
+      where: { profesorId: req.user.userId, timestamp: { gte: inicioDia, lte: finDia } },
+      orderBy: { timestamp: 'asc' },
+    });
+    const ultimo = registrosHoy[registrosHoy.length - 1];
+    if (!ultimo || ultimo.tipo !== 'ENTRADA')
+      return res.status(400).json({ error: 'No hay entrada activa para registrar salida.' });
+    await prisma.registroJornada.create({
+      data: {
+        profesorId: req.user.userId,
+        zonaId: ultimo.zonaId,
+        zonaNombre: ultimo.zonaNombre,
+        tipo: 'SALIDA',
+        timestamp: ahora,
+        lat: null, lng: null, distancia: null,
+      },
+    });
+    res.json({
+      success: true, tipo: 'SALIDA',
+      hora: ahora.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+      timestamp: ahora.toISOString(),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error registrando salida' }); }
+});
+
 app.get('/api/fichaje/historial', auth, async (req, res) => {
   try {
     const registros = await prisma.registroJornada.findMany({
@@ -579,6 +619,91 @@ app.delete('/api/admin/profesores/:id', auth, adminOnly, async (req, res) => {
 });
 
 // ============ INFORMES ============
+function countWorkingDays(anio, mes) {
+  let count = 0;
+  const days = new Date(anio, mes, 0).getDate();
+  for (let d = 1; d <= days; d++) {
+    const wd = new Date(anio, mes - 1, d).getDay();
+    if (wd !== 0 && wd !== 6) count++;
+  }
+  return count;
+}
+
+app.get('/api/admin/planilla/:mes/:anio', auth, adminOnly, async (req, res) => {
+  try {
+    const mesNum = parseInt(req.params.mes), anioNum = parseInt(req.params.anio);
+    const inicio = new Date(anioNum, mesNum - 1, 1);
+    const fin    = new Date(anioNum, mesNum, 0, 23, 59, 59, 999);
+    const diasLaborables = countWorkingDays(anioNum, mesNum);
+
+    const [profesores, todosRegistros] = await Promise.all([
+      prisma.profesor.findMany({ where: { activo: true }, orderBy: { apellidos: 'asc' } }),
+      prisma.registroJornada.findMany({ where: { timestamp: { gte: inicio, lte: fin } }, orderBy: { timestamp: 'asc' } }),
+    ]);
+
+    const porProfesor = {};
+    todosRegistros.forEach(r => {
+      if (!porProfesor[r.profesorId]) porProfesor[r.profesorId] = [];
+      porProfesor[r.profesorId].push(r);
+    });
+
+    const resultado = profesores.map(p => {
+      const horasDiarias  = p.horasContrato / 5;
+      const horasEsperadas = Math.round(horasDiarias * diasLaborables * 100) / 100;
+      const regs = porProfesor[p.id] || [];
+
+      if (!regs.length) return {
+        id: p.id, nombre: p.nombre, apellidos: p.apellidos, email: p.email,
+        tipoJornada: p.tipoJornada, horasContrato: p.horasContrato,
+        horasEsperadas, horasTrabajadas: 0,
+        horasExceso: 0, horasDeficit: horasEsperadas,
+        diasTrabajados: 0, diasConExceso: 0,
+        cumplimiento: 0, estado: 'SIN_DATOS',
+      };
+
+      const porDia = {};
+      regs.forEach(r => {
+        const dia = fechaLocal(r.timestamp);
+        if (!porDia[dia]) porDia[dia] = [];
+        porDia[dia].push(r);
+      });
+
+      let totalHoras = 0, diasConExceso = 0;
+      Object.values(porDia).forEach(dRegs => {
+        const h = calcularHorasMs(dRegs) / 3_600_000;
+        totalHoras += h;
+        if (h > horasDiarias + 0.05) diasConExceso++;
+      });
+
+      const exceso  = Math.max(0, totalHoras - horasEsperadas);
+      const deficit = Math.max(0, horasEsperadas - totalHoras);
+      const cumplimiento = horasEsperadas > 0 ? Math.round(totalHoras / horasEsperadas * 1000) / 10 : 0;
+      const estado = exceso > 1 ? 'EXCESO' : deficit > 2 ? 'DEFICIT' : totalHoras === 0 ? 'SIN_DATOS' : 'OK';
+
+      return {
+        id: p.id, nombre: p.nombre, apellidos: p.apellidos, email: p.email,
+        tipoJornada: p.tipoJornada, horasContrato: p.horasContrato,
+        horasEsperadas,
+        horasTrabajadas: Math.round(totalHoras * 100) / 100,
+        horasExceso:     Math.round(exceso  * 100) / 100,
+        horasDeficit:    Math.round(deficit * 100) / 100,
+        diasTrabajados:  Object.keys(porDia).length, diasConExceso,
+        cumplimiento, estado,
+      };
+    });
+
+    const totTrabajadas = Math.round(resultado.reduce((s, p) => s + p.horasTrabajadas, 0) * 100) / 100;
+    const totEsperadas  = Math.round(resultado.reduce((s, p) => s + p.horasEsperadas,  0) * 100) / 100;
+
+    res.json({
+      mes: req.params.mes, anio: req.params.anio, diasLaborables,
+      totTrabajadas, totEsperadas,
+      cumplimientoGlobal: totEsperadas > 0 ? Math.round(totTrabajadas / totEsperadas * 1000) / 10 : 0,
+      profesores: resultado,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error generando planilla' }); }
+});
+
 app.get('/api/informe/:mes/:anio', auth, async (req, res) => {
   try {
     const { mes, anio } = req.params;
@@ -778,7 +903,7 @@ app.get('/api/documentos/mis-documentos', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Error obteniendo documentos' }); }
 });
 
-app.post('/api/documentos/:id/firmar', auth, upload.single('pdf'), async (req, res) => {
+app.post('/api/documentos/:id/firmar', auth, uploadFirma.single('pdf'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No se recibió ningún archivo' });
 
@@ -872,6 +997,93 @@ app.get('/api/admin/fichajes-activos', auth, adminOnly, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Error obteniendo fichajes activos' });
   }
+});
+
+// ============ NOTIFICACIONES ============
+app.get('/api/notificaciones', auth, async (req, res) => {
+  try {
+    const notifs = await prisma.notificacion.findMany({
+      where: { profesorId: req.user.userId },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: { enviadaPor: { select: { nombre: true, apellidos: true } } },
+    });
+    res.json(notifs.map(n => ({ ...n, enviadoPorNombre: `${n.enviadaPor.nombre} ${n.enviadaPor.apellidos}` })));
+  } catch (err) { res.status(500).json({ error: 'Error' }); }
+});
+
+app.post('/api/notificaciones/leer-todas', auth, async (req, res) => {
+  try {
+    await prisma.notificacion.updateMany({ where: { profesorId: req.user.userId, leida: false }, data: { leida: true } });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Error' }); }
+});
+
+app.post('/api/notificaciones/:id/leer', auth, async (req, res) => {
+  try {
+    await prisma.notificacion.updateMany({ where: { id: req.params.id, profesorId: req.user.userId }, data: { leida: true } });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Error' }); }
+});
+
+app.post('/api/admin/notificaciones', auth, adminOnly, async (req, res) => {
+  try {
+    const { titulo, mensaje, tipo = 'INFO', destinatarioId } = req.body;
+    if (!titulo || !mensaje) return res.status(400).json({ error: 'Faltan título y mensaje' });
+    const destinatarios = destinatarioId
+      ? [{ id: destinatarioId }]
+      : await prisma.profesor.findMany({ where: { activo: true, NOT: { id: req.user.userId } }, select: { id: true } });
+    if (!destinatarios.length) return res.status(400).json({ error: 'No hay destinatarios activos' });
+    await prisma.notificacion.createMany({
+      data: destinatarios.map(p => ({ titulo, mensaje, tipo, profesorId: p.id, enviadaPorId: req.user.userId })),
+    });
+    res.json({ success: true, enviadas: destinatarios.length });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error enviando notificación' }); }
+});
+
+app.get('/api/admin/notificaciones', auth, adminOnly, async (req, res) => {
+  try {
+    const notifs = await prisma.notificacion.findMany({
+      orderBy: { createdAt: 'desc' }, take: 200,
+      include: {
+        profesor:   { select: { nombre: true, apellidos: true } },
+        enviadaPor: { select: { nombre: true, apellidos: true } },
+      },
+    });
+    res.json(notifs.map(n => ({
+      ...n,
+      profesorNombre:    `${n.profesor.nombre} ${n.profesor.apellidos}`,
+      enviadoPorNombre:  `${n.enviadaPor.nombre} ${n.enviadaPor.apellidos}`,
+    })));
+  } catch (err) { res.status(500).json({ error: 'Error' }); }
+});
+
+app.delete('/api/admin/notificaciones/:id', auth, adminOnly, async (req, res) => {
+  try {
+    await prisma.notificacion.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Error' }); }
+});
+
+// ============ CONFIG ESCUELA ============
+async function getConfig() {
+  return prisma.configEscuela.upsert({ where: { id: 'default' }, create: { id: 'default' }, update: {} });
+}
+
+app.get('/api/config', async (req, res) => {
+  try { res.json(await getConfig()); } catch (err) { res.status(500).json({ error: 'Error' }); }
+});
+
+app.put('/api/admin/config', auth, adminOnly, async (req, res) => {
+  try {
+    const { nombre, cif, direccion, telefono, email, colorPrimario } = req.body;
+    const config = await prisma.configEscuela.upsert({
+      where: { id: 'default' },
+      create: { id: 'default', nombre, cif, direccion, telefono, email, colorPrimario },
+      update: { nombre, cif, direccion, telefono, email, colorPrimario },
+    });
+    res.json(config);
+  } catch (err) { res.status(500).json({ error: 'Error guardando configuración' }); }
 });
 
 // ============ WHATSAPP (Baileys) ============

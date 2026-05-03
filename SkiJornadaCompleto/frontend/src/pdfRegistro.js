@@ -4,15 +4,24 @@ import autoTable from 'jspdf-autotable';
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const DIAS_SEMANA = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
 
-const COLOR_PRIMARY = [15, 76, 129];
 const COLOR_LIGHT   = [240, 247, 255];
 const COLOR_DARK    = [30, 41, 59];
 const COLOR_MUTED   = [100, 116, 139];
 const COLOR_WARN    = [245, 158, 11];
 const COLOR_WHITE   = [255, 255, 255];
 
+function hexToRgb(hex) {
+  const m = (hex || '#0f4c81').replace('#', '').match(/.{2}/g);
+  return m ? m.map(c => parseInt(c, 16)) : [15, 76, 129];
+}
+
 function _buildPDF(informe, opciones = {}) {
-  const { incluirExtras = true } = opciones;
+  const { incluirExtras = true, config = {} } = opciones;
+  const COLOR_PRIMARY = hexToRgb(config.colorPrimario || '#0f4c81');
+  const escuelaNombre = config.nombre     || 'Escuela de Esquí Sierra Nevada';
+  const escuelaDirec  = config.direccion  || 'Sierra Nevada, Granada';
+  const escuelaTel    = config.telefono   || '958 000 000';
+  const escuelaCif    = config.cif        || 'B12345678';
   const { profesor, mesNum, anio, detalle, totalHoras, totalExceso, diasTrabajados, diasConExceso, promedioDiario } = informe;
   const mesNombre = MESES[parseInt(mesNum) - 1];
 
@@ -32,9 +41,9 @@ function _buildPDF(informe, opciones = {}) {
 
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.text('Escuela de Esquí Sierra Nevada', 14, 23);
-  doc.text('Sierra Nevada, Granada · Tel: 958 000 000', 14, 28);
-  doc.text('CIF: B12345678', 14, 33);
+  doc.text(escuelaNombre, 14, 23);
+  doc.text(`${escuelaDirec} · Tel: ${escuelaTel}`, 14, 28);
+  doc.text(`CIF: ${escuelaCif}`, 14, 33);
 
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
@@ -266,13 +275,13 @@ function _buildPDF(informe, opciones = {}) {
   doc.setFont('helvetica', 'bold');
   doc.text('Firma y sello de la empresa', fx2 + fw / 2, firmaY + 5, { align: 'center' });
   doc.setFont('helvetica', 'normal');
-  doc.text('Escuela de Esquí Sierra Nevada', fx2 + fw / 2, firmaY + 10, { align: 'center' });
+  doc.text(escuelaNombre, fx2 + fw / 2, firmaY + 10, { align: 'center' });
   doc.text('Responsable: _________________', fx2 + fw / 2, firmaY + 15, { align: 'center' });
   doc.text(`Fecha: ________________________`, fx2 + fw / 2, firmaY + 20, { align: 'center' });
 
   // ===== PIE LEGAL =====
   const footerY = H - 18;
-  doc.setFillColor(15, 76, 129);
+  doc.setFillColor(...COLOR_PRIMARY);
   doc.rect(0, footerY, W, 18, 'F');
   doc.setTextColor(...COLOR_WHITE);
   doc.setFontSize(7);

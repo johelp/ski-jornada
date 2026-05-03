@@ -21,10 +21,12 @@ model Profesor {
   horaRecordatorio String   @default("17:00")
   createdAt        DateTime @default(now())
 
-  registros      RegistroJornada[]
-  solicitudes    SolicitudLibre[]
-  firmasRegistro FirmaRegistro[]
-  documentos     DocumentoLegajo[]
+  registros                RegistroJornada[]
+  solicitudes              SolicitudLibre[]
+  firmasRegistro           FirmaRegistro[]
+  documentos               DocumentoLegajo[]
+  notificacionesRecibidas  Notificacion[] @relation("NotifRecibidas")
+  notificacionesEnviadas   Notificacion[] @relation("NotifEnviadas")
 }
 
 model ZonaFichaje {
@@ -99,4 +101,28 @@ model DocumentoLegajo {
   firmaPath   String?
   firmadoAt   DateTime?
   createdAt   DateTime  @default(now())
+}
+
+model Notificacion {
+  id           String   @id @default(uuid())
+  titulo       String
+  mensaje      String
+  tipo         String   @default("INFO")
+  profesorId   String
+  enviadaPorId String
+  leida        Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  profesor     Profesor @relation("NotifRecibidas", fields: [profesorId],   references: [id])
+  enviadaPor   Profesor @relation("NotifEnviadas",  fields: [enviadaPorId], references: [id])
+}
+
+model ConfigEscuela {
+  id            String   @id @default("default")
+  nombre        String   @default("Escuela de Esquí Sierra Nevada")
+  cif           String   @default("B12345678")
+  direccion     String   @default("Sierra Nevada, Granada")
+  telefono      String   @default("958 000 000")
+  email         String   @default("")
+  colorPrimario String   @default("#0f4c81")
+  updatedAt     DateTime @updatedAt
 }

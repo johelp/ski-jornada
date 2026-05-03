@@ -233,6 +233,7 @@ function App() {
   const [modoEmpleado, setModoEmpleado] = useState(false);
   const [toast, setToast]   = useState(null);
   const [cargando, setCargando] = useState(false);
+  const [confirmarSalida, setConfirmarSalida] = useState(false);
 
   // Server time
   const [serverTimeOffset, setServerTimeOffset] = useState(0);
@@ -274,12 +275,21 @@ function App() {
   const [zonasAdmin, setZonasAdmin]                 = useState([]);
   const [informeMensual, setInformeMensual]         = useState(null);
   const [informeAusencias, setInformeAusencias]     = useState(null);
+  const [planillaData, setPlanillaData]             = useState(null);
+  const [informeTab, setInformeTab]                 = useState('registro');
+  const [planillaOrden, setPlanillaOrden]           = useState('apellidos');
+  const [planillaDir, setPlanillaDir]               = useState('asc');
   const [profesorInforme, setProfesorInforme]       = useState('');
   const [documentosAdmin, setDocumentosAdmin]       = useState([]);
   const [docFiltro, setDocFiltro]                   = useState('todos');
   const [pdfIncluirExtras, setPdfIncluirExtras]     = useState(false);
   const [whatsappStatus, setWhatsappStatus]         = useState(null);
   const [presencia, setPresencia]                   = useState(null);
+  const [notificaciones, setNotificaciones]         = useState([]);
+  const [notifPanel, setNotifPanel]                 = useState(false);
+  const [notifAdmin, setNotifAdmin]                 = useState([]);
+  const [nuevaNotif, setNuevaNotif]                 = useState({ titulo: '', mensaje: '', tipo: 'INFO', destinatarioId: '' });
+  const [configEscuela, setConfigEscuela]           = useState(null);
 
   // Forms
   const [fechaInicio, setFechaInicio]         = useState('');
@@ -413,6 +423,11 @@ function App() {
     const r = await api.get('/api/admin/informe-libres', { headers: h() });
     setInformeAusencias(r.data);
   }), [token]);
+  const cargarPlanilla = useCallback(() => load(async () => {
+    const [anio, mes] = mesInforme.split('-');
+    const r = await api.get(`/api/admin/planilla/${mes}/${anio}`, { headers: h() });
+    setPlanillaData(r.data);
+  }), [token, mesInforme]);
   const cargarDocumentosAdmin = useCallback(() => load(async () => {
     const r = await api.get('/api/admin/documentos', { headers: h() });
     setDocumentosAdmin(r.data);
@@ -425,16 +440,37 @@ function App() {
     const r = await api.get('/api/admin/fichajes-activos', { headers: h() });
     setPresencia(r.data);
   }), [token]);
+  const cargarNotificaciones = useCallback(() => load(async () => {
+    const r = await api.get('/api/notificaciones', { headers: h() });
+    setNotificaciones(r.data);
+  }), [token]);
+  const cargarNotifAdmin = useCallback(() => load(async () => {
+    const r = await api.get('/api/admin/notificaciones', { headers: h() });
+    setNotifAdmin(r.data);
+  }), [token]);
+  const cargarConfig = useCallback(() => load(async () => {
+    const r = await api.get('/api/config');
+    setConfigEscuela(r.data);
+  }), []);
 
   useEffect(() => {
     if (token && user) {
       cargarHistorial(); cargarSolicitudes(); cargarMisDocumentos();
+      cargarNotificaciones(); cargarConfig();
       if (user.role === 'ADMIN') {
         cargarAdminSolicitudes(); cargarProfesores(); cargarZonasAdmin(); cargarDocumentosAdmin();
+        cargarNotifAdmin();
         api.get('/api/whatsapp/status', { headers: h() }).then(r => setWhatsappStatus(r.data)).catch(() => {});
       }
     }
   }, [token]);
+
+  // Poll notifications every 60s
+  useEffect(() => {
+    if (!token) return;
+    const iv = setInterval(cargarNotificaciones, 60000);
+    return () => clearInterval(iv);
+  }, [token, cargarNotificaciones]);
 
   // ===== QR SCANNER =====
   const iniciarScanner = async () => {
@@ -536,6 +572,54 @@ function App() {
       toast$(`${res.data.tipo === 'ENTRADA' ? '▶ Entrada' : '■ Salida'} registrada a las ${res.data.hora}`, 'success');
       cargarHistorial(); setQrCode('');
     } catch (err) { toast$(err.response?.data?.error || err.message, 'error', 5000); }
+    finally { setCargando(false); }
+  };
+
+  const registrarSalida = async () => {
+    setConfirmarSalida(false);
+    setCargando(true);
+    try {
+      const res = await api.post('/api/fichaje/salida', {}, { headers: h() });
+      toast$(`■ Salida registrada a las ${res.data.hora}`, 'success');
+      cargarHistorial();
+    } catch (err) { toast$(err.response?.data?.error || err.message, 'error', 5000); }
+    finally { setCargando(false); }
+  };
+
+  const marcarLeida = async (id) => {
+    await api.post(`/api/notificaciones/${id}/leer`, {}, { headers: h() });
+    setNotificaciones(prev => prev.map(n => n.id === id ? { ...n, leida: true } : n));
+  };
+  const marcarTodasLeidas = async () => {
+    await api.post('/api/notificaciones/leer-todas', {}, { headers: h() });
+    setNotificaciones(prev => prev.map(n => ({ ...n, leida: true })));
+  };
+  const enviarNotificacion = async () => {
+    if (!nuevaNotif.titulo || !nuevaNotif.mensaje) { toast$('Escribe título y mensaje', 'warning'); return; }
+    setCargando(true);
+    try {
+      const body = { ...nuevaNotif };
+      if (!body.destinatarioId) delete body.destinatarioId;
+      const r = await api.post('/api/admin/notificaciones', body, { headers: h() });
+      toast$(`Notificación enviada a ${r.data.enviadas} empleado(s) ✓`, 'success', 4000);
+      setNuevaNotif({ titulo: '', mensaje: '', tipo: 'INFO', destinatarioId: '' });
+      cargarNotifAdmin();
+    } catch (err) { toast$(err.response?.data?.error || 'Error', 'error'); }
+    finally { setCargando(false); }
+  };
+  const eliminarNotifAdmin = async (id) => {
+    try {
+      await api.delete(`/api/admin/notificaciones/${id}`, { headers: h() });
+      setNotifAdmin(prev => prev.filter(n => n.id !== id));
+    } catch { toast$('Error al eliminar', 'error'); }
+  };
+  const guardarConfig = async () => {
+    setCargando(true);
+    try {
+      const r = await api.put('/api/admin/config', configEscuela, { headers: h() });
+      setConfigEscuela(r.data);
+      toast$('Configuración guardada ✓', 'success');
+    } catch { toast$('Error guardando configuración', 'error'); }
     finally { setCargando(false); }
   };
 
@@ -732,6 +816,7 @@ function App() {
   const adminPendientes = adminSolicitudes.filter(s => s.estado === 'PENDIENTE').length;
   const docsPendientes  = documentosAdmin.filter(d => d.estado === 'PENDIENTE').length;
   const misDocsPendientes = misDocumentos.filter(d => d.estado === 'PENDIENTE').length;
+  const notifNoLeidas   = notificaciones.filter(n => !n.leida).length;
 
   // ===== NAVEGACIÓN =====
   const navItems = esAdmin && !modoEmpleado
@@ -743,7 +828,9 @@ function App() {
         { id: 'documentos', icon: '📁', label: 'Documentos', badge: docsPendientes },
         { id: 'usuarios',   icon: '👥', label: 'Usuarios' },
         { id: 'zonas',      icon: '📍', label: 'Zonas' },
-        { id: 'perfil',     icon: '⚙️', label: 'Mi Perfil' },
+        { id: 'avisos',     icon: '🔔', label: 'Avisos' },
+        { id: 'config',     icon: '🏔', label: 'Config' },
+        { id: 'perfil',     icon: '👤', label: 'Mi Perfil' },
       ]
     : [
         ...(!esAdmin ? [{ id: 'dashboard', icon: '📊', label: 'Dashboard' }] : []),
@@ -832,10 +919,52 @@ function App() {
             {pwaInstallEvent && (
               <button className="btn-pwa" onClick={instalarPWA} title="Instalar en pantalla de inicio">📱</button>
             )}
+            <button className="btn-bell" onClick={() => setNotifPanel(p => !p)} title="Notificaciones">
+              🔔{notifNoLeidas > 0 && <span className="bell-badge">{notifNoLeidas > 9 ? '9+' : notifNoLeidas}</span>}
+            </button>
             <button onClick={logout} className="btn-logout">Salir</button>
           </div>
         </div>
       </header>
+
+      {/* ===== PANEL NOTIFICACIONES ===== */}
+      {notifPanel && (
+        <div className="notif-overlay" onClick={() => setNotifPanel(false)}>
+          <div className="notif-panel" onClick={e => e.stopPropagation()}>
+            <div className="notif-panel-header">
+              <h3>Notificaciones</h3>
+              {notifNoLeidas > 0 && (
+                <button className="btn-ghost notif-leer-todas" onClick={marcarTodasLeidas}>
+                  Marcar todas como leídas
+                </button>
+              )}
+            </div>
+            {!notificaciones.length ? (
+              <div className="notif-empty">Sin notificaciones</div>
+            ) : (
+              <div className="notif-list">
+                {notificaciones.map(n => (
+                  <div key={n.id} className={`notif-item notif-tipo-${n.tipo.toLowerCase()}${n.leida ? ' leida' : ''}`}
+                    onClick={() => !n.leida && marcarLeida(n.id)}>
+                    <span className="notif-icono">
+                      {n.tipo === 'ALERTA' ? '🚨' : n.tipo === 'AVISO' ? '⚠️' : 'ℹ️'}
+                    </span>
+                    <div className="notif-body">
+                      <strong className="notif-titulo">{n.titulo}</strong>
+                      <p className="notif-mensaje">{n.mensaje}</p>
+                      <span className="notif-meta">
+                        {new Date(n.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
+                        {' · '}{n.enviadoPorNombre}
+                      </span>
+                    </div>
+                    {!n.leida && <span className="notif-dot" />}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <nav>
         {navItems.map(item => (
@@ -927,6 +1056,34 @@ function App() {
         {/* ===== DASHBOARD EMPLEADO ===== */}
         {(!esAdmin || modoEmpleado) && vista === 'dashboard' && (
           <div>
+            {/* Estado actual prominente */}
+            <div className={`card fichar-clock-card ${estadoFichaje === 'ENTRADA' ? 'estado-dentro' : 'estado-fuera'}`}>
+              <div className="fichar-hora-actual">
+                {horaActual.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </div>
+              <div className="fichar-fecha-actual">
+                {horaActual.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              </div>
+              <div className="fichar-estado-row">
+                <span className={`fichar-estado-pill ${estadoFichaje === 'ENTRADA' ? 'dentro' : 'fuera'}`}>
+                  {estadoFichaje === 'ENTRADA' ? '▶ DENTRO' : (estadoFichaje === 'SALIDA' ? '■ FUERA' : '○ Sin fichar')}
+                </span>
+                {estadoFichaje === 'ENTRADA' && tiempoFichado !== null && (
+                  <span className="fichar-timer">
+                    <span className="timer-dot">●</span> {formatTiempo(tiempoFichado)}
+                  </span>
+                )}
+              </div>
+              {estadoFichaje === 'ENTRADA' && registrosHoy.length > 0 && (
+                <p className="dashboard-entrada-hora">
+                  Entrada a las {registrosHoy.find(r => r.tipo === 'ENTRADA')?.hora}
+                </p>
+              )}
+              <button className="btn-sm" style={{ marginTop: '0.75rem' }} onClick={() => setVista('fichar')}>
+                Ir a Fichar →
+              </button>
+            </div>
+
             <div className="stats-grid">
               <div className="stat-card stat-blue"><span className="stat-icon">⏱</span><div>
                 <p className="stat-label">Total horas</p><p className="stat-number">{totalHoras}h</p></div></div>
@@ -948,12 +1105,6 @@ function App() {
                     </div>
                   ))}
                 </div>
-                {estadoFichaje === 'ENTRADA' && tiempoFichado !== null && (
-                  <div className="timer-banner">
-                    <span className="timer-dot">●</span>
-                    Tiempo trabajado hoy: <strong>{formatTiempo(tiempoFichado)}</strong>
-                  </div>
-                )}
               </div>
             )}
             <div className="card">
@@ -1029,6 +1180,31 @@ function App() {
                 </>
               )}
             </div>
+
+            {/* Salida sin QR — solo visible si está fichado */}
+            {estadoFichaje === 'ENTRADA' && (
+              <div className="card salida-directa-card">
+                <h2>Salida rápida</h2>
+                <p className="salida-directa-info">Registra tu salida sin necesidad de escanear el código QR.</p>
+                <button className="btn-salida-directa" onClick={() => setConfirmarSalida(true)} disabled={cargando}>
+                  ■ Registrar salida ahora
+                </button>
+              </div>
+            )}
+
+            {/* Modal confirmación salida */}
+            {confirmarSalida && (
+              <div className="modal-overlay" onClick={() => setConfirmarSalida(false)}>
+                <div className="modal-box" onClick={e => e.stopPropagation()}>
+                  <h3>¿Confirmar salida?</h3>
+                  <p>Se registrará tu salida a las <strong>{horaActual.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</strong>.</p>
+                  <div className="modal-actions">
+                    <button className="btn-ghost" onClick={() => setConfirmarSalida(false)}>Cancelar</button>
+                    <button className="btn-primary" onClick={registrarSalida}>Sí, registrar salida</button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Registros de hoy */}
             {registrosHoy.length > 0 && (
@@ -1111,7 +1287,7 @@ function App() {
                       <input type="checkbox" checked={pdfIncluirExtras} onChange={e => setPdfIncluirExtras(e.target.checked)} />
                       Incluir horas extra en el PDF
                     </label>
-                    <button className="btn-download" onClick={() => generarPDFRegistro(informeMensual, { incluirExtras: pdfIncluirExtras })}>⬇ Descargar PDF oficial</button>
+                    <button className="btn-download" onClick={() => generarPDFRegistro(informeMensual, { incluirExtras: pdfIncluirExtras, config: configEscuela || {} })}>⬇ Descargar PDF oficial</button>
                   </div>
                 </div>
                 <div className="informe-stats">
@@ -1249,98 +1425,309 @@ function App() {
         )}
 
         {/* ===== INFORMES ADMIN ===== */}
-        {esAdmin && !modoEmpleado && vista === 'informes' && (
-          <div>
-            <div className="informe-tabs">
-              <button className="btn-tab active" onClick={() => { setInformeAusencias(null); }}>📊 Registro horario</button>
-              <button className="btn-tab" onClick={() => { setInformeMensual(null); cargarInformeAusencias(); }}>📅 Ausencias</button>
-            </div>
-            {!informeAusencias && (
-              <div className="card">
-                <div className="informe-selector">
-                  <h2>Registro de jornada</h2>
-                  <div className="mes-selector">
-                    <select value={profesorInforme} onChange={e => setProfesorInforme(e.target.value)}
-                      style={{ padding: '0.5rem 0.75rem', border: '2px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '0.9rem', background: 'white', outline: 'none' }}>
-                      <option value="">— Seleccionar empleado —</option>
-                      {profesores.filter(p => p.role === 'PROFESOR').map(p => (
-                        <option key={p.id} value={p.id}>{p.apellidos}, {p.nombre}</option>
-                      ))}
-                    </select>
-                    <input type="month" value={mesInforme} onChange={e => setMesInforme(e.target.value)} />
-                    <button className="btn-primary" onClick={() => cargarInforme()} style={{ width: 'auto', padding: '0.5rem 1.25rem', marginTop: 0 }}>Ver</button>
-                  </div>
-                </div>
+        {esAdmin && !modoEmpleado && vista === 'informes' && (() => {
+          // helpers locales al bloque
+          const sortPlanilla = (campo) => {
+            if (planillaOrden === campo) setPlanillaDir(d => d === 'asc' ? 'desc' : 'asc');
+            else { setPlanillaOrden(campo); setPlanillaDir('asc'); }
+          };
+          const planillaOrdenada = planillaData ? [...planillaData.profesores].sort((a, b) => {
+            const va = a[planillaOrden] ?? '', vb = b[planillaOrden] ?? '';
+            const cmp = typeof va === 'string' ? va.localeCompare(vb) : va - vb;
+            return planillaDir === 'asc' ? cmp : -cmp;
+          }) : [];
+          const thSort = (campo, label) => (
+            <th className={`planilla-th sortable${planillaOrden === campo ? ' sorted' : ''}`}
+              onClick={() => sortPlanilla(campo)}>
+              {label}{planillaOrden === campo ? (planillaDir === 'asc' ? ' ↑' : ' ↓') : ''}
+            </th>
+          );
+          const exportarCSV = () => {
+            if (!planillaData) return;
+            const [anio, mes] = mesInforme.split('-');
+            const cols = ['Apellidos','Nombre','Email','Tipo Jornada','h/Semana','h Esperadas','h Trabajadas','h Exceso','h Déficit','Cumpl. %','Días Trab.','Días Exceso','Estado'];
+            const filas = planillaOrdenada.map(p => [
+              p.apellidos, p.nombre, p.email, p.tipoJornada, p.horasContrato,
+              p.horasEsperadas, p.horasTrabajadas, p.horasExceso, p.horasDeficit,
+              p.cumplimiento, p.diasTrabajados, p.diasConExceso, p.estado,
+            ]);
+            const csv = [cols, ...filas].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+            const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `Planilla_${mes}-${anio}.csv`; a.click();
+            URL.revokeObjectURL(url);
+          };
+          const estadoBadge = (e) => {
+            if (e === 'OK')       return <span className="planilla-badge ok">✓ OK</span>;
+            if (e === 'EXCESO')   return <span className="planilla-badge exceso">↑ Exceso</span>;
+            if (e === 'DEFICIT')  return <span className="planilla-badge deficit">↓ Déficit</span>;
+            return                       <span className="planilla-badge sin-datos">— Sin datos</span>;
+          };
+
+          return (
+            <div>
+              <div className="informe-tabs">
+                <button className={`btn-tab${informeTab === 'registro' ? ' active' : ''}`}
+                  onClick={() => { setInformeTab('registro'); setPlanillaData(null); }}>
+                  📊 Registro individual
+                </button>
+                <button className={`btn-tab${informeTab === 'planilla' ? ' active' : ''}`}
+                  onClick={() => { setInformeTab('planilla'); setInformeMensual(null); setInformeAusencias(null); }}>
+                  📋 Planilla global
+                </button>
+                <button className={`btn-tab${informeTab === 'ausencias' ? ' active' : ''}`}
+                  onClick={() => { setInformeTab('ausencias'); setInformeMensual(null); setPlanillaData(null); cargarInformeAusencias(); }}>
+                  📅 Ausencias
+                </button>
               </div>
-            )}
-            {informeMensual && !informeAusencias && (
-              <div className="card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
-                  <div>
-                    <h2 style={{ marginBottom: '0.25rem' }}>{informeMensual.profesor.apellidos}, {informeMensual.profesor.nombre} — {informeMensual.mes}</h2>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{informeMensual.profesor.tipoJornada === 'COMPLETA' ? 'Jornada Completa' : 'Media Jornada'} · {informeMensual.profesor.horasContrato}h/semana</p>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={pdfIncluirExtras} onChange={e => setPdfIncluirExtras(e.target.checked)} />
-                      Incluir horas extra en el PDF
-                    </label>
-                    <button className="btn-download" onClick={() => generarPDFRegistro(informeMensual, { incluirExtras: pdfIncluirExtras })}>⬇ Descargar PDF oficial</button>
-                  </div>
-                </div>
-                <div className="informe-stats">
-                  <div className="informe-stat"><span className="informe-stat-icon">⏱</span><span className="informe-stat-value">{informeMensual.totalHoras}h</span><span className="informe-stat-label">Total horas</span></div>
-                  <div className="informe-stat"><span className="informe-stat-icon">📆</span><span className="informe-stat-value">{informeMensual.diasTrabajados}</span><span className="informe-stat-label">Días trabajados</span></div>
-                  <div className={`informe-stat${informeMensual.diasConExceso > 0 ? ' warning' : ''}`}><span className="informe-stat-icon">⚠️</span><span className="informe-stat-value">{informeMensual.diasConExceso}</span><span className="informe-stat-label">Días con exceso</span></div>
-                  <div className="informe-stat"><span className="informe-stat-icon">📊</span><span className="informe-stat-value">{informeMensual.promedioDiario}h</span><span className="informe-stat-label">Promedio diario</span></div>
-                </div>
-                {informeMensual.detalle?.length > 0 && (
-                  <div className="informe-detalle">
-                    <h3>Detalle por día</h3>
-                    <div className="detalle-list">
-                      {informeMensual.detalle.map(d => (
-                        <div key={d.fecha} className={`detalle-item${!d.cumpleNormativa ? ' exceso' : ''}`}>
-                          <span className="detalle-fecha">{new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
-                          <span className="detalle-horas">{d.horas}h</span>
-                          {d.exceso > 0 && <span className="badge-warning">+{d.exceso}h</span>}
-                          {d.cumpleNormativa ? <span className="badge-ok">✓</span> : <span className="badge-warning">!</span>}
-                          {d.registros?.length > 0 && (
-                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', gridColumn: '1 / -1', marginTop: '2px' }}>
-                              {d.registros.map(r => `${r.tipo === 'ENTRADA' ? '▶' : '■'} ${r.hora}`).join('  ')}
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <p className="nota-legal">* RD 8/2019 · Art. 34.9 ET: obligación de registro diario · conservar 4 años</p>
-              </div>
-            )}
-            {informeAusencias && (
-              <div className="card">
-                <h2>Ausencias por empleado</h2>
-                <div className="ausencias-list">
-                  {informeAusencias.map(p => (
-                    <div key={p.id} className="ausencia-card">
-                      <div className="ausencia-header">
-                        <div className="profesor-avatar small">{p.nombre[0]}{p.apellidos[0]}</div>
-                        <div className="ausencia-info"><strong>{p.nombre} {p.apellidos}</strong><small>{p.email}</small></div>
-                        <div className="ausencia-badges">
-                          {p.diasVacaciones > 0 && <span className="ausencia-pill vac">🌴 {p.diasVacaciones}d vac.</span>}
-                          {p.diasEnfermedad > 0 && <span className="ausencia-pill enf">🏥 {p.diasEnfermedad}d enf.</span>}
-                          {p.diasAsuntoPropios > 0 && <span className="ausencia-pill ap">📌 {p.diasAsuntoPropios}d A.P.</span>}
-                          {p.pendientes > 0 && <span className="ausencia-pill pend">⏳ {p.pendientes} pend.</span>}
-                          {!p.totalSolicitudes && <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Sin solicitudes</span>}
-                        </div>
+
+              {/* ── Registro individual ── */}
+              {informeTab === 'registro' && (
+                <>
+                  <div className="card">
+                    <div className="informe-selector">
+                      <h2>Registro de jornada</h2>
+                      <div className="mes-selector">
+                        <select value={profesorInforme} onChange={e => setProfesorInforme(e.target.value)}
+                          style={{ padding: '0.5rem 0.75rem', border: '2px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '0.9rem', background: 'white', outline: 'none' }}>
+                          <option value="">— Seleccionar empleado —</option>
+                          {profesores.filter(p => p.role === 'PROFESOR').map(p => (
+                            <option key={p.id} value={p.id}>{p.apellidos}, {p.nombre}</option>
+                          ))}
+                        </select>
+                        <input type="month" value={mesInforme} onChange={e => setMesInforme(e.target.value)} />
+                        <button className="btn-primary" onClick={() => cargarInforme()} style={{ width: 'auto', padding: '0.5rem 1.25rem', marginTop: 0 }}>Ver</button>
                       </div>
                     </div>
-                  ))}
+                  </div>
+                  {informeMensual && (
+                    <div className="card">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+                        <div>
+                          <h2 style={{ marginBottom: '0.25rem' }}>{informeMensual.profesor.apellidos}, {informeMensual.profesor.nombre} — {informeMensual.mes}</h2>
+                          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{informeMensual.profesor.tipoJornada === 'COMPLETA' ? 'Jornada Completa' : 'Media Jornada'} · {informeMensual.profesor.horasContrato}h/semana</p>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                            <input type="checkbox" checked={pdfIncluirExtras} onChange={e => setPdfIncluirExtras(e.target.checked)} />
+                            Incluir horas extra en el PDF
+                          </label>
+                          <button className="btn-download" onClick={() => generarPDFRegistro(informeMensual, { incluirExtras: pdfIncluirExtras, config: configEscuela || {} })}>⬇ Descargar PDF oficial</button>
+                        </div>
+                      </div>
+                      <div className="informe-stats">
+                        <div className="informe-stat"><span className="informe-stat-icon">⏱</span><span className="informe-stat-value">{informeMensual.totalHoras}h</span><span className="informe-stat-label">Total horas</span></div>
+                        <div className="informe-stat"><span className="informe-stat-icon">📆</span><span className="informe-stat-value">{informeMensual.diasTrabajados}</span><span className="informe-stat-label">Días trabajados</span></div>
+                        <div className={`informe-stat${informeMensual.diasConExceso > 0 ? ' warning' : ''}`}><span className="informe-stat-icon">⚠️</span><span className="informe-stat-value">{informeMensual.diasConExceso}</span><span className="informe-stat-label">Días con exceso</span></div>
+                        <div className="informe-stat"><span className="informe-stat-icon">📊</span><span className="informe-stat-value">{informeMensual.promedioDiario}h</span><span className="informe-stat-label">Promedio diario</span></div>
+                      </div>
+                      {informeMensual.detalle?.length > 0 && (
+                        <div className="informe-detalle">
+                          <h3>Detalle por día</h3>
+                          <div className="detalle-list">
+                            {informeMensual.detalle.map(d => (
+                              <div key={d.fecha} className={`detalle-item${!d.cumpleNormativa ? ' exceso' : ''}`}>
+                                <span className="detalle-fecha">{new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+                                <span className="detalle-horas">{d.horas}h</span>
+                                {d.exceso > 0 && <span className="badge-warning">+{d.exceso}h</span>}
+                                {d.cumpleNormativa ? <span className="badge-ok">✓</span> : <span className="badge-warning">!</span>}
+                                {d.registros?.length > 0 && (
+                                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', gridColumn: '1 / -1', marginTop: '2px' }}>
+                                    {d.registros.map(r => `${r.tipo === 'ENTRADA' ? '▶' : '■'} ${r.hora}`).join('  ')}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <p className="nota-legal">* RD 8/2019 · Art. 34.9 ET: obligación de registro diario · conservar 4 años</p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* ── Planilla global ── */}
+              {informeTab === 'planilla' && (
+                <>
+                  <div className="card planilla-controls">
+                    <div className="planilla-controls-row">
+                      <div>
+                        <h2>Planilla de horas</h2>
+                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                          Comparativa horas contratadas vs trabajadas — todos los empleados
+                        </p>
+                      </div>
+                      <div className="planilla-controls-right">
+                        <input type="month" value={mesInforme} onChange={e => { setMesInforme(e.target.value); setPlanillaData(null); }} />
+                        <button className="btn-primary" onClick={cargarPlanilla} disabled={cargando}
+                          style={{ width: 'auto', padding: '0.5rem 1.25rem', marginTop: 0 }}>
+                          {cargando ? <span className="btn-spinner" /> : 'Generar'}
+                        </button>
+                        {planillaData && (
+                          <button className="btn-sm btn-csv" onClick={exportarCSV} title="Exportar a CSV / Excel">
+                            ⬇ CSV
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {planillaData && (
+                    <>
+                      {/* Resumen global */}
+                      <div className="planilla-resumen">
+                        <div className="planilla-kpi">
+                          <span className="planilla-kpi-val">{planillaData.diasLaborables}</span>
+                          <span className="planilla-kpi-lab">días laborables</span>
+                        </div>
+                        <div className="planilla-kpi">
+                          <span className="planilla-kpi-val">{planillaData.totEsperadas}h</span>
+                          <span className="planilla-kpi-lab">horas esperadas (total)</span>
+                        </div>
+                        <div className="planilla-kpi">
+                          <span className="planilla-kpi-val">{planillaData.totTrabajadas}h</span>
+                          <span className="planilla-kpi-lab">horas trabajadas (total)</span>
+                        </div>
+                        <div className={`planilla-kpi${planillaData.cumplimientoGlobal < 90 ? ' kpi-warn' : planillaData.cumplimientoGlobal >= 98 ? ' kpi-ok' : ''}`}>
+                          <span className="planilla-kpi-val">{planillaData.cumplimientoGlobal}%</span>
+                          <span className="planilla-kpi-lab">cumplimiento global</span>
+                        </div>
+                        <div className="planilla-kpi kpi-ok">
+                          <span className="planilla-kpi-val">{planillaData.profesores.filter(p => p.estado === 'OK').length}</span>
+                          <span className="planilla-kpi-lab">empleados OK</span>
+                        </div>
+                        <div className="planilla-kpi kpi-warn">
+                          <span className="planilla-kpi-val">{planillaData.profesores.filter(p => p.estado === 'DEFICIT').length}</span>
+                          <span className="planilla-kpi-lab">con déficit</span>
+                        </div>
+                        <div className="planilla-kpi kpi-exceso">
+                          <span className="planilla-kpi-val">{planillaData.profesores.filter(p => p.estado === 'EXCESO').length}</span>
+                          <span className="planilla-kpi-lab">con exceso</span>
+                        </div>
+                        <div className="planilla-kpi kpi-sin">
+                          <span className="planilla-kpi-val">{planillaData.profesores.filter(p => p.estado === 'SIN_DATOS').length}</span>
+                          <span className="planilla-kpi-lab">sin registros</span>
+                        </div>
+                      </div>
+
+                      {/* Tabla planilla */}
+                      <div className="card planilla-card">
+                        <div className="planilla-table-wrap">
+                          <table className="planilla-table">
+                            <thead>
+                              <tr>
+                                {thSort('apellidos',       'Empleado')}
+                                {thSort('tipoJornada',     'Jornada')}
+                                {thSort('horasEsperadas',  'Esperadas')}
+                                {thSort('horasTrabajadas', 'Trabajadas')}
+                                <th className="planilla-th">Diferencia</th>
+                                {thSort('cumplimiento',    'Cumpl. %')}
+                                {thSort('diasTrabajados',  'Días trab.')}
+                                {thSort('diasConExceso',   'Días exc.')}
+                                {thSort('estado',          'Estado')}
+                                <th className="planilla-th">Acción</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {planillaOrdenada.map(p => {
+                                const diff = p.horasTrabajadas - p.horasEsperadas;
+                                return (
+                                  <tr key={p.id} className={`planilla-row planilla-row-${p.estado.toLowerCase().replace('_','-')}`}>
+                                    <td className="planilla-td planilla-nombre">
+                                      <strong>{p.apellidos}, {p.nombre}</strong>
+                                      <span className="planilla-email">{p.email}</span>
+                                    </td>
+                                    <td className="planilla-td planilla-center">
+                                      <span className={`badge-jornada badge ${p.tipoJornada === 'COMPLETA' ? 'completa' : 'media'}`}>
+                                        {p.tipoJornada === 'COMPLETA' ? `${p.horasContrato}h` : 'Media'}
+                                      </span>
+                                    </td>
+                                    <td className="planilla-td planilla-num">{p.horasEsperadas}h</td>
+                                    <td className="planilla-td planilla-num planilla-trab">{p.horasTrabajadas}h</td>
+                                    <td className={`planilla-td planilla-num${diff > 0 ? ' planilla-pos' : diff < -0.1 ? ' planilla-neg' : ''}`}>
+                                      {diff === 0 ? '—' : `${diff > 0 ? '+' : ''}${Math.round(diff * 100) / 100}h`}
+                                    </td>
+                                    <td className="planilla-td planilla-num">
+                                      <div className="planilla-cumpl-wrap">
+                                        <span className={p.cumplimiento >= 98 ? 'planilla-pos' : p.cumplimiento < 85 ? 'planilla-neg' : ''}>
+                                          {p.cumplimiento}%
+                                        </span>
+                                        <div className="planilla-bar">
+                                          <div className="planilla-bar-fill" style={{
+                                            width: `${Math.min(100, p.cumplimiento)}%`,
+                                            background: p.cumplimiento >= 98 ? 'var(--success)' : p.cumplimiento < 85 ? 'var(--danger)' : 'var(--warning)',
+                                          }} />
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="planilla-td planilla-num">{p.diasTrabajados}</td>
+                                    <td className="planilla-td planilla-num">{p.diasConExceso > 0 ? <span className="planilla-warn">{p.diasConExceso}</span> : '—'}</td>
+                                    <td className="planilla-td">{estadoBadge(p.estado)}</td>
+                                    <td className="planilla-td">
+                                      <button className="btn-sm" onClick={() => {
+                                        setProfesorInforme(p.id);
+                                        setInformeTab('registro');
+                                        cargarInforme(p.id);
+                                      }}>Ver →</button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                            <tfoot>
+                              <tr className="planilla-tfoot">
+                                <td className="planilla-td" colSpan="2"><strong>TOTALES</strong></td>
+                                <td className="planilla-td planilla-num"><strong>{planillaData.totEsperadas}h</strong></td>
+                                <td className="planilla-td planilla-num"><strong>{planillaData.totTrabajadas}h</strong></td>
+                                <td className="planilla-td planilla-num">
+                                  <strong className={planillaData.totTrabajadas - planillaData.totEsperadas >= 0 ? 'planilla-pos' : 'planilla-neg'}>
+                                    {(() => { const d = Math.round((planillaData.totTrabajadas - planillaData.totEsperadas) * 100) / 100; return `${d > 0 ? '+' : ''}${d}h`; })()}
+                                  </strong>
+                                </td>
+                                <td className="planilla-td planilla-num"><strong>{planillaData.cumplimientoGlobal}%</strong></td>
+                                <td className="planilla-td" colSpan="4" />
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                        <p className="nota-legal" style={{ marginTop: '0.75rem' }}>
+                          * Horas esperadas = (h/semana ÷ 5) × días laborables del mes. Días laborables: {planillaData.diasLaborables} (lun–vie, sin festivos nacionales).
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+
+              {/* ── Ausencias ── */}
+              {informeTab === 'ausencias' && informeAusencias && (
+                <div className="card">
+                  <h2>Ausencias por empleado</h2>
+                  <div className="ausencias-list">
+                    {informeAusencias.map(p => (
+                      <div key={p.id} className="ausencia-card">
+                        <div className="ausencia-header">
+                          <div className="profesor-avatar small">{p.nombre[0]}{p.apellidos[0]}</div>
+                          <div className="ausencia-info"><strong>{p.nombre} {p.apellidos}</strong><small>{p.email}</small></div>
+                          <div className="ausencia-badges">
+                            {p.diasVacaciones > 0 && <span className="ausencia-pill vac">🌴 {p.diasVacaciones}d vac.</span>}
+                            {p.diasEnfermedad > 0 && <span className="ausencia-pill enf">🏥 {p.diasEnfermedad}d enf.</span>}
+                            {p.diasAsuntoPropios > 0 && <span className="ausencia-pill ap">📌 {p.diasAsuntoPropios}d A.P.</span>}
+                            {p.pendientes > 0 && <span className="ausencia-pill pend">⏳ {p.pendientes} pend.</span>}
+                            {!p.totalSolicitudes && <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Sin solicitudes</span>}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          );
+        })()}
+
 
         {/* ===== DOCUMENTOS ADMIN ===== */}
         {esAdmin && !modoEmpleado && vista === 'documentos' && (
@@ -1487,12 +1874,20 @@ function App() {
                         {p.tipoJornada === 'COMPLETA' ? `${p.horasContrato}h/sem` : 'Media'}
                       </span>
                       {!p.activo && <span className="estado-badge rechazado">Inactivo</span>}
-                      <button className="btn-sm" style={{ marginTop: '4px' }} onClick={() => {
-                        setProfesorEditId(profesorEditId === p.id ? null : p.id);
-                        setProfesorEditData({ nombre: p.nombre, apellidos: p.apellidos, tipoJornada: p.tipoJornada, horasContrato: p.horasContrato, telefono: p.telefono || '', horaRecordatorio: p.horaRecordatorio || '17:00', activo: p.activo });
-                      }}>
-                        {profesorEditId === p.id ? '✕ Cerrar' : '✏ Editar'}
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.4rem', marginTop: '4px', flexWrap: 'wrap' }}>
+                        <button className="btn-sm" onClick={() => {
+                          setProfesorEditId(profesorEditId === p.id ? null : p.id);
+                          setProfesorEditData({ nombre: p.nombre, apellidos: p.apellidos, tipoJornada: p.tipoJornada, horasContrato: p.horasContrato, telefono: p.telefono || '', horaRecordatorio: p.horaRecordatorio || '17:00', activo: p.activo });
+                        }}>
+                          {profesorEditId === p.id ? '✕ Cerrar' : '✏ Editar'}
+                        </button>
+                        <button className="btn-sm btn-sm-bell" onClick={() => {
+                          setNuevaNotif({ titulo: '', mensaje: '', tipo: 'INFO', destinatarioId: p.id });
+                          setVista('avisos');
+                        }} title="Enviar aviso personal">
+                          🔔 Aviso
+                        </button>
+                      </div>
                     </div>
                     {profesorEditId === p.id && (
                       <div className="profesor-edit-form">
@@ -1624,6 +2019,128 @@ function App() {
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* ===== AVISOS (admin) ===== */}
+        {esAdmin && !modoEmpleado && vista === 'avisos' && (
+          <div>
+            <div className="card">
+              <h2>Nueva notificación</h2>
+              <div className="form-row">
+                <div className="form-group"><label>Destinatario</label>
+                  <select value={nuevaNotif.destinatarioId} onChange={e => setNuevaNotif({ ...nuevaNotif, destinatarioId: e.target.value })}>
+                    <option value="">Todos los empleados</option>
+                    {profesores.filter(p => p.activo).map(p => (
+                      <option key={p.id} value={p.id}>{p.nombre} {p.apellidos}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group"><label>Tipo</label>
+                  <select value={nuevaNotif.tipo} onChange={e => setNuevaNotif({ ...nuevaNotif, tipo: e.target.value })}>
+                    <option value="INFO">ℹ️ Información</option>
+                    <option value="AVISO">⚠️ Aviso</option>
+                    <option value="ALERTA">🚨 Alerta</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-group"><label>Título</label>
+                <input type="text" placeholder="Ej: Reunión mañana a las 9:00" value={nuevaNotif.titulo}
+                  onChange={e => setNuevaNotif({ ...nuevaNotif, titulo: e.target.value })} />
+              </div>
+              <div className="form-group"><label>Mensaje</label>
+                <textarea rows="4" placeholder="Escribe el mensaje completo..." value={nuevaNotif.mensaje}
+                  onChange={e => setNuevaNotif({ ...nuevaNotif, mensaje: e.target.value })} />
+              </div>
+              <button className="btn-primary" onClick={enviarNotificacion} disabled={cargando}>
+                {cargando ? <span className="btn-spinner" /> : '🔔 Enviar notificación'}
+              </button>
+            </div>
+
+            <div className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h2>Enviadas recientes</h2>
+                <button className="btn-sm" onClick={cargarNotifAdmin}>↻ Actualizar</button>
+              </div>
+              {!notifAdmin.length ? (
+                <div className="empty-state"><p>📭 Sin notificaciones enviadas</p></div>
+              ) : (
+                <div className="notif-admin-list">
+                  {notifAdmin.map(n => (
+                    <div key={n.id} className={`notif-admin-item notif-tipo-${n.tipo.toLowerCase()}${n.leida ? ' leida' : ''}`}>
+                      <span className="notif-icono">
+                        {n.tipo === 'ALERTA' ? '🚨' : n.tipo === 'AVISO' ? '⚠️' : 'ℹ️'}
+                      </span>
+                      <div className="notif-body">
+                        <strong>{n.titulo}</strong>
+                        <p className="notif-mensaje">{n.mensaje}</p>
+                        <span className="notif-meta">
+                          Para: <strong>{n.profesorNombre}</strong>
+                          {' · '}{new Date(n.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          {n.leida ? <span className="notif-leida-tag"> · Leída ✓</span> : <span className="notif-noleida-tag"> · No leída</span>}
+                        </span>
+                      </div>
+                      <button className="btn-delete" onClick={() => eliminarNotifAdmin(n.id)} title="Eliminar">✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ===== CONFIG ESCUELA (admin) ===== */}
+        {esAdmin && !modoEmpleado && vista === 'config' && (
+          <div>
+            <div className="card">
+              <h2>Datos de la escuela</h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '1.25rem' }}>
+                Esta información aparece en el encabezado de los informes PDF.
+              </p>
+              {configEscuela && (
+                <>
+                  <div className="form-row">
+                    <div className="form-group"><label>Nombre de la escuela</label>
+                      <input type="text" value={configEscuela.nombre}
+                        onChange={e => setConfigEscuela({ ...configEscuela, nombre: e.target.value })} />
+                    </div>
+                    <div className="form-group"><label>CIF / NIF</label>
+                      <input type="text" value={configEscuela.cif}
+                        onChange={e => setConfigEscuela({ ...configEscuela, cif: e.target.value })} />
+                    </div>
+                  </div>
+                  <div className="form-row">
+                    <div className="form-group"><label>Dirección</label>
+                      <input type="text" value={configEscuela.direccion}
+                        onChange={e => setConfigEscuela({ ...configEscuela, direccion: e.target.value })} />
+                    </div>
+                    <div className="form-group"><label>Teléfono</label>
+                      <input type="text" value={configEscuela.telefono}
+                        onChange={e => setConfigEscuela({ ...configEscuela, telefono: e.target.value })} />
+                    </div>
+                  </div>
+                  <div className="form-row">
+                    <div className="form-group"><label>Email de contacto</label>
+                      <input type="email" value={configEscuela.email}
+                        onChange={e => setConfigEscuela({ ...configEscuela, email: e.target.value })} />
+                    </div>
+                    <div className="form-group config-color-group"><label>Color principal del informe PDF</label>
+                      <div className="config-color-row">
+                        <input type="color" value={configEscuela.colorPrimario}
+                          onChange={e => setConfigEscuela({ ...configEscuela, colorPrimario: e.target.value })} />
+                        <span className="config-color-hex">{configEscuela.colorPrimario}</span>
+                        <div className="config-color-preview" style={{ background: configEscuela.colorPrimario }}>
+                          Cabecera PDF
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <button className="btn-primary" onClick={guardarConfig} disabled={cargando}>
+                    {cargando ? <span className="btn-spinner" /> : '💾 Guardar configuración'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}
