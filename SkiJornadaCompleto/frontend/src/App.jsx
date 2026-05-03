@@ -26,6 +26,10 @@ function contenidoQR(zona) {
   return `SKIJORNADA|${zona.id}|${zona.secret}|${zona.validationMode}`;
 }
 
+function fechaLocal(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function formatTiempo(ms) {
   if (ms < 0) ms = 0;
   const s = Math.floor(ms / 1000);
@@ -99,7 +103,9 @@ function FirmaCanvas({ onFirma, onCancelar }) {
     // Verificar que hay algo dibujado
     const ctx = canvas.getContext('2d');
     const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-    const hasFirma = Array.from(data).some((v, i) => i % 4 === 3 && v > 0 && data[i - 1] < 50 && data[i - 2] < 100);
+    // Background is #f8fafc (R=248); stroke is #0f4c81 (R=15). Any dark pixel = firma present.
+    let hasFirma = false;
+    for (let i = 0; i < data.length; i += 4) { if (data[i] < 100) { hasFirma = true; break; } }
     if (!hasFirma) { alert('Por favor, dibuja tu firma antes de continuar.'); return; }
     onFirma(canvas.toDataURL('image/png'));
   };
@@ -329,7 +335,7 @@ function App() {
 
   // ===== LIVE SHIFT TIMER =====
   useEffect(() => {
-    const hoyStr = new Date(Date.now() + serverTimeOffsetRef.current).toISOString().split('T')[0];
+    const hoyStr = fechaLocal(new Date(Date.now() + serverTimeOffsetRef.current));
     const regs = historial[hoyStr] || [];
     const ultimo = regs[regs.length - 1];
     if (ultimo?.tipo === 'ENTRADA' && ultimo?.timestamp) {
@@ -360,7 +366,7 @@ function App() {
     const delay = target - ahora;
     if (delay <= 0) return;
     const tid = setTimeout(() => {
-      const hoyStr = new Date(Date.now() + serverTimeOffsetRef.current).toISOString().split('T')[0];
+      const hoyStr = fechaLocal(new Date(Date.now() + serverTimeOffsetRef.current));
       const regs = historial[hoyStr] || [];
       if (regs[regs.length - 1]?.tipo === 'ENTRADA') {
         const entradaMs = new Date(regs[regs.length - 1].timestamp).getTime();
@@ -435,13 +441,13 @@ function App() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       streamRef.current = stream;
-      if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play(); }
-      setEscaneando(true);
+      setEscaneando(true); // video element mounts on next render; useEffect below attaches stream
       const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       scanIntervalRef.current = setInterval(() => {
         if (!videoRef.current || videoRef.current.readyState !== 4) return;
         canvas.width = videoRef.current.videoWidth; canvas.height = videoRef.current.videoHeight;
-        const ctx = canvas.getContext('2d'); ctx.drawImage(videoRef.current, 0, 0);
+        ctx.drawImage(videoRef.current, 0, 0);
         const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(img.data, img.width, img.height);
         if (code?.data) { detenerScanner(); procesarQREscaneado(code.data); }
@@ -453,6 +459,13 @@ function App() {
     streamRef.current?.getTracks().forEach(t => t.stop());
     setEscaneando(false);
   };
+  // Attach stream after React mounts the <video> element (escaneando===true triggers mount)
+  useEffect(() => {
+    if (escaneando && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [escaneando]);
   useEffect(() => () => detenerScanner(), []);
 
   // ===== NFC LEER =====
@@ -711,7 +724,7 @@ function App() {
   const logout = () => { localStorage.removeItem('token'); localStorage.removeItem('user'); setToken(null); setUser(null); };
 
   // ===== ESTADO ACTUAL =====
-  const hoy = horaActual.toISOString().split('T')[0];
+  const hoy = fechaLocal(horaActual);
   const registrosHoy   = historial[hoy] || [];
   const estadoFichaje  = registrosHoy[registrosHoy.length - 1]?.tipo || null;
   const esAdmin        = user?.role === 'ADMIN';
