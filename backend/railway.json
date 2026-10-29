@@ -1,0 +1,9 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": { "builder": "NIXPACKS", "buildCommand": "npm install && npx prisma generate" },
+  "deploy": {
+    "preDeployCommand": "npx prisma migrate deploy && node prisma/bootstrap.js",
+    "startCommand": "node index.js",
+    "healthcheckPath": "/api/server-time"
+  }
+}
