@@ -7,6 +7,8 @@ import VistaMisClases from './VistaMisClases';
 import VistaAdminClases from './VistaAdminClases';
 import Landing from './Landing';
 import './App.css';
+import './theme.css';
+import Icono, { LogoMarca } from './Iconos';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const api = axios.create({ baseURL: API_BASE });
@@ -237,6 +239,7 @@ function App() {
   const [toast, setToast]   = useState(null);
   const [cargando, setCargando] = useState(false);
   const [confirmarSalida, setConfirmarSalida] = useState(false);
+  const [masAbierto, setMasAbierto] = useState(false);
   const [emailLogin, setEmailLogin] = useState('');
   const [enlaceEnviado, setEnlaceEnviado] = useState(false);
   const magicProcesado = useRef(false);
@@ -884,16 +887,37 @@ function App() {
         { id: 'perfil',     icon: '👤', label: 'Mi Perfil' },
       ]
     : [
-        ...(!esAdmin ? [{ id: 'dashboard', icon: '📊', label: 'Dashboard' }] : []),
+        ...(!esAdmin ? [{ id: 'dashboard', icon: '📊', label: 'Inicio' }] : []),
         { id: 'fichar',     icon: '🕐', label: 'Fichar' },
-        { id: 'misclases',  icon: '🎿', label: 'Mis Clases' },
-        { id: 'solicitar',  icon: '📅', label: 'Días Libres' },
-        { id: 'informes',   icon: '📄', label: 'Mis Informes' },
-        { id: 'documentos', icon: '📁', label: 'Mis Docs', badge: misDocsPendientes },
-        { id: 'perfil',     icon: '⚙️', label: 'Mi Perfil' },
+        { id: 'misclases',  icon: '🎿', label: 'Clases' },
+        { id: 'solicitar',  icon: '📅', label: 'Días libres' },
+        { id: 'informes',   icon: '📄', label: 'Informes' },
+        { id: 'documentos', icon: '📁', label: 'Documentos', badge: misDocsPendientes },
+        { id: 'perfil',     icon: '⚙️', label: 'Mi perfil' },
       ];
 
   const navItems = docsOn ? navItemsTodos : navItemsTodos.filter(i => i.id !== 'documentos');
+
+  const ICONO_NAV = {
+    dashboard: 'inicio', presencia: 'presencia', gestionar: 'solicitudes', clases: 'clases', informes: 'informe', documentos: 'docs',
+    usuarios: 'usuarios', zonas: 'zonas', avisos: 'avisos', config: 'config', perfil: 'perfil', fichar: 'reloj', misclases: 'clases', solicitar: 'calendario',
+  };
+  const PRINCIPALES = esAdmin && !modoEmpleado ? ['dashboard', 'clases', 'usuarios', 'informes'] : ['dashboard', 'fichar', 'misclases', 'informes'];
+  const navPrincipal = PRINCIPALES.map(id => navItems.find(i => i.id === id)).filter(Boolean);
+  const navMas = navItems.filter(i => !PRINCIPALES.includes(i.id));
+  const irA = (item) => {
+    setVista(item.id); setMasAbierto(false); window.scrollTo({ top: 0 });
+    if (item.id === 'informes') { setInformeMensual(null); setInformeAusencias(null); }
+    if (item.id === 'presencia') cargarPresencia();
+    if (item.id === 'documentos' && esAdmin && !modoEmpleado) cargarDocumentosAdmin();
+    if (item.id === 'documentos' && (!esAdmin || modoEmpleado)) cargarMisDocumentos();
+  };
+  const BotonNav = ({ item }) => (
+    <button className={`nav-item${vista === item.id ? ' active' : ''}`} onClick={() => irA(item)} aria-current={vista === item.id ? 'page' : undefined}>
+      <Icono n={ICONO_NAV[item.id] || 'mas'} /><span>{item.label}</span>
+      {item.badge > 0 && <span className="nav-badge">{item.badge}</span>}
+    </button>
+  );
 
   // ===== LOGIN =====
   if (!token) {
@@ -937,43 +961,36 @@ function App() {
 
   return (
     <div className="app-container">
-      <header>
-        <div className="header-content">
-          <div className="header-brand">
-            <span className="header-logo">⛷️</span>
-            <h1>Ski Jornada</h1>
+      <header className="topbar">
+        <div className="topbar-in">
+          <div className="topbar-brand">
+            <LogoMarca size={30} />
+            <span>Ski Jornada</span>
           </div>
-          <div className="user-info">
-            {/* Live timer en header cuando está fichado */}
-            {estadoFichaje === 'ENTRADA' && tiempoFichado !== null && (
-              <div className="header-timer">
-                <span className="timer-dot">●</span>
-                <span className="timer-value">{formatTiempo(tiempoFichado)}</span>
-              </div>
-            )}
+          <div className="topbar-right">
             {estadoFichaje && (
-              <span className={`fichaje-status ${estadoFichaje.toLowerCase()}`}>
-                {estadoFichaje === 'ENTRADA' ? '● Dentro' : '○ Fuera'}
+              <span className={`chip-estado ${estadoFichaje === 'ENTRADA' ? 'dentro' : ''}`} role="status">
+                <span className="punto" />
+                {estadoFichaje === 'ENTRADA'
+                  ? (tiempoFichado !== null ? formatTiempo(tiempoFichado).replace(/ \d+s$/, '') : 'Dentro')
+                  : 'Fuera'}
               </span>
             )}
-            <span className="user-name">{user?.nombre} {user?.apellidos}</span>
-            <span className={`badge badge-${esAdmin ? 'admin' : 'profesor'}`}>{esAdmin ? '🛡 Admin' : '👤 Emp.'}</span>
             {esAdmin && (
-              <button
-                className={`btn-modo ${modoEmpleado ? 'btn-modo-active' : ''}`}
+              <button className={`chip-modo${modoEmpleado ? ' activo' : ''}`}
                 onClick={() => { setModoEmpleado(m => !m); setVista(modoEmpleado ? 'dashboard' : 'fichar'); }}
-                title={modoEmpleado ? 'Volver al panel de administración' : 'Cambiar a modo empleado para fichar'}
-              >
-                {modoEmpleado ? '🛡 Admin' : '🕐 Fichar'}
+                aria-pressed={modoEmpleado}>
+                {modoEmpleado ? 'Vista admin' : 'Modo empleado'}
               </button>
             )}
             {pwaInstallEvent && (
-              <button className="btn-pwa" onClick={instalarPWA} title="Instalar en pantalla de inicio">📱</button>
+              <button className="icon-btn solo-escritorio" onClick={instalarPWA} aria-label="Instalar la app"><Icono n="instalar" /></button>
             )}
-            <button className="btn-bell" onClick={() => setNotifPanel(p => !p)} title="Notificaciones">
-              🔔{notifNoLeidas > 0 && <span className="bell-badge">{notifNoLeidas > 9 ? '9+' : notifNoLeidas}</span>}
+            <button className="icon-btn" onClick={() => setNotifPanel(p => !p)} aria-label={`Notificaciones${notifNoLeidas ? `, ${notifNoLeidas} sin leer` : ''}`}>
+              <Icono n="campana" />
+              {notifNoLeidas > 0 && <span className="badge-dot">{notifNoLeidas > 9 ? '9+' : notifNoLeidas}</span>}
             </button>
-            <button onClick={logout} className="btn-logout">Salir</button>
+            <button className="icon-btn solo-escritorio" onClick={logout} aria-label="Cerrar sesión"><Icono n="salir" /></button>
           </div>
         </div>
       </header>
@@ -1017,22 +1034,42 @@ function App() {
         </div>
       )}
 
-      <nav>
-        {navItems.map(item => (
-          <button key={item.id} className={vista === item.id ? 'active' : ''}
-            onClick={() => {
-              setVista(item.id);
-              if (item.id === 'informes') { setInformeMensual(null); setInformeAusencias(null); }
-              if (item.id === 'presencia') cargarPresencia();
-              if (item.id === 'documentos' && esAdmin && !modoEmpleado) cargarDocumentosAdmin();
-              if (item.id === 'documentos' && (!esAdmin || modoEmpleado)) cargarMisDocumentos();
-            }}>
-            <span className="nav-icon">{item.icon}</span>
-            <span className="nav-label">{item.label}</span>
-            {item.badge > 0 && <span className="nav-badge">{item.badge}</span>}
-          </button>
-        ))}
+      <nav className="side-nav" aria-label="Principal">
+        {navItems.map(item => <BotonNav key={item.id} item={item} />)}
+        <div style={{ flex: 1 }} />
+        <button className="nav-item" onClick={logout}><Icono n="salir" /><span>Cerrar sesión</span></button>
       </nav>
+
+      <nav className="bottom-nav" aria-label="Principal">
+        {navPrincipal.map(item => <BotonNav key={item.id} item={item} />)}
+        {navMas.length > 0 && (
+          <button className={`nav-item${navMas.some(i => i.id === vista) ? ' active' : ''}`} onClick={() => setMasAbierto(true)} aria-haspopup="dialog">
+            <Icono n="mas" /><span>Más</span>
+            {navMas.some(i => i.badge > 0) && <span className="nav-badge">{navMas.reduce((s, i) => s + (i.badge || 0), 0)}</span>}
+          </button>
+        )}
+      </nav>
+
+      {masAbierto && (
+        <div className="sheet-overlay" onClick={() => setMasAbierto(false)}>
+          <div className="sheet" role="dialog" aria-modal="true" aria-label="Más opciones" onClick={e => e.stopPropagation()}>
+            <div className="sheet-grip" />
+            <h3>Más opciones</h3>
+            <div className="sheet-grid">
+              {navMas.map(item => (
+                <button key={item.id} className={`sheet-item${vista === item.id ? ' activo' : ''}`} onClick={() => irA(item)}>
+                  <Icono n={ICONO_NAV[item.id] || 'mas'} /><span>{item.label}</span>
+                  {item.badge > 0 && <span className="nav-badge">{item.badge}</span>}
+                </button>
+              ))}
+            </div>
+            <div className="sheet-acciones">
+              {pwaInstallEvent && <button onClick={() => { instalarPWA(); setMasAbierto(false); }}><Icono n="instalar" size={20} />Instalar la app</button>}
+              <button className="salir" onClick={logout}><Icono n="salir" size={20} />Cerrar sesión</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main>
 
@@ -1130,8 +1167,8 @@ function App() {
                   Entrada a las {registrosHoy.find(r => r.tipo === 'ENTRADA')?.hora}
                 </p>
               )}
-              <button className="btn-sm" style={{ marginTop: '0.75rem' }} onClick={() => setVista('fichar')}>
-                Ir a Fichar →
+              <button className="btn-sm" onClick={() => setVista('fichar')}>
+                {estadoFichaje === 'ENTRADA' ? 'Fichar salida' : 'Fichar entrada'}
               </button>
             </div>
 
@@ -1209,15 +1246,15 @@ function App() {
                 <div className="scanner-container">
                   <video ref={videoRef} className="scanner-video" playsInline muted />
                   <div className="scanner-overlay"><div className="scanner-frame" /></div>
-                  <button className="btn-ghost scanner-stop" onClick={detenerScanner}>✕ Cerrar cámara</button>
+                  <button className="btn-ghost scanner-stop" onClick={detenerScanner}><Icono n="cerrar" size={20} /> Cerrar cámara</button>
                 </div>
               ) : (
                 <>
                   <div className="scan-buttons">
-                    <button className="btn-scan" onClick={iniciarScanner}>📷 Escanear QR con cámara</button>
+                    <button className="btn-scan" onClick={iniciarScanner}><Icono n="qr" size={22} /> Escanear QR con cámara</button>
                     {nfcDisponible && (
                       <button className={`btn-scan btn-nfc ${nfcActivo ? 'active' : ''}`} onClick={iniciarNFC}>
-                        {nfcActivo ? '📡 Esperando NFC...' : '📡 Leer tag NFC'}
+                        <Icono n="nfc" size={22} /> {nfcActivo ? 'Esperando NFC…' : 'Leer tag NFC'}
                       </button>
                     )}
                   </div>
