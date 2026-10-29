@@ -17,7 +17,8 @@ cd frontend && npm install && npm run dev
 
 Sin SMTP configurado, el enlace de acceso se imprime en la consola del backend.
 
-## Deploy
+## Deploy (Railway + Cloudflare Pages + Resend)
 
-- **Backend (Railway)**: Root Directory `backend`. Variables: `JWT_SECRET`, `FRONTEND_URL` (URL del frontend), `DATABASE_URL=file:/data/prod.db`, `SMTP_*`, `EMAIL_FROM`. Volumen montado en `/data` y `UPLOAD_DIR` en ese volumen (ver `backend/.env.example`).
-- **Frontend (Vercel)**: Root Directory `frontend`, variable `VITE_API_URL` con la URL del backend.
+- **Backend (Railway)**: Root Directory `backend`, volumen en `/data`. Variables: `JWT_SECRET`, `FRONTEND_URL=https://skijornada.johelpastorino.com`, `ADMIN_EMAIL`, `DATABASE_URL=file:/data/prod.db`, `UPLOAD_DIR=/data/uploads`, `RESEND_API_KEY`, `EMAIL_FROM`. Dominio sugerido: `api.skijornada.johelpastorino.com`.
+- **Frontend (Cloudflare Pages)**: root `frontend`, build `npm run build`, salida `dist`, variable `VITE_API_URL=https://api.skijornada.johelpastorino.com`. Dominio: `skijornada.johelpastorino.com`.
+- **Correo (Resend)**: verificar el dominio en resend.com/domains (registros SPF/DKIM en el DNS) y usar `EMAIL_FROM=Ski Jornada <no-reply@skijornada.johelpastorino.com>`.

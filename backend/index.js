@@ -83,15 +83,32 @@ const emailTransporter = nodemailer.createTransport({
   auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
 });
 
+const RESEND_KEY = process.env.RESEND_API_KEY;
+const EMAIL_OK = !!RESEND_KEY || SMTP_OK;
+
 async function enviarEmail(to, subject, html, attachments = []) {
+  const from = process.env.EMAIL_FROM || 'Ski Jornada <no-reply@skijornada.com>';
+  if (RESEND_KEY) {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from, to: [to], subject, html,
+        attachments: attachments.map(a => ({
+          filename: a.filename,
+          content: Buffer.isBuffer(a.content) ? a.content.toString('base64') : a.content,
+        })),
+      }),
+    });
+    if (!r.ok) throw new Error(`Resend ${r.status}: ${await r.text()}`);
+    console.log(`📧 Enviado (Resend) → ${to}`);
+    return;
+  }
   if (!SMTP_OK) {
     console.log(`📧 [SIMULADO] → ${to}: ${subject}`);
     return;
   }
-  await emailTransporter.sendMail({
-    from: process.env.EMAIL_FROM || 'Ski Jornada <no-reply@skijornada.com>',
-    to, subject, html, attachments,
-  });
+  await emailTransporter.sendMail({ from, to, subject, html, attachments });
   console.log(`📧 Enviado → ${to}`);
 }
 
@@ -204,7 +221,7 @@ async function enviarMagicLink(u, { invitacion = false } = {}) {
   });
   const base = (process.env.FRONTEND_URL || 'http://localhost:5173').split(',')[0].trim();
   const url = `${base}/?magic=${token}`;
-  if (!SMTP_OK && process.env.NODE_ENV !== 'production') console.log(`🔗 [DEV] Enlace de acceso para ${u.email}: ${url}`);
+  if (!EMAIL_OK && process.env.NODE_ENV !== 'production') console.log(`🔗 [DEV] Enlace de acceso para ${u.email}: ${url}`);
   await enviarEmail(
     u.email,
     invitacion ? 'Te damos la bienvenida a Ski Jornada' : 'Tu enlace de acceso a Ski Jornada',
@@ -1512,7 +1529,7 @@ app.listen(PORT, () => {
   console.log(`  Ski Jornada API — http://localhost:${PORT}`);
   console.log('  Admin:    admin@escuela.com / ski123');
   console.log('  Profesor: profesor@escuela.com / ski123');
-  console.log(SMTP_OK ? '  📧 Email: configurado' : '  📧 Email: modo consola (sin SMTP)');
+  console.log(RESEND_KEY ? '  📧 Email: Resend' : SMTP_OK ? '  📧 Email: SMTP' : '  📧 Email: modo consola');
   console.log(`  📱 WhatsApp: ${process.env.WHATSAPP_ENABLED === 'true' ? 'habilitado' : 'deshabilitado'}`);
   console.log('========================================');
 });
