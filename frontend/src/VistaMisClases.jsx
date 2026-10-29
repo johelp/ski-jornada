@@ -5,6 +5,13 @@ const eur = n => (n == null ? '—' : `${n.toLocaleString('es-ES', { minimumFrac
 const fechaCorta = f => { const [, m, d] = f.split('-'); return `${d}/${m}`; };
 const hoyISO = () => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`; };
 const mesActual = () => hoyISO().slice(0, 7);
+export const REVISION = {
+  APROBADO: { label: 'Aprobado por administración', clase: 'aprobado' },
+  DISCREPANCIA: { label: 'Discrepancia detectada', clase: 'rechazado' },
+  CORRECCION: { label: 'Corrección solicitada', clase: 'rechazado' },
+  COMENTARIO: { label: 'Comentario de administración', clase: 'pendiente' },
+  PENDIENTE: { label: 'En revisión', clase: 'pendiente' },
+};
 const formVacio = () => ({ fecha: hoyISO(), horas: '1', tipoId: '', primaIds: [], notas: '' });
 
 // Vista del profesor: cargar clases dadas, consultarlas, confirmar el mes y bajar el informe.
@@ -124,6 +131,16 @@ export default function VistaMisClases({ api, h, toast$, config }) {
               </div>
             </div>
 
+            {informe.revision ? (
+              <div className={`revision revision-${REVISION[informe.revision.estado]?.clase}`} role="status">
+                <strong>{REVISION[informe.revision.estado]?.label}</strong>
+                {informe.revision.nota && <p>“{informe.revision.nota}”</p>}
+                {informe.revision.estado === 'CORRECCION' && <p className="form-hint">Corrige lo indicado y vuelve a confirmar el mes.</p>}
+              </div>
+            ) : bloqueado && (
+              <div className="revision revision-pendiente" role="status"><strong>En espera de revisión</strong><p>Administración revisará tus horas.</p></div>
+            )}
+
             {!informe.detalle.length ? <div className="empty-state"><p>🎿 Sin clases cargadas este mes</p></div> : (
               <div className="clases-lista">
                 {informe.detalle.map(c => (
@@ -133,6 +150,11 @@ export default function VistaMisClases({ api, h, toast$, config }) {
                       <strong>{c.tipoNombre}</strong> · {c.horas} h
                       {c.primas.length > 0 && <div className="clase-primas">{c.primas.map(p => <span key={p.id} className="chip chip-sm">{p.nombre}</span>)}</div>}
                       {c.notas && <small>{c.notas}</small>}
+                      {c.marca && (
+                        <small className={`marca marca-${c.marca.toLowerCase()}`}>
+                          {c.marca === 'OK' ? '✓ Revisada' : '⚠ A revisar'}{c.notaAdmin ? ` — ${c.notaAdmin}` : ''}
+                        </small>
+                      )}
                     </div>
                     {conImporte && <div className="clase-importe">{eur(c.importe)}</div>}
                     {!bloqueado && (

@@ -36,10 +36,14 @@ Los errores devuelven `{ "error": "mensaje" }` con el código HTTP correspondien
 | POST | `/api/clases/confirmar-mes` | `{mes}` → bloquea, congela tarifas, avisa al admin |
 | GET 🛡 | `/api/admin/clases/resumen/:mes` | Resumen por profesor |
 | POST 🛡 | `/api/admin/clases/reabrir` | `{profesorId, mes}` |
+| POST 🛡 | `/api/admin/clases/revision` | `{profesorId, mes, estado: APROBADO\|DISCREPANCIA\|CORRECCION\|COMENTARIO, nota?}`. La nota es obligatoria salvo en `APROBADO`. `CORRECCION` reabre el mes. Notifica al profesor |
+| PUT 🛡 | `/api/admin/clases/:id/anotacion` | `{marca: "OK"\|"REVISAR"\|null, nota?}` sobre una clase |
 | GET/POST 🛡 | `/api/admin/tipos-clase` | Disciplinas |
 | PUT 🛡 | `/api/admin/tipos-clase/:id` | `{nombre?, activo?}` |
 | GET/POST 🛡 | `/api/admin/primas` | Primas |
 | PUT 🛡 | `/api/admin/primas/:id` | `{nombre?, activa?, importe?, modo?: "POR_HORA"\|"POR_CLASE"}` |
+
+El informe incluye `revision` (`{estado, nota, revisadoAt}` o `null`) y, por clase, `marca` y `notaAdmin`. El resumen admin incluye `revisionEstado`.
 
 `importe*` es `null` si no hay tarifa ni importes de prima cargados.
 
@@ -61,6 +65,9 @@ Los errores devuelven `{ "error": "mensaje" }` con el código HTTP correspondien
 | POST | `/api/firma/subir-firmado` | Sube el PDF firmado |
 | GET | `/api/firma/estado/:profesorId/:mes` | Estado de la firma |
 | GET 🛡 | `/api/admin/firmas` | Firmas pendientes |
+
+## Archivos (protegidos)
+`GET /uploads/documentos/:file` y `GET /uploads/firmas/:file` requieren `Authorization: Bearer`. Admin: todo. Profesor: solo los suyos (403 si no). Ver `ARQUITECTURA.md`.
 
 ## Días libres
 `POST /api/libres/solicitar` · `GET /api/libres/mis-solicitudes` · 🛡 `GET /api/admin/solicitudes` · 🛡 `POST /api/admin/solicitudes/:id/responder`

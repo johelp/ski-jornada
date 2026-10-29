@@ -29,6 +29,7 @@ model Profesor {
   clasesDadas              ClaseDada[]
   confirmacionesClases     ConfirmacionClases[]
   magicLinks               MagicLink[]
+  revisionesClases         RevisionMes[]
   notificacionesRecibidas  Notificacion[] @relation("NotifRecibidas")
   notificacionesEnviadas   Notificacion[] @relation("NotifEnviadas")
 }
@@ -159,6 +160,8 @@ model ClaseDada {
   tipo       TipoClase    @relation(fields: [tipoId], references: [id])
   primas     PrimaClase[]
   notas      String?
+  marca      String?
+  notaAdmin  String?
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
 
@@ -184,4 +187,17 @@ model MagicLink {
   tokenHash  String   @unique
   expiraAt   DateTime
   createdAt  DateTime @default(now())
+}
+
+model RevisionMes {
+  id            String   @id @default(uuid())
+  profesorId    String
+  profesor      Profesor @relation(fields: [profesorId], references: [id], onDelete: Cascade)
+  mes           String
+  estado        String
+  nota          String?
+  revisadoPorId String?
+  revisadoAt    DateTime @default(now())
+
+  @@unique([profesorId, mes])
 }

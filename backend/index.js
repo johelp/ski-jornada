@@ -71,7 +71,6 @@ const uploadFirma = multer({
   },
 });
 
-app.use('/uploads', express.static(UPLOAD_DIR));
 
 // ============ EMAIL ============
 const SMTP_OK = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
@@ -189,6 +188,26 @@ const adminOnly = (req, res, next) => {
   if (req.user.role !== 'ADMIN') return res.status(403).json({ error: 'Requiere permisos de administrador' });
   next();
 };
+
+// ============ ARCHIVOS (protegidos) ============
+// Los PDFs (nóminas, contratos, firmas) solo los ve el administrador o el profesor dueño.
+app.get('/uploads/:sub/:file', auth, async (req, res) => {
+  try {
+    const { sub, file } = req.params;
+    if (!['documentos', 'firmas'].includes(sub) || !/^[\w.-]+$/.test(file)) return res.status(400).json({ error: 'Archivo inválido' });
+    if (req.user.role !== 'ADMIN') {
+      const campo = sub === 'documentos' ? 'archivoPath' : 'firmaPath';
+      const doc = await prisma.documentoLegajo.findFirst({ where: { [campo]: file, profesorId: req.user.userId } });
+      const reg = sub === 'firmas' && !doc
+        ? await prisma.firmaRegistro.findFirst({ where: { pdfFirmadoPath: file, profesorId: req.user.userId } })
+        : null;
+      if (!doc && !reg) return res.status(403).json({ error: 'No autorizado' });
+    }
+    const ruta = path.join(UPLOAD_DIR, sub, file);
+    if (!fs.existsSync(ruta)) return res.status(404).json({ error: 'Archivo no encontrado' });
+    res.sendFile(ruta);
+  } catch (err) { res.status(500).json({ error: 'Error leyendo el archivo' }); }
+});
 
 // ============ SERVER TIME ============
 app.get('/api/server-time', (req, res) => {
@@ -1253,7 +1272,7 @@ crudCatalogo('primas', 'primaClase', 'activa', b => {
 
 const incluirClase = { tipo: true, primas: true };
 const mapClase = c => ({
-  id: c.id, fecha: c.fecha, horas: c.horas, notas: c.notas,
+  id: c.id, fecha: c.fecha, horas: c.horas, notas: c.notas, marca: c.marca, notaAdmin: c.notaAdmin,
   tipoId: c.tipoId, tipoNombre: c.tipo.nombre,
   primas: c.primas.map(p => ({ id: p.id, nombre: p.nombre })),
 });
@@ -1323,7 +1342,7 @@ app.delete('/api/clases/:id', auth, async (req, res) => {
 
 // Informe del mes de un profesor (propio; el admin puede pedir ?profesorId=)
 async function construirInformeClases(profesorId, mes) {
-  const [profesor, clases, conf, primasCat] = await Promise.all([
+  const [profesor, clases, conf, primasCat, revision] = await Promise.all([
     prisma.profesor.findUnique({ where: { id: profesorId }, select: { id: true, nombre: true, apellidos: true, email: true, tarifaHora: true } }),
     prisma.claseDada.findMany({
       where: { profesorId, fecha: { startsWith: mes } },
@@ -1331,6 +1350,7 @@ async function construirInformeClases(profesorId, mes) {
     }),
     mesConfirmado(profesorId, mes),
     prisma.primaClase.findMany(),
+    prisma.revisionMes.findUnique({ where: { profesorId_mes: { profesorId, mes } } }),
   ]);
   if (!profesor) return null;
   // Mes confirmado → se usan las tarifas congeladas al confirmar; si no, las vigentes.
@@ -1371,6 +1391,7 @@ async function construirInformeClases(profesorId, mes) {
     diasConClases: Object.keys(porDia).length,
     tarifaHora, importeBase: base, importePrimas: primasTotal, importeTotal,
     confirmado: !!conf, confirmadoAt: conf?.confirmadoAt ?? null,
+    revision: revision ? { estado: revision.estado, nota: revision.nota, revisadoAt: revision.revisadoAt } : null,
   };
 }
 
@@ -1396,6 +1417,7 @@ app.post('/api/clases/confirmar-mes', auth, async (req, res) => {
       prisma.profesor.findUnique({ where: { id: req.user.userId }, select: { tarifaHora: true } }),
       prisma.primaClase.findMany(),
     ]);
+    await prisma.revisionMes.updateMany({ where: { profesorId: req.user.userId, mes }, data: { estado: 'PENDIENTE', revisadoAt: new Date() } });
     await prisma.confirmacionClases.create({ data: {
       profesorId: req.user.userId, mes, tarifaHora: prof.tarifaHora ?? null,
       primasJson: JSON.stringify(Object.fromEntries(primasCat.map(p => [p.id, { importe: p.importe, modo: p.modo }]))),
@@ -1439,9 +1461,61 @@ app.get('/api/admin/clases/resumen/:mes', auth, adminOnly, async (req, res) => {
       id: i.profesor.id, nombre: i.profesor.nombre, apellidos: i.profesor.apellidos,
       totalHoras: i.totalHoras, cantidadClases: i.detalle.length, diasConClases: i.diasConClases,
       tarifaHora: i.tarifaHora, importeTotal: i.importeTotal,
-      confirmado: i.confirmado, confirmadoAt: i.confirmadoAt,
+      confirmado: i.confirmado, confirmadoAt: i.confirmadoAt, revisionEstado: i.revision?.estado ?? null,
     })));
   } catch (err) { console.error(err); res.status(500).json({ error: 'Error' }); }
+});
+
+// Admin: revisión del mes de un profesor (aprobar, marcar discrepancia, pedir corrección o dejar un comentario)
+const ESTADOS_REVISION = ['APROBADO', 'DISCREPANCIA', 'CORRECCION', 'COMENTARIO'];
+app.post('/api/admin/clases/revision', auth, adminOnly, async (req, res) => {
+  try {
+    const { profesorId, mes, estado } = req.body;
+    const nota = String(req.body.nota || '').trim().slice(0, 600) || null;
+    if (!profesorId || !MES_RE.test(mes || '')) return res.status(400).json({ error: 'Datos inválidos' });
+    if (!ESTADOS_REVISION.includes(estado)) return res.status(400).json({ error: 'Estado de revisión inválido' });
+    if (['DISCREPANCIA', 'CORRECCION', 'COMENTARIO'].includes(estado) && !nota)
+      return res.status(400).json({ error: 'Escribí una nota para el profesor' });
+    const prof = await prisma.profesor.findUnique({ where: { id: profesorId } });
+    if (!prof) return res.status(404).json({ error: 'Profesor no encontrado' });
+
+    const rev = await prisma.revisionMes.upsert({
+      where: { profesorId_mes: { profesorId, mes } },
+      create: { profesorId, mes, estado, nota, revisadoPorId: req.user.userId },
+      update: { estado, nota, revisadoPorId: req.user.userId, revisadoAt: new Date() },
+    });
+    // Pedir corrección = reabrir el mes para que el profesor edite
+    if (estado === 'CORRECCION') await prisma.confirmacionClases.deleteMany({ where: { profesorId, mes } });
+
+    const titulos = {
+      APROBADO: 'Horas aprobadas', DISCREPANCIA: 'Discrepancia en tus horas',
+      CORRECCION: 'Corrección solicitada', COMENTARIO: 'Comentario sobre tus horas',
+    };
+    await prisma.notificacion.create({ data: {
+      titulo: `${titulos[estado]} · ${mes}`,
+      mensaje: nota || 'El administrador revisó tus horas y están correctas.',
+      tipo: estado === 'APROBADO' ? 'INFO' : 'AVISO', profesorId, enviadaPorId: req.user.userId,
+    } });
+    enviarEmail(prof.email, `${titulos[estado]} (${mes})`,
+      `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
+        <h2 style="color:#0f4c81">⛷️ ${titulos[estado]} — ${mes}</h2>
+        <p>${escHtml(nota || 'El administrador revisó tus horas y están correctas.')}</p>
+        <p><a href="${(process.env.FRONTEND_URL || 'http://localhost:5173').split(',')[0].trim()}">Abrir Ski Jornada →</a></p>
+      </div>`).catch(console.error);
+    res.json({ success: true, revision: rev });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error guardando la revisión' }); }
+});
+
+// Admin: marca y anotación sobre una clase concreta (visible para el profesor)
+app.put('/api/admin/clases/:id/anotacion', auth, adminOnly, async (req, res) => {
+  try {
+    const marca = ['OK', 'REVISAR'].includes(req.body.marca) ? req.body.marca : null;
+    const notaAdmin = String(req.body.nota || '').trim().slice(0, 300) || null;
+    const c = await prisma.claseDada.update({
+      where: { id: req.params.id }, data: { marca, notaAdmin }, include: incluirClase,
+    });
+    res.json(mapClase(c));
+  } catch (err) { res.status(404).json({ error: 'Clase no encontrada' }); }
 });
 
 // Admin: reabrir un mes confirmado para que el profesor pueda corregir

@@ -1916,3 +1916,27 @@ main {
 .catalogo-item { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .catalogo-item.inactivo { opacity: 0.55; }
 .catalogo-item > input:first-child { flex: 1; min-width: 8rem; }
+
+/* ===== Revisión de administración ===== */
+.revision { border-left: 4px solid #94a3b8; background: #f8fafc; border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; }
+.revision p { margin: 0.25rem 0 0; }
+.revision-aprobado { border-color: #16a34a; background: #f0fdf4; }
+.revision-rechazado { border-color: #dc2626; background: #fef2f2; }
+.revision-pendiente { border-color: #f59e0b; background: #fffbeb; }
+.marca { display: block; font-size: 0.8rem; }
+.marca-ok { color: #15803d; }
+.marca-revisar { color: #b45309; }
+.panel-revision { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; display: grid; gap: 0.6rem; }
+.panel-revision textarea { width: 100%; font: inherit; padding: 0.5rem; border: 1px solid #94a3b8; border-radius: 8px; }
+.chip-btn { cursor: pointer; }
+.anotacion { display: flex; flex-direction: column; gap: 0.3rem; align-items: flex-end; }
+.anotacion-botones { display: flex; gap: 0.25rem; flex-wrap: wrap; justify-content: flex-end; }
+.anotacion-edit { display: flex; gap: 0.25rem; }
+.anotacion-edit input { min-width: 12rem; }
+.marca-activa-ok { background: #dcfce7; border-color: #16a34a; }
+.marca-activa-revisar { background: #fef3c7; border-color: #f59e0b; }
+.clase-item { flex-wrap: wrap; }
+.panel-revision, .clase-item, .revision, .anotacion { text-align: left; }
+.panel-revision textarea { background: #fff; color: #0f172a; text-align: left; }
+.panel-revision label { text-align: left; }
+.clase-info { align-items: flex-start; }

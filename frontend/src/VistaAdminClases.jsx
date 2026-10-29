@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { generarPDFClases } from './pdfClases';
+import { REVISION } from './VistaMisClases';
 
 const eur = n => (n == null ? '—' : `${n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`);
 const fechaCorta = f => { const [, m, d] = f.split('-'); return `${d}/${m}`; };
@@ -15,6 +16,7 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
   const [tipos, setTipos] = useState([]);
   const [primas, setPrimas] = useState([]);
   const [nuevoTipo, setNuevoTipo] = useState('');
+  const [notaRev, setNotaRev] = useState('');
   const [nuevaPrima, setNuevaPrima] = useState({ nombre: '', importe: '', modo: 'POR_HORA' });
 
   const err = e => toast$(e.response?.data?.error || 'Error', 'error');
@@ -33,7 +35,20 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
   useEffect(() => { cargarCatalogo(); }, [cargarCatalogo]);
 
   const verDetalle = async id => {
-    try { setDetalle((await api.get(`/api/clases/informe/${mes}?profesorId=${id}`, { headers: h() })).data); } catch (e) { err(e); }
+    try { setDetalle((await api.get(`/api/clases/informe/${mes}?profesorId=${id}`, { headers: h() })).data); setNotaRev(''); } catch (e) { err(e); }
+  };
+  const revisar = async estado => {
+    try {
+      await api.post('/api/admin/clases/revision', { profesorId: detalle.profesor.id, mes, estado, nota: notaRev }, { headers: h() });
+      toast$('Revisión enviada al profesor ✓', 'success');
+      verDetalle(detalle.profesor.id); cargarResumen();
+    } catch (e) { err(e); }
+  };
+  const anotar = async (c, marca, nota) => {
+    try {
+      await api.put(`/api/admin/clases/${c.id}/anotacion`, { marca, nota }, { headers: h() });
+      verDetalle(detalle.profesor.id);
+    } catch (e) { err(e); }
   };
   const reabrir = async () => {
     if (!window.confirm('¿Reabrir el mes para que el profesor pueda corregir?')) return;
@@ -85,7 +100,7 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
           </div>
           <div className="tabla-scroll">
             <table className="tabla-clases">
-              <thead><tr><th>Profesor</th><th>Horas</th><th>Clases</th><th>Importe</th><th>Estado</th><th /></tr></thead>
+              <thead><tr><th>Profesor</th><th>Horas</th><th>Clases</th><th>Importe</th><th>Estado</th><th>Revisión</th><th /></tr></thead>
               <tbody>
                 {resumen.map(r => (
                   <tr key={r.id}>
@@ -93,6 +108,7 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
                     <td>{r.totalHoras}</td><td>{r.cantidadClases}</td>
                     <td>{eur(r.importeTotal)}</td>
                     <td><span className={`estado-badge ${r.confirmado ? 'aprobado' : 'pendiente'}`}>{r.confirmado ? 'Confirmado' : 'Sin confirmar'}</span></td>
+                    <td>{r.revisionEstado ? <span className={`estado-badge ${REVISION[r.revisionEstado]?.clase}`}>{REVISION[r.revisionEstado]?.label}</span> : (r.confirmado ? <span className="estado-badge pendiente">Por revisar</span> : '—')}</td>
                     <td><button className="btn-sm" onClick={() => verDetalle(r.id)}>Ver</button></td>
                   </tr>
                 ))}
@@ -109,6 +125,29 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
                   {detalle.confirmado && <button className="btn-sm" onClick={reabrir}>↩ Reabrir mes</button>}
                 </div>
               </div>
+              {detalle.confirmado || detalle.revision ? (
+                <div className="panel-revision">
+                  <p className="form-hint">
+                    Estado: <strong>{detalle.revision ? REVISION[detalle.revision.estado]?.label : detalle.confirmado ? 'Confirmado por el profesor, sin revisar' : 'Sin confirmar'}</strong>
+                    {detalle.revision?.nota && <> · última nota: “{detalle.revision.nota}”</>}
+                  </p>
+                  <label htmlFor="nota-rev">Nota para el profesor</label>
+                  <textarea id="nota-rev" rows="2" maxLength="600" value={notaRev} onChange={e => setNotaRev(e.target.value)}
+                    placeholder="Ej. Horas correctas / Discrepancia con la reserva del día 10" />
+                  <div className="chips">
+                    {['Horas correctas', 'Discrepancia con reservas', 'Falta cargar clases', 'Revisar las primas'].map(t => (
+                      <button type="button" key={t} className="chip chip-sm chip-btn" onClick={() => setNotaRev(t)}>{t}</button>
+                    ))}
+                  </div>
+                  <div className="action-buttons">
+                    <button className="btn-approve" disabled={!detalle.confirmado} onClick={() => revisar('APROBADO')}>✓ Aprobar</button>
+                    <button className="btn-sm" onClick={() => revisar('DISCREPANCIA')}>⚠ Marcar discrepancia</button>
+                    <button className="btn-sm" onClick={() => revisar('CORRECCION')}>↩ Pedir corrección</button>
+                    <button className="btn-sm" onClick={() => revisar('COMENTARIO')}>💬 Solo comentar</button>
+                  </div>
+                  <p className="form-hint">“Pedir corrección” reabre el mes para que el profesor edite. Todo llega al profesor por aviso y correo.</p>
+                </div>
+              ) : null}
               {!detalle.detalle.length ? <p>Sin clases cargadas.</p> : (
                 <div className="clases-lista">
                   {detalle.detalle.map(c => (
@@ -120,6 +159,7 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
                         {c.notas && <small>{c.notas}</small>}
                       </div>
                       <div className="clase-importe">{eur(c.importe)}</div>
+                      <AnotacionClase c={c} onGuardar={anotar} />
                     </div>
                   ))}
                 </div>
@@ -174,6 +214,31 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
             <p className="form-hint">La tarifa base por hora se configura en cada profesor, en Usuarios → Editar.</p>
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+// Marca (OK / A revisar) y nota de administración sobre una clase concreta
+function AnotacionClase({ c, onGuardar }) {
+  const [abierto, setAbierto] = useState(false);
+  const [nota, setNota] = useState(c.notaAdmin || '');
+  useEffect(() => { setNota(c.notaAdmin || ''); }, [c.notaAdmin]);
+  return (
+    <div className="anotacion">
+      <div className="anotacion-botones">
+        <button type="button" className={`btn-sm${c.marca === 'OK' ? ' marca-activa-ok' : ''}`} aria-pressed={c.marca === 'OK'}
+          onClick={() => onGuardar(c, c.marca === 'OK' ? null : 'OK', nota)}>✓ OK</button>
+        <button type="button" className={`btn-sm${c.marca === 'REVISAR' ? ' marca-activa-revisar' : ''}`} aria-pressed={c.marca === 'REVISAR'}
+          onClick={() => onGuardar(c, c.marca === 'REVISAR' ? null : 'REVISAR', nota)}>⚠ Revisar</button>
+        <button type="button" className="btn-sm" onClick={() => setAbierto(a => !a)} aria-expanded={abierto}>✎ Nota</button>
+      </div>
+      {c.notaAdmin && !abierto && <small className="marca marca-revisar">{c.notaAdmin}</small>}
+      {abierto && (
+        <div className="anotacion-edit">
+          <input aria-label="Nota sobre la clase" maxLength="300" value={nota} onChange={e => setNota(e.target.value)} placeholder="Nota visible para el profesor" />
+          <button type="button" className="btn-sm" onClick={() => { onGuardar(c, c.marca, nota); setAbierto(false); }}>Guardar</button>
+        </div>
       )}
     </div>
   );

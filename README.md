@@ -7,7 +7,7 @@ Web app instalable (PWA) para escuelas de esquí: **fichaje de jornada**, **carg
 | Rol | Funciones |
 |-----|-----------|
 | **Profesor** | Fichar/desfichar (QR TOTP, GPS o NFC) · Cargar clases dadas (horas + disciplina + primas) · Consultar sus horas · Confirmar el mes · Descargar su informe mensual y económico en PDF · Pedir días libres · Ver nóminas/documentos |
-| **Administrador** | Gestionar la lista de profesores (alta por email, tarifa por hora) · Configurar disciplinas y primas con importes · Ver horas por profesor para **cotejar con el planning de reservas** · Reabrir meses · Informes de jornada (RD 8/2019) · Solicitudes de días libres · Documentos/legajo · Avisos |
+| **Administrador** | Gestionar la lista de profesores (alta por email o CSV, tarifa por hora) · **Revisar las horas**: aprobar, marcar discrepancia, pedir corrección o dejar notas que ve el profesor · Configurar disciplinas y primas con importes · Ver horas por profesor para **cotejar con el planning de reservas** · Reabrir meses · Informes de jornada (RD 8/2019) · Solicitudes de días libres · Documentos/legajo · Avisos |
 
 Ejemplo de carga: *“Hoy 2 h de Clase de Esquí + prima Idioma + prima Repetida”*.
 
@@ -59,6 +59,10 @@ npm run dev                     # http://localhost:5173
 
 ## Documentación
 
+- [docs/FUNCIONES.md](docs/FUNCIONES.md) — catálogo de funciones por rol y su estado
+- [docs/MULTI-DESPLIEGUE.md](docs/MULTI-DESPLIEGUE.md) — alta de un cliente nuevo (plantillas en `deploy/`)
+- [docs/PILOTO-SNOWMOTION.md](docs/PILOTO-SNOWMOTION.md) — piloto, gestión documental e integración con Drive
+- [docs/PRUEBAS.md](docs/PRUEBAS.md) — prueba de humo automática y lista de comprobación
 - [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) — modelo de datos, flujos y decisiones
 - [docs/API.md](docs/API.md) — referencia de endpoints
 - [docs/DEPLOY.md](docs/DEPLOY.md) — producción paso a paso (Railway, Cloudflare Pages, Resend, DNS)

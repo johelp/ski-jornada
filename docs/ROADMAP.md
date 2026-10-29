@@ -9,12 +9,14 @@
 - Landing pública (`frontend/src/Landing.jsx` + `Landing.css`) con accesos separados para profesores y administración; el rol lo define la cuenta del email
 - PWA instalable; repo ordenado; configuración de Railway y Cloudflare Pages
 
+## Piloto Snowmotion
+Ver `PILOTO-SNOWMOTION.md`: carga masiva de nóminas, archivado en Drive (cuenta de servicio), backup a Drive, importación del planning de reservas.
+
 ## Próximo (prioridad alta)
 1. **Revisión UX/UI** de toda la app (mobile first): jerarquía visual, contraste de inputs, formulario de carga de clases con 1 mano, estados vacíos, accesibilidad. Probar la PWA en iOS y Android reales.
 2. **Código de 6 dígitos** además del enlace mágico, por el problema de iOS (la PWA instalada no comparte almacenamiento con Safari).
 3. **Verificar el envío de correos en producción** (Resend + DNS) y plantilla visual de los correos.
 4. **Backups automáticos** de `prod.db` y `uploads`.
-5. **Proteger `/uploads`**: hoy se sirve estático sin autenticación (nombres aleatorios). Pasar a endpoints autenticados o URLs firmadas.
 
 ## Deuda técnica
 - `frontend/src/App.jsx` (~2.300 líneas): partir en vistas (`VistaFichar`, `VistaInformes`, `VistaUsuarios`, `VistaZonas`, `VistaDocumentos`, `VistaPerfil`…) y mover estado a hooks. Considerar `react-router` para URLs reales y botón “atrás”.
