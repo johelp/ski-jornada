@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { generarPDFClases } from './pdfClases';
 import { REVISION } from './VistaMisClases';
+import VistaComparativa from './VistaComparativa';
 
 const eur = n => (n == null ? '—' : `${n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`);
 const fechaCorta = f => { const [, m, d] = f.split('-'); return `${d}/${m}`; };
@@ -85,8 +86,9 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
   return (
     <div>
       <div className="informe-tabs">
-        <button className={`btn-tab${tab === 'resumen' ? ' active' : ''}`} onClick={() => setTab('resumen')}>📋 Horas por profesor</button>
-        <button className={`btn-tab${tab === 'config' ? ' active' : ''}`} onClick={() => setTab('config')}>⚙️ Disciplinas y primas</button>
+        <button className={`btn-tab${tab === 'resumen' ? ' active' : ''}`} onClick={() => setTab('resumen')}>Horas por profesor</button>
+        <button className={`btn-tab${tab === 'cmp' ? ' active' : ''}`} onClick={() => setTab('cmp')}>Comparar con reservas</button>
+        <button className={`btn-tab${tab === 'config' ? ' active' : ''}`} onClick={() => setTab('config')}>Disciplinas y primas</button>
       </div>
 
       {tab === 'resumen' && (
@@ -95,7 +97,7 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
             <h2>Clases impartidas</h2>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <input type="month" value={mes} onChange={e => e.target.value && setMes(e.target.value)} />
-              <button className="btn-sm" onClick={exportarCSV}>⬇ CSV</button>
+              <button className="btn-sm" onClick={exportarCSV}>CSV</button>
             </div>
           </div>
           <div className="tabla-scroll">
@@ -105,10 +107,10 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
                 {resumen.map(r => (
                   <tr key={r.id}>
                     <td>{r.apellidos}, {r.nombre}</td>
-                    <td>{r.totalHoras}</td><td>{r.cantidadClases}</td>
-                    <td>{eur(r.importeTotal)}</td>
-                    <td><span className={`estado-badge ${r.confirmado ? 'aprobado' : 'pendiente'}`}>{r.confirmado ? 'Confirmado' : 'Sin confirmar'}</span></td>
-                    <td>{r.revisionEstado ? <span className={`estado-badge ${REVISION[r.revisionEstado]?.clase}`}>{REVISION[r.revisionEstado]?.label}</span> : (r.confirmado ? <span className="estado-badge pendiente">Por revisar</span> : '—')}</td>
+                    <td data-label="Horas">{r.totalHoras}</td><td data-label="Clases">{r.cantidadClases}</td>
+                    <td data-label="Importe">{eur(r.importeTotal)}</td>
+                    <td data-label="Estado"><span className={`estado-badge ${r.confirmado ? 'aprobado' : 'pendiente'}`}>{r.confirmado ? 'Confirmado' : 'Sin confirmar'}</span></td>
+                    <td data-label="Revisión">{r.revisionEstado ? <span className={`estado-badge ${REVISION[r.revisionEstado]?.clase}`}>{REVISION[r.revisionEstado]?.label}</span> : (r.confirmado ? <span className="estado-badge pendiente">Por revisar</span> : '—')}</td>
                     <td><button className="btn-sm" onClick={() => verDetalle(r.id)}>Ver</button></td>
                   </tr>
                 ))}
@@ -121,10 +123,29 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
               <div className="card-header">
                 <h3>{detalle.profesor.nombre} {detalle.profesor.apellidos} — {detalle.totalHoras} h {detalle.importeTotal != null && `· ${eur(detalle.importeTotal)}`}</h3>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button className="btn-sm" onClick={() => generarPDFClases(detalle, config || {})}>⬇ PDF</button>
-                  {detalle.confirmado && <button className="btn-sm" onClick={reabrir}>↩ Reabrir mes</button>}
+                  <button className="btn-sm" onClick={() => generarPDFClases(detalle, config || {})}>PDF</button>
+                  {detalle.confirmado && <button className="btn-sm" onClick={reabrir}>Reabrir mes</button>}
                 </div>
               </div>
+              {detalle.planning && (
+                <div className="cotejo">
+                  <h3>Cotejo con el planning</h3>
+                  <p className="form-hint">
+                    Planificadas <strong>{detalle.planning.totalPlanificadas} h</strong> · cargadas <strong>{detalle.planning.totalCargadas} h</strong> ·{' '}
+                    {detalle.planning.diasConDiferencia ? <span className="texto-aviso">{detalle.planning.diasConDiferencia} día(s) con diferencia</span> : <span className="texto-ok">sin diferencias</span>}
+                  </p>
+                  <div className="cotejo-filas">
+                    {detalle.planning.filas.map(f => (
+                      <div key={f.fecha} className={`cotejo-fila${f.diferencia ? ' dif' : ''}`}>
+                        <span>{fechaCorta(f.fecha)}</span>
+                        <span>Plan. {f.planificadas} h</span>
+                        <span>Carg. {f.cargadas} h</span>
+                        <strong>{f.diferencia > 0 ? '+' : ''}{f.diferencia} h</strong>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {detalle.confirmado || detalle.revision ? (
                 <div className="panel-revision">
                   <p className="form-hint">
@@ -140,10 +161,10 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
                     ))}
                   </div>
                   <div className="action-buttons">
-                    <button className="btn-approve" disabled={!detalle.confirmado} onClick={() => revisar('APROBADO')}>✓ Aprobar</button>
-                    <button className="btn-sm" onClick={() => revisar('DISCREPANCIA')}>⚠ Marcar discrepancia</button>
-                    <button className="btn-sm" onClick={() => revisar('CORRECCION')}>↩ Pedir corrección</button>
-                    <button className="btn-sm" onClick={() => revisar('COMENTARIO')}>💬 Solo comentar</button>
+                    <button className="btn-approve" disabled={!detalle.confirmado} onClick={() => revisar('APROBADO')}>Aprobar</button>
+                    <button className="btn-sm" onClick={() => revisar('DISCREPANCIA')}>Marcar discrepancia</button>
+                    <button className="btn-sm" onClick={() => revisar('CORRECCION')}>Pedir corrección</button>
+                    <button className="btn-sm" onClick={() => revisar('COMENTARIO')}>Solo comentar</button>
                   </div>
                   <p className="form-hint">“Pedir corrección” reabre el mes para que el profesor edite. Todo llega al profesor por aviso y correo.</p>
                 </div>
@@ -154,7 +175,7 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
                     <div key={c.id} className="clase-item">
                       <div className="clase-fecha">{fechaCorta(c.fecha)}</div>
                       <div className="clase-info">
-                        <strong>{c.tipoNombre}</strong> · {c.horas} h
+                        <span><strong>{c.tipoNombre}</strong> · {c.horas} h</span>
                         {c.primas.length > 0 && <div className="clase-primas">{c.primas.map(p => <span key={p.id} className="chip chip-sm">{p.nombre}</span>)}</div>}
                         {c.notas && <small>{c.notas}</small>}
                       </div>
@@ -168,6 +189,8 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
           )}
         </div>
       )}
+
+      {tab === 'cmp' && <VistaComparativa api={api} h={h} toast$={toast$} />}
 
       {tab === 'config' && (
         <>
@@ -228,10 +251,10 @@ function AnotacionClase({ c, onGuardar }) {
     <div className="anotacion">
       <div className="anotacion-botones">
         <button type="button" className={`btn-sm${c.marca === 'OK' ? ' marca-activa-ok' : ''}`} aria-pressed={c.marca === 'OK'}
-          onClick={() => onGuardar(c, c.marca === 'OK' ? null : 'OK', nota)}>✓ OK</button>
+          onClick={() => onGuardar(c, c.marca === 'OK' ? null : 'OK', nota)}>OK</button>
         <button type="button" className={`btn-sm${c.marca === 'REVISAR' ? ' marca-activa-revisar' : ''}`} aria-pressed={c.marca === 'REVISAR'}
-          onClick={() => onGuardar(c, c.marca === 'REVISAR' ? null : 'REVISAR', nota)}>⚠ Revisar</button>
-        <button type="button" className="btn-sm" onClick={() => setAbierto(a => !a)} aria-expanded={abierto}>✎ Nota</button>
+          onClick={() => onGuardar(c, c.marca === 'REVISAR' ? null : 'REVISAR', nota)}>Revisar</button>
+        <button type="button" className="btn-sm" onClick={() => setAbierto(a => !a)} aria-expanded={abierto}>Nota</button>
       </div>
       {c.notaAdmin && !abierto && <small className="marca marca-revisar">{c.notaAdmin}</small>}
       {abierto && (

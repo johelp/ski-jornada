@@ -60,6 +60,7 @@ npm run dev                     # http://localhost:5173
 ## Documentación
 
 - [docs/ALCANCE-MVP.md](docs/ALCANCE-MVP.md) — alcance, estado, riesgos y decisiones pendientes del MVP
+- [docs/COMPARATIVA.md](docs/COMPARATIVA.md) — comparar el resumen de instructores del sistema de reservas con las horas cargadas
 - [docs/INTEGRACIONES.md](docs/INTEGRACIONES.md) — API con keys, webhooks e importación de planning
 - [docs/RGPD.md](docs/RGPD.md) — protección de datos: registro, política, contrato de encargo, medidas, brechas
 - [docs/FUNCIONES.md](docs/FUNCIONES.md) — catálogo de funciones por rol y su estado

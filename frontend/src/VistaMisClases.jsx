@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { generarPDFClases } from './pdfClases';
+import Icono from './Iconos';
 
 const eur = n => (n == null ? '—' : `${n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`);
 const fechaCorta = f => { const [, m, d] = f.split('-'); return `${d}/${m}`; };
@@ -84,16 +85,34 @@ export default function VistaMisClases({ api, h, toast$, config }) {
       <div className="card">
         <h2>{editId ? 'Editar clase' : 'Cargar clase'}</h2>
         <div className="form-row">
-          <div className="form-group"><label>Fecha</label>
-            <input type="date" value={form.fecha} max={hoyISO()} onChange={e => setForm({ ...form, fecha: e.target.value })} /></div>
-          <div className="form-group"><label>Horas</label>
-            <input type="number" inputMode="decimal" min="0.25" max="12" step="0.25" value={form.horas}
-              onChange={e => setForm({ ...form, horas: e.target.value })} /></div>
+          <div className="form-group"><label htmlFor="cl-fecha">Fecha</label>
+            <input id="cl-fecha" type="date" value={form.fecha} max={hoyISO()} onChange={e => setForm({ ...form, fecha: e.target.value })} /></div>
+          <div className="form-group"><label htmlFor="cl-horas">Horas</label>
+            <input id="cl-horas" type="number" inputMode="decimal" min="0.25" max="12" step="0.25" value={form.horas}
+              onChange={e => setForm({ ...form, horas: e.target.value })} />
+            <div className="chips atajos">
+              {['0.5', '1', '1.5', '2', '3', '4'].map(h => (
+                <button type="button" key={h} className={`chip chip-sm chip-btn${String(form.horas) === h ? ' chip-on' : ''}`}
+                  onClick={() => setForm({ ...form, horas: h })}>{h.replace('.', ',')} h</button>
+              ))}
+            </div>
+          </div>
         </div>
-        <div className="form-group"><label>Disciplina</label>
-          <select value={form.tipoId} onChange={e => setForm({ ...form, tipoId: e.target.value })}>
-            {catalogo.tipos.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-          </select>
+        <div className="form-group"><label id="cl-disc">Disciplina</label>
+          {catalogo.tipos.length <= 5 ? (
+            <div className="chips" role="radiogroup" aria-labelledby="cl-disc">
+              {catalogo.tipos.map(t => (
+                <button type="button" key={t.id} role="radio" aria-checked={form.tipoId === t.id}
+                  className={`chip${form.tipoId === t.id ? ' chip-on' : ''}`} onClick={() => setForm({ ...form, tipoId: t.id })}>
+                  {t.nombre}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <select aria-labelledby="cl-disc" value={form.tipoId} onChange={e => setForm({ ...form, tipoId: e.target.value })}>
+              {catalogo.tipos.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+            </select>
+          )}
         </div>
         {catalogo.primas.length > 0 && (
           <div className="form-group"><label>Primas</label>
@@ -101,7 +120,7 @@ export default function VistaMisClases({ api, h, toast$, config }) {
               {catalogo.primas.map(p => (
                 <button type="button" key={p.id}
                   className={`chip${form.primaIds.includes(p.id) ? ' chip-on' : ''}`} onClick={() => togglePrima(p.id)}>
-                  {form.primaIds.includes(p.id) ? '✓ ' : ''}{p.nombre}
+                  {form.primaIds.includes(p.id) && <Icono n="check" size={16} />}{p.nombre}
                 </button>
               ))}
             </div>
@@ -147,20 +166,20 @@ export default function VistaMisClases({ api, h, toast$, config }) {
                   <div key={c.id} className="clase-item">
                     <div className="clase-fecha">{fechaCorta(c.fecha)}</div>
                     <div className="clase-info">
-                      <strong>{c.tipoNombre}</strong> · {c.horas} h
+                      <span><strong>{c.tipoNombre}</strong> · {c.horas} h</span>
                       {c.primas.length > 0 && <div className="clase-primas">{c.primas.map(p => <span key={p.id} className="chip chip-sm">{p.nombre}</span>)}</div>}
                       {c.notas && <small>{c.notas}</small>}
                       {c.marca && (
                         <small className={`marca marca-${c.marca.toLowerCase()}`}>
-                          {c.marca === 'OK' ? '✓ Revisada' : '⚠ A revisar'}{c.notaAdmin ? ` — ${c.notaAdmin}` : ''}
+                          {c.marca === 'OK' ? 'Revisada por administración' : 'A revisar'}{c.notaAdmin ? ` — ${c.notaAdmin}` : ''}
                         </small>
                       )}
                     </div>
                     {conImporte && <div className="clase-importe">{eur(c.importe)}</div>}
                     {!bloqueado && (
                       <div className="clase-acciones">
-                        <button className="btn-sm" onClick={() => editar(c)}>✏</button>
-                        <button className="btn-sm" onClick={() => eliminar(c)}>🗑</button>
+                        <button className="btn-sm" onClick={() => editar(c)}><Icono n="editar" size={18} /> Editar</button>
+                        <button className="btn-sm" onClick={() => eliminar(c)} aria-label="Eliminar clase"><Icono n="borrar" size={18} /></button>
                       </div>
                     )}
                   </div>
@@ -179,9 +198,9 @@ export default function VistaMisClases({ api, h, toast$, config }) {
             )}
 
             <div className="action-buttons" style={{ marginTop: '1rem' }}>
-              <button className="btn-sm" disabled={!informe.detalle.length} onClick={() => generarPDFClases(informe, config || {})}>⬇ Descargar informe PDF</button>
+              <button className="btn-sm" disabled={!informe.detalle.length} onClick={() => generarPDFClases(informe, config || {})}><Icono n="descargar" size={18} /> Descargar informe PDF</button>
               {!bloqueado && (
-                <button className="btn-approve" disabled={!informe.detalle.length} onClick={confirmarMes}>✔ Confirmar horas del mes</button>
+                <button className="btn-approve" disabled={!informe.detalle.length} onClick={confirmarMes}><Icono n="check" size={18} /> Confirmar horas del mes</button>
               )}
             </div>
             {bloqueado && <p className="form-hint">Para corregir algo pedile al administrador que reabra el mes.</p>}

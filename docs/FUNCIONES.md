@@ -69,7 +69,8 @@ Estado: ✅ disponible · 🟡 disponible con límites · 🗺 planificado (ver 
 | Frases rápidas | ✅ | “Horas correctas”, “Discrepancia con reservas”… |
 | Reabrir un mes confirmado | ✅ | |
 | Informe PDF por profesor | ✅ | Incluye la parte económica si hay tarifas |
-| Importar el planning de reservas | 🗺 | Comparación automática planificado vs. cargado |
+| Comparativa con el resumen de instructores del sistema de reservas | ✅ | Horas, importe, tarifa y primas por instructor; vincula nombres y recuerda el vínculo. Ver `COMPARATIVA.md` |
+| Importar el planning de reservas (por día) | ✅ | Por API o CSV; el detalle de cada profesor muestra planificado vs. cargado. Pantalla en *Integraciones* |
 
 ### Informes de jornada y ausencias
 | Función | Estado | Detalle |
@@ -109,4 +110,4 @@ Estado: ✅ disponible · 🟡 disponible con límites · 🗺 planificado (ver 
 - **Seguridad:** enlaces de un solo uso con hash en base, JWT, rate limit, CORS por despliegue, archivos protegidos, cada profesor solo ve sus datos.
 - **Cálculo de importes:** `horas × tarifa del profesor + Σ primas` (por hora o por clase), congelado al confirmar.
 - **Multi-despliegue:** un backend, una base y un frontend por cliente, con plantillas de variables.
-- **Pruebas:** `node backend/scripts/smoke.js` ejecuta 59 verificaciones de extremo a extremo (ver `PRUEBAS.md`).
+- **Pruebas:** `node backend/scripts/smoke.js` ejecuta 68 verificaciones de extremo a extremo (ver `PRUEBAS.md`).

@@ -43,7 +43,8 @@ Plataforma instalable para escuelas de esquí, con **dos accesos** (profesor y a
 | Resumen mensual por profesor, exporta CSV | ✅ |
 | Detalle día a día para cotejar con reservas | ✅ |
 | Aprobar / discrepancia / pedir corrección / comentar + anotaciones por clase | ✅ |
-| Cotejo automático planificado vs. cargado | 🔧 (API lista; falta mostrarlo en la interfaz) |
+| Cotejo planificado vs. cargado por día | ✅ (en el detalle de cada profesor) |
+| Comparativa mensual con el resumen de instructores del sistema de reservas (CSV) | ✅ (`COMPARATIVA.md`) |
 | Informes de jornada (RD 8/2019), planilla, ausencias, días libres | ✅ (heredado) |
 | Zonas de fichaje, QR, presencia en tiempo real, avisos | ✅ (heredado) |
 | Documentos (subida, firma del profesor, descarga protegida) | ✅ |
@@ -54,7 +55,7 @@ Plataforma instalable para escuelas de esquí, con **dos accesos** (profesor y a
 | Landing pública con accesos profesor / administración, marca por variables | ✅ |
 | Multi-despliegue: plantillas de variables, checklist de alta | ✅ (`deploy/`, `MULTI-DESPLIEGUE.md`) |
 | Archivos laborales protegidos (solo admin y dueño) | ✅ |
-| API para integraciones (API keys con alcances), webhooks firmados, importación de planning | 🔧 backend probado; sin pantalla de gestión |
+| API para integraciones (API keys con alcances), webhooks firmados, importación de planning | ✅ con pantalla de gestión (*Integraciones*) |
 | Interruptor del módulo de documentos por despliegue | 🔧 |
 | RGPD: documentación base, exportación de datos, retención/purga | 🔧 (`RGPD.md`, `purgar.js`) |
 | Pruebas: prueba de humo de 59 comprobaciones | ✅ |

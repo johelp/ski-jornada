@@ -155,6 +155,27 @@ const pdf = nombre => {
   await http('DELETE', `/api/admin/integraciones/keys/${nk.data.id}`, { token: admin });
   check('una key eliminada deja de funcionar', (await api('GET', '/api/v1/profesores')).status === 401);
 
+  seccion('6c. Comparativa con el sistema de reservas');
+  const nombreMayus = `${me.nombre} ${me.apellidos}`.toUpperCase();
+  const desconocido = `ZZZ NADIE ${Date.now()}`; // único por ejecución: el alias queda guardado
+  const cmp = await http('POST', '/api/admin/comparativa', { token: admin, body: { mes: MES, filas: [
+    { profesor: nombreMayus, salario: 20, totalHoras: 2, total: 56, primas: { Idioma: 6, Repetida: 10 } },
+    { profesor: desconocido, salario: 10, totalHoras: 5, total: 50 },
+    { profesor: 'NO ASIGNADO ', totalHoras: 40, total: 0 },
+  ] } });
+  const filaCmp = cmp.data.resultado?.find(r => r.profesor?.id === me.id);
+  check('compara y reconoce al profesor por nombre', cmp.status === 200 && filaCmp && filaCmp.via === 'nombre');
+  check('horas e importe coinciden → OK', filaCmp?.estado === "OK", `(estado ${filaCmp?.estado}, dif ${JSON.stringify(filaCmp?.diferencia)})`);
+  check('compara las primas por nombre', filaCmp?.primas.some(p => p.nombre === 'Idioma' && p.diferencia === 0));
+  check('un nombre desconocido queda sin vincular', cmp.data.resultado.some(r => r.estado === 'SIN_COINCIDENCIA'));
+  check('detecta las reservas sin instructor asignado', cmp.data.sinAsignar?.totalHoras === 40);
+  const dif = await http('POST', '/api/admin/comparativa', { token: admin, body: { mes: MES, filas: [{ profesor: nombreMayus, salario: 20, totalHoras: 5, total: 100 }] } });
+  check('marca diferencia de horas', dif.data.resultado[0].estado === 'DIFERENCIA_HORAS' && dif.data.resultado[0].diferencia.horas === -3);
+  check('el alias se guarda', (await http('POST', '/api/admin/comparativa/alias', { token: admin, body: { nombreExterno: desconocido, profesorId: me.id } })).status === 200);
+  const cmp2 = await http('POST', '/api/admin/comparativa', { token: admin, body: { mes: MES, filas: [{ profesor: desconocido, salario: 20, totalHoras: 2, total: 56 }] } });
+  check('con el alias reconoce al instructor', cmp2.data.resultado[0].via === 'alias');
+  check('el profesor no puede comparar → 403', (await http('POST', '/api/admin/comparativa', { token: prof, body: { mes: MES, filas: [] } })).status === 403);
+
   seccion('7. Limpieza');
   await http('POST', '/api/admin/clases/reabrir', { token: admin, body: { profesorId: me.id, mes: MES } });
   check('elimina la clase de prueba', (await http('DELETE', `/api/clases/${claseId}`, { token: prof })).status === 200);
