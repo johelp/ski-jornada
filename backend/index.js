@@ -1527,8 +1527,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log('========================================');
   console.log(`  Ski Jornada API — http://localhost:${PORT}`);
-  console.log('  Admin:    admin@escuela.com / ski123');
-  console.log('  Profesor: profesor@escuela.com / ski123');
+  if (process.env.PASSWORD_LOGIN === 'true') console.log('  Demo (PASSWORD_LOGIN): admin@escuela.com / profesor@escuela.com · ski123');
   console.log(RESEND_KEY ? '  📧 Email: Resend' : SMTP_OK ? '  📧 Email: SMTP' : '  📧 Email: modo consola');
   console.log(`  📱 WhatsApp: ${process.env.WHATSAPP_ENABLED === 'true' ? 'habilitado' : 'deshabilitado'}`);
   console.log('========================================');
