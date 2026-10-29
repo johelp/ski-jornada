@@ -240,3 +240,11 @@ model PlanningClase {
   @@unique([profesorId, fecha, referencia])
   @@index([profesorId, fecha])
 }
+
+// Nombre con el que aparece un profesor en un sistema externo (p. ej. el de reservas) → profesor de la plataforma
+model AliasProfesor {
+  id            String   @id @default(uuid())
+  nombreExterno String   @unique
+  profesorId    String
+  createdAt     DateTime @default(now())
+}

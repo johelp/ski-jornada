@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { generarPDFClases } from './pdfClases';
 import { REVISION } from './VistaMisClases';
+import VistaComparativa from './VistaComparativa';
 
 const eur = n => (n == null ? '—' : `${n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`);
 const fechaCorta = f => { const [, m, d] = f.split('-'); return `${d}/${m}`; };
@@ -86,6 +87,7 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
     <div>
       <div className="informe-tabs">
         <button className={`btn-tab${tab === 'resumen' ? ' active' : ''}`} onClick={() => setTab('resumen')}>Horas por profesor</button>
+        <button className={`btn-tab${tab === 'cmp' ? ' active' : ''}`} onClick={() => setTab('cmp')}>Comparar con reservas</button>
         <button className={`btn-tab${tab === 'config' ? ' active' : ''}`} onClick={() => setTab('config')}>Disciplinas y primas</button>
       </div>
 
@@ -125,6 +127,25 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
                   {detalle.confirmado && <button className="btn-sm" onClick={reabrir}>Reabrir mes</button>}
                 </div>
               </div>
+              {detalle.planning && (
+                <div className="cotejo">
+                  <h3>Cotejo con el planning</h3>
+                  <p className="form-hint">
+                    Planificadas <strong>{detalle.planning.totalPlanificadas} h</strong> · cargadas <strong>{detalle.planning.totalCargadas} h</strong> ·{' '}
+                    {detalle.planning.diasConDiferencia ? <span className="texto-aviso">{detalle.planning.diasConDiferencia} día(s) con diferencia</span> : <span className="texto-ok">sin diferencias</span>}
+                  </p>
+                  <div className="cotejo-filas">
+                    {detalle.planning.filas.map(f => (
+                      <div key={f.fecha} className={`cotejo-fila${f.diferencia ? ' dif' : ''}`}>
+                        <span>{fechaCorta(f.fecha)}</span>
+                        <span>Plan. {f.planificadas} h</span>
+                        <span>Carg. {f.cargadas} h</span>
+                        <strong>{f.diferencia > 0 ? '+' : ''}{f.diferencia} h</strong>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {detalle.confirmado || detalle.revision ? (
                 <div className="panel-revision">
                   <p className="form-hint">
@@ -168,6 +189,8 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
           )}
         </div>
       )}
+
+      {tab === 'cmp' && <VistaComparativa api={api} h={h} toast$={toast$} />}
 
       {tab === 'config' && (
         <>

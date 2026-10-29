@@ -1415,6 +1415,28 @@ app.get('/api/clases/informe/:mes', auth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Error generando informe' }); }
 });
 
+// Totales de clases por mes en un rango (mes en curso, temporada…). Propio; el admin puede pedir ?profesorId=
+app.get('/api/clases/periodo', auth, async (req, res) => {
+  try {
+    const { desde, hasta } = req.query;
+    if (!MES_RE.test(desde || '') || !MES_RE.test(hasta || '') || desde > hasta) return res.status(400).json({ error: 'Rango inválido (AAAA-MM)' });
+    const pid = req.user.role === 'ADMIN' && req.query.profesorId ? req.query.profesorId : req.user.userId;
+    const meses = [];
+    for (let [y, m] = desde.split('-').map(Number); `${y}-${String(m).padStart(2, '0')}` <= hasta && meses.length < 24; m === 12 ? (y++, m = 1) : m++)
+      meses.push(`${y}-${String(m).padStart(2, '0')}`);
+    const informes = await Promise.all(meses.map(mes => construirInformeClases(pid, mes)));
+    if (!informes[0]) return res.status(404).json({ error: 'Profesor no encontrado' });
+    const filas = informes.map((i, k) => ({ mes: meses[k], horas: i.totalHoras, clases: i.detalle.length, importe: i.importeTotal, confirmado: i.confirmado }));
+    const conImporte = filas.some(f => f.importe != null);
+    res.json({
+      desde, hasta, meses: filas,
+      totalHoras: r2(filas.reduce((t, f) => t + f.horas, 0)),
+      totalClases: filas.reduce((t, f) => t + f.clases, 0),
+      totalImporte: conImporte ? r2(filas.reduce((t, f) => t + (f.importe || 0), 0)) : null,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error calculando el período' }); }
+});
+
 // Profesor: confirmar las horas del mes → avisa al administrador
 app.post('/api/clases/confirmar-mes', auth, async (req, res) => {
   try {
@@ -1796,6 +1818,120 @@ app.get('/api/admin/profesores/:id/exportar', auth, adminOnly, async (req, res) 
     res.setHeader('Content-Disposition', 'attachment; filename="datos-profesor.json"');
     res.json(d);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Error exportando los datos' }); }
+});
+
+// ============ COMPARATIVA CON EL SISTEMA DE RESERVAS ============
+// Compara el resumen mensual por instructor del sistema de reservas (CSV) con las horas cargadas en la plataforma.
+const normNombre = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+const tokensNombre = s => normNombre(s).split(' ').filter(t => t.length > 1);
+
+// Coincidencia por nombre: alias guardado → todas las palabras de uno están en el otro → mayor solapamiento
+function buscarProfesor(nombreExterno, profes, alias) {
+  const aliasId = alias[normNombre(nombreExterno)];
+  if (aliasId) { const p = profes.find(x => x.id === aliasId); if (p) return { prof: p, via: 'alias' }; }
+  const te = tokensNombre(nombreExterno);
+  if (!te.length) return { prof: null };
+  const candidatos = profes.map(p => {
+    const tp = tokensNombre(`${p.nombre} ${p.apellidos}`);
+    const comunes = tp.filter(t => te.includes(t)).length;
+    const subconjunto = comunes === Math.min(tp.length, te.length) && comunes >= 2;
+    return { p, score: comunes / Math.max(tp.length, te.length), subconjunto };
+  }).filter(c => c.subconjunto || c.score >= 0.6).sort((a, b) => b.score - a.score);
+  if (!candidatos.length) return { prof: null };
+  if (candidatos.length > 1 && candidatos[0].score === candidatos[1].score) return { prof: null, ambiguo: candidatos.slice(0, 3).map(c => c.p.id) };
+  return { prof: candidatos[0].p, via: 'nombre' };
+}
+
+const TOL_HORAS = 0.25, TOL_EUROS = 1;
+const num = v => (Number.isFinite(parseFloat(v)) ? parseFloat(v) : 0);
+
+app.post('/api/admin/comparativa', auth, adminOnly, async (req, res) => {
+  try {
+    const { mes, filas } = req.body;
+    if (!MES_RE.test(mes || '')) return res.status(400).json({ error: 'Mes inválido (AAAA-MM)' });
+    if (!Array.isArray(filas) || !filas.length) return res.status(400).json({ error: 'El archivo no tiene filas' });
+    if (filas.length > 500) return res.status(400).json({ error: 'Máximo 500 filas' });
+
+    const [profes, aliasRows] = await Promise.all([
+      prisma.profesor.findMany({ where: { activo: true }, select: { id: true, nombre: true, apellidos: true, email: true, tarifaHora: true } }),
+      prisma.aliasProfesor.findMany(),
+    ]);
+    const alias = Object.fromEntries(aliasRows.map(a => [a.nombreExterno, a.profesorId]));
+    const usados = new Set();
+    const resultado = [];
+    let sinAsignar = null;
+
+    for (const f of filas) {
+      const nombre = String(f.profesor || '').trim();
+      const ext = {
+        salario: num(f.salario), totalHoras: r2(num(f.totalHoras)), horasPrivadas: num(f.horasPrivadas), horasGrupales: num(f.horasGrupales),
+        horasCursillos: num(f.horasCursillos), horasRequeridas: num(f.horasRequeridas), totalSinPrimas: num(f.totalSinPrimas),
+        totalPrimas: num(f.totalPrimas), totalRequeridas: num(f.totalRequeridas), total: num(f.total),
+        primas: Object.fromEntries(Object.entries(f.primas || {}).map(([k, v]) => [k, num(v)])),
+      };
+      if (/^NO ASIGNADO/i.test(nombre)) { sinAsignar = { nombre, ...ext }; continue; }
+      if (ext.totalHoras === 0 && ext.total === 0) continue; // sin actividad en el sistema de reservas
+
+      const { prof, via, ambiguo } = buscarProfesor(nombre, profes, alias);
+      if (!prof) { resultado.push({ nombre, estado: 'SIN_COINCIDENCIA', externo: ext, candidatos: ambiguo || [] }); continue; }
+      usados.add(prof.id);
+      const inf = await construirInformeClases(prof.id, mes);
+      const plat = {
+        totalHoras: inf.totalHoras, clases: inf.detalle.length, tarifaHora: inf.tarifaHora, importeTotal: inf.importeTotal,
+        confirmado: inf.confirmado, revision: inf.revision?.estado || null,
+        primas: Object.fromEntries(inf.desglosePrimas.map(d => [d.nombre, { horas: d.horas, importe: d.importe }])),
+      };
+      const dif = {
+        horas: r2(plat.totalHoras - ext.totalHoras),
+        importe: plat.importeTotal == null ? null : r2(plat.importeTotal - ext.total),
+        tarifa: plat.tarifaHora == null ? null : r2(plat.tarifaHora - ext.salario),
+      };
+      // Primas: se comparan por nombre las del sistema externo con las de la plataforma (importe)
+      const primas = Object.entries(ext.primas).filter(([, v]) => v !== 0).map(([n, v]) => {
+        const k = Object.keys(plat.primas).find(x => normNombre(x) === normNombre(n));
+        const p = k ? plat.primas[k] : null;
+        return { nombre: n, externo: v, plataforma: p?.importe ?? null, horasPlataforma: p?.horas ?? 0, diferencia: p?.importe == null ? null : r2(p.importe - v) };
+      });
+      let estado;
+      if (plat.totalHoras === 0) estado = 'SIN_CARGA';
+      else if (Math.abs(dif.horas) <= TOL_HORAS) estado = (dif.importe != null && Math.abs(dif.importe) > TOL_EUROS) ? 'DIFERENCIA_IMPORTE' : 'OK';
+      else estado = 'DIFERENCIA_HORAS';
+      resultado.push({
+        nombre, estado, via, profesor: { id: prof.id, nombre: `${prof.nombre} ${prof.apellidos}`, email: prof.email },
+        externo: ext, plataforma: plat, diferencia: dif, primas,
+      });
+    }
+
+    // Profesores con horas cargadas que no aparecen en el sistema de reservas
+    const restantes = profes.filter(p => !usados.has(p.id));
+    const soloPlataforma = [];
+    for (const p of restantes) {
+      const inf = await construirInformeClases(p.id, mes);
+      if (inf.totalHoras > 0) soloPlataforma.push({ profesor: { id: p.id, nombre: `${p.nombre} ${p.apellidos}`, email: p.email }, totalHoras: inf.totalHoras, importeTotal: inf.importeTotal });
+    }
+
+    const cuenta = e => resultado.filter(r => r.estado === e).length;
+    res.json({
+      mes, resultado, soloPlataforma, sinAsignar,
+      resumen: {
+        instructores: resultado.length, ok: cuenta('OK'), diferenciaHoras: cuenta('DIFERENCIA_HORAS'), diferenciaImporte: cuenta('DIFERENCIA_IMPORTE'),
+        sinCarga: cuenta('SIN_CARGA'), sinCoincidencia: cuenta('SIN_COINCIDENCIA'), soloPlataforma: soloPlataforma.length,
+        horasExterno: r2(resultado.reduce((s, r) => s + r.externo.totalHoras, 0)),
+        horasPlataforma: r2(resultado.reduce((s, r) => s + (r.plataforma?.totalHoras || 0), 0)),
+      },
+      profesores: profes.map(p => ({ id: p.id, nombre: `${p.nombre} ${p.apellidos}` })),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error generando la comparativa' }); }
+});
+
+// Vincula un nombre del sistema externo con un profesor (se recuerda para próximas comparativas)
+app.post('/api/admin/comparativa/alias', auth, adminOnly, async (req, res) => {
+  try {
+    const nombreExterno = normNombre(req.body.nombreExterno);
+    if (!nombreExterno || !req.body.profesorId) return res.status(400).json({ error: 'Datos inválidos' });
+    await prisma.aliasProfesor.upsert({ where: { nombreExterno }, create: { nombreExterno, profesorId: req.body.profesorId }, update: { profesorId: req.body.profesorId } });
+    res.json({ success: true });
+  } catch { res.status(500).json({ error: 'Error guardando el vínculo' }); }
 });
 
 // ============ WHATSAPP (Baileys) ============

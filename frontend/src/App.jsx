@@ -4,6 +4,8 @@ import jsQR from 'jsqr';
 import QRCode from 'qrcode';
 import { generarPDFRegistro } from './pdfRegistro';
 import VistaMisClases from './VistaMisClases';
+import InformeClases from './InformeClases';
+import VistaIntegraciones from './VistaIntegraciones';
 import VistaAdminClases from './VistaAdminClases';
 import Landing from './Landing';
 import './App.css';
@@ -45,6 +47,21 @@ function formatTiempo(ms) {
 }
 
 const nfcDisponible = 'NDEFReader' in window;
+
+// Temporada = 12 meses desde el mes de inicio (por defecto noviembre; configurable con VITE_TEMPORADA_INICIO_MES)
+const TEMPORADA_INICIO = Math.min(12, Math.max(1, parseInt(import.meta.env.VITE_TEMPORADA_INICIO_MES) || 11));
+const pad2 = n => String(n).padStart(2, '0');
+function rangoPeriodo(periodo, ahora = new Date()) {
+  const y = ahora.getFullYear(), m = ahora.getMonth() + 1;
+  if (periodo === 'mes') return { desde: `${y}-${pad2(m)}`, hasta: `${y}-${pad2(m)}`, etiqueta: ahora.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }) };
+  const y0 = m >= TEMPORADA_INICIO ? y : y - 1;
+  const fin = TEMPORADA_INICIO === 1 ? { y: y0, m: 12 } : { y: y0 + 1, m: TEMPORADA_INICIO - 1 };
+  return {
+    desde: `${y0}-${pad2(TEMPORADA_INICIO)}`, hasta: `${fin.y}-${pad2(fin.m)}`,
+    etiqueta: TEMPORADA_INICIO === 1 ? `Temporada ${y0}` : `Temporada ${y0}-${String(fin.y).slice(2)}`,
+  };
+}
+const eurFmt = n => (n == null ? null : `${n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`);
 
 const TIPO_DOC_LABEL = { NOMINA: 'Nómina', CONTRATO: 'Contrato', CERTIFICADO: 'Certificado', OTRO: 'Otro' };
 const TIPO_DOC_ICON  = { NOMINA: '💰', CONTRATO: '📋', CERTIFICADO: '🏅', OTRO: '📄' };
@@ -240,6 +257,11 @@ function App() {
   const [cargando, setCargando] = useState(false);
   const [confirmarSalida, setConfirmarSalida] = useState(false);
   const [masAbierto, setMasAbierto] = useState(false);
+  const [periodoDash, setPeriodoDash] = useState('mes');
+  const [nuevoUsuarioAbierto, setNuevoUsuarioAbierto] = useState(false);
+  const [busquedaUsuario, setBusquedaUsuario] = useState('');
+  const [tabInformeEmp, setTabInformeEmp] = useState('jornada');
+  const [clasesPeriodo, setClasesPeriodo] = useState(null);
   const [emailLogin, setEmailLogin] = useState('');
   const [enlaceEnviado, setEnlaceEnviado] = useState(false);
   const magicProcesado = useRef(false);
@@ -498,6 +520,15 @@ function App() {
       }
     }
   }, [token]);
+
+  // Totales de clases del período elegido en el inicio (mes en curso o temporada)
+  useEffect(() => {
+    if (!token) return;
+    const { desde, hasta } = rangoPeriodo(periodoDash);
+    setClasesPeriodo(null);
+    api.get(`/api/clases/periodo?desde=${desde}&hasta=${hasta}`, { headers: h() })
+      .then(r => setClasesPeriodo(r.data)).catch(() => {});
+  }, [token, periodoDash]);
 
   // Poll notifications every 60s
   useEffect(() => {
@@ -865,6 +896,9 @@ function App() {
   const estadoFichaje  = registrosHoy[registrosHoy.length - 1]?.tipo || null;
   const esAdmin        = user?.role === 'ADMIN';
   const totalHoras     = Object.values(resumenDiario).reduce((s, d) => s + d.horas, 0).toFixed(1);
+  const rango          = rangoPeriodo(periodoDash, horaActual);
+  const diasPeriodo    = Object.entries(resumenDiario).filter(([dia]) => dia.slice(0, 7) >= rango.desde && dia.slice(0, 7) <= rango.hasta);
+  const horasPeriodo   = diasPeriodo.reduce((s, [, d]) => s + d.horas, 0).toFixed(1);
   const adminPendientes = adminSolicitudes.filter(s => s.estado === 'PENDIENTE').length;
   const docsPendientes  = documentosAdmin.filter(d => d.estado === 'PENDIENTE').length;
   const misDocsPendientes = misDocumentos.filter(d => d.estado === 'PENDIENTE').length;
@@ -883,6 +917,7 @@ function App() {
         { id: 'usuarios',   icon: '👥', label: 'Usuarios' },
         { id: 'zonas',      icon: '📍', label: 'Zonas' },
         { id: 'avisos',     icon: '🔔', label: 'Avisos' },
+        { id: 'integraciones', icon: '🔗', label: 'Integraciones' },
         { id: 'config',     icon: '🏔', label: 'Config' },
         { id: 'perfil',     icon: '👤', label: 'Mi Perfil' },
       ]
@@ -900,7 +935,7 @@ function App() {
 
   const ICONO_NAV = {
     dashboard: 'inicio', presencia: 'presencia', gestionar: 'solicitudes', clases: 'clases', informes: 'informe', documentos: 'docs',
-    usuarios: 'usuarios', zonas: 'zonas', avisos: 'avisos', config: 'config', perfil: 'perfil', fichar: 'reloj', misclases: 'clases', solicitar: 'calendario',
+    usuarios: 'usuarios', zonas: 'zonas', avisos: 'avisos', integraciones: 'enlace', config: 'config', perfil: 'perfil', fichar: 'reloj', misclases: 'clases', solicitar: 'calendario',
   };
   const PRINCIPALES = esAdmin && !modoEmpleado ? ['dashboard', 'clases', 'usuarios', 'informes'] : ['dashboard', 'fichar', 'misclases', 'informes'];
   const navPrincipal = PRINCIPALES.map(id => navItems.find(i => i.id === id)).filter(Boolean);
@@ -1172,15 +1207,45 @@ function App() {
               </button>
             </div>
 
-            <div className="stats-grid">
-              <div className="stat-card stat-blue"><span className="stat-icon">⏱</span><div>
-                <p className="stat-label">Total horas</p><p className="stat-number">{totalHoras}h</p></div></div>
-              <div className="stat-card stat-green"><span className="stat-icon">📆</span><div>
-                <p className="stat-label">Días trabajados</p><p className="stat-number">{Object.keys(resumenDiario).length}</p></div></div>
-              <div className="stat-card stat-amber"><span className="stat-icon">📋</span><div>
-                <p className="stat-label">Solicitudes pendientes</p>
-                <p className="stat-number">{solicitudes.filter(s => s.estado === 'PENDIENTE').length}</p></div></div>
+            <div className="periodo-bar">
+              <div className="segmentado" role="tablist" aria-label="Período de los totales">
+                <button role="tab" aria-selected={periodoDash === 'mes'} className={periodoDash === 'mes' ? 'activo' : ''} onClick={() => setPeriodoDash('mes')}>Este mes</button>
+                <button role="tab" aria-selected={periodoDash === 'temporada'} className={periodoDash === 'temporada' ? 'activo' : ''} onClick={() => setPeriodoDash('temporada')}>Temporada</button>
+              </div>
+              <span className="periodo-etiqueta">{rango.etiqueta}</span>
             </div>
+            <div className="stats-grid stats-2x2">
+              <div className="stat-card stat-blue"><div>
+                <p className="stat-label">Horas fichadas</p><p className="stat-number">{horasPeriodo}h</p></div></div>
+              <div className="stat-card stat-green"><div>
+                <p className="stat-label">Días trabajados</p><p className="stat-number">{diasPeriodo.length}</p></div></div>
+              <div className="stat-card stat-blue"><div>
+                <p className="stat-label">Horas de clase</p><p className="stat-number">{clasesPeriodo ? `${clasesPeriodo.totalHoras}h` : '…'}</p></div></div>
+              {clasesPeriodo?.totalImporte != null ? (
+                <div className="stat-card stat-amber"><div>
+                  <p className="stat-label">Importe estimado</p><p className="stat-number">{eurFmt(clasesPeriodo.totalImporte)}</p></div></div>
+              ) : (
+                <div className="stat-card stat-amber"><div>
+                  <p className="stat-label">Solicitudes pendientes</p>
+                  <p className="stat-number">{solicitudes.filter(s => s.estado === 'PENDIENTE').length}</p></div></div>
+              )}
+            </div>
+            {periodoDash === 'temporada' && clasesPeriodo?.meses?.some(m => m.horas > 0) && (
+              <div className="card">
+                <h2>Clases por mes</h2>
+                <div className="resumen-list">
+                  {clasesPeriodo.meses.filter(m => m.horas > 0).map(m => (
+                    <div key={m.mes} className="resumen-item">
+                      <span className="resumen-fecha">{new Date(m.mes + '-15T12:00:00').toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</span>
+                      <div className="resumen-right">
+                        <span className="resumen-horas">{m.horas} h</span>
+                        {m.importe != null && <span className="badge-ok">{eurFmt(m.importe)}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {registrosHoy.length > 0 && (
               <div className="card"><h2>Hoy</h2>
                 <div className="timeline">
@@ -1325,9 +1390,9 @@ function App() {
               </div>
               <div className="form-group"><label>Motivo</label>
                 <select value={motivo} onChange={e => setMotivo(e.target.value)}>
-                  <option value="VACACIONES">🌴 Vacaciones</option>
-                  <option value="ASUNTO_PROPIO">📌 Asunto propio</option>
-                  <option value="ENFERMEDAD">🏥 Enfermedad</option>
+                  <option value="VACACIONES">Vacaciones</option>
+                  <option value="ASUNTO_PROPIO">Asunto propio</option>
+                  <option value="ENFERMEDAD">Enfermedad</option>
                 </select>
               </div>
               <div className="form-group"><label>Comentario (opcional)</label>
@@ -1358,15 +1423,21 @@ function App() {
         {(!esAdmin || modoEmpleado) && vista === 'informes' && (
           <div>
             <div className="card">
-              <div className="informe-selector">
-                <h2>Mi registro de jornada</h2>
+              <h2>Mis informes</h2>
+              <div className="segmentado" role="tablist" aria-label="Tipo de informe" style={{ marginBottom: 12 }}>
+                <button role="tab" aria-selected={tabInformeEmp === 'jornada'} className={tabInformeEmp === 'jornada' ? 'activo' : ''} onClick={() => setTabInformeEmp('jornada')}>Jornada</button>
+                <button role="tab" aria-selected={tabInformeEmp === 'clases'} className={tabInformeEmp === 'clases' ? 'activo' : ''} onClick={() => setTabInformeEmp('clases')}>Clases y economía</button>
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label htmlFor="inf-mes">Mes</label>
                 <div className="mes-selector">
-                  <input type="month" value={mesInforme} onChange={e => setMesInforme(e.target.value)} />
-                  <button className="btn-primary" onClick={() => cargarInforme('')} style={{ width: 'auto', padding: '0.5rem 1.25rem', marginTop: 0 }}>Ver</button>
+                  <input id="inf-mes" type="month" value={mesInforme} onChange={e => setMesInforme(e.target.value)} />
+                  {tabInformeEmp === 'jornada' && <button className="btn-primary" onClick={() => cargarInforme('')}>Ver</button>}
                 </div>
               </div>
             </div>
-            {informeMensual && (
+            {tabInformeEmp === 'clases' && <InformeClases api={api} h={h} toast$={toast$} config={configEscuela} mes={mesInforme} />}
+            {tabInformeEmp === 'jornada' && informeMensual && (
               <div className="card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
                   <h2 style={{ marginBottom: 0 }}>{informeMensual.mes}</h2>
@@ -1907,7 +1978,14 @@ function App() {
         {/* ===== USUARIOS (admin) ===== */}
         {esAdmin && !modoEmpleado && vista === 'usuarios' && (
           <div>
-            <div className="card">
+            <div className="toolbar">
+              <input type="search" className="busqueda" aria-label="Buscar usuario" placeholder="Buscar por nombre o email"
+                value={busquedaUsuario} onChange={e => setBusquedaUsuario(e.target.value)} />
+              <button className="btn-primary" onClick={() => setNuevoUsuarioAbierto(a => !a)} aria-expanded={nuevoUsuarioAbierto}>
+                {nuevoUsuarioAbierto ? 'Cerrar' : '+ Nuevo'}
+              </button>
+            </div>
+            {nuevoUsuarioAbierto && <div className="card">
               <h2>Nuevo usuario</h2>
               <div className="form-row">
                 <div className="form-group"><label>Nombre</label>
@@ -1924,8 +2002,8 @@ function App() {
               <div className="form-row">
                 <div className="form-group"><label>Rol</label>
                   <select value={nuevoUsuario.role} onChange={e => setNuevoUsuario({ ...nuevoUsuario, role: e.target.value })}>
-                    <option value="PROFESOR">👤 Profesor</option>
-                    <option value="ADMIN">🛡 Administrador</option>
+                    <option value="PROFESOR">Profesor</option>
+                    <option value="ADMIN">Administrador</option>
                   </select>
                 </div>
                 <div className="form-group"><label>Tipo de jornada</label>
@@ -1939,7 +2017,7 @@ function App() {
                 <input type="number" min="1" max="40" value={nuevoUsuario.horasContrato} onChange={e => setNuevoUsuario({ ...nuevoUsuario, horasContrato: parseInt(e.target.value) })} /></div>
               <button onClick={agregarUsuario} disabled={cargando} className="btn-primary">+ Crear usuario</button>
               <p className="form-hint">Se enviará un email con un enlace para entrar (sin contraseña).</p>
-            </div>
+            </div>}
 
             <div className="card">
               <div className="card-header">
@@ -1947,7 +2025,7 @@ function App() {
                 <button className="btn-sm" onClick={cargarProfesores}>↻ Actualizar</button>
               </div>
               <div className="profesores-grid">
-                {profesores.map(p => (
+                {profesores.filter(p => `${p.nombre} ${p.apellidos} ${p.email}`.toLowerCase().includes(busquedaUsuario.toLowerCase())).map(p => (
                   <div key={p.id} className={`profesor-card ${!p.activo ? 'inactivo' : ''}`}>
                     <div className="profesor-avatar">{p.nombre[0]}{p.apellidos[0]}</div>
                     <div className="profesor-info">
@@ -1957,7 +2035,7 @@ function App() {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
                       <span className={`badge badge-${p.role === 'ADMIN' ? 'admin' : 'profesor'}`} style={{ fontSize: '0.68rem' }}>
-                        {p.role === 'ADMIN' ? '🛡 Admin' : '👤 Prof'}
+                        {p.role === 'ADMIN' ? 'Admin' : 'Profesor'}
                       </span>
                       <span className={`badge-jornada badge ${p.tipoJornada === 'COMPLETA' ? 'completa' : 'media'}`}>
                         {p.tipoJornada === 'COMPLETA' ? `${p.horasContrato}h/sem` : 'Media'}
@@ -1968,13 +2046,13 @@ function App() {
                           setProfesorEditId(profesorEditId === p.id ? null : p.id);
                           setProfesorEditData({ nombre: p.nombre, apellidos: p.apellidos, tipoJornada: p.tipoJornada, horasContrato: p.horasContrato, telefono: p.telefono || '', horaRecordatorio: p.horaRecordatorio || '17:00', tarifaHora: p.tarifaHora ?? '', activo: p.activo });
                         }}>
-                          {profesorEditId === p.id ? '✕ Cerrar' : '✏ Editar'}
+                          {profesorEditId === p.id ? 'Cerrar' : <><Icono n="editar" size={18} /> Editar</>}
                         </button>
                         <button className="btn-sm btn-sm-bell" onClick={() => {
                           setNuevaNotif({ titulo: '', mensaje: '', tipo: 'INFO', destinatarioId: p.id });
                           setVista('avisos');
                         }} title="Enviar aviso personal">
-                          🔔 Aviso
+                          <Icono n="campana" size={18} /> Aviso
                         </button>
                       </div>
                     </div>
@@ -2239,6 +2317,9 @@ function App() {
         {/* ===== MI PERFIL ===== */}
         {(!esAdmin || modoEmpleado) && vista === 'misclases' && (
           <VistaMisClases api={api} h={h} toast$={toast$} config={configEscuela} />
+        )}
+        {esAdmin && !modoEmpleado && vista === 'integraciones' && (
+          <VistaIntegraciones api={api} h={h} toast$={toast$} />
         )}
         {esAdmin && !modoEmpleado && vista === 'clases' && (
           <VistaAdminClases api={api} h={h} toast$={toast$} config={configEscuela} />
