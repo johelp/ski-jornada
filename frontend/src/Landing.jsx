@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import './Landing.css';
+import { Pantalla, PANTALLAS } from './Mockups';
 
 // Marca por despliegue (variables de build de Cloudflare Pages; ver docs/MULTI-DESPLIEGUE.md)
 const APP_NAME = import.meta.env.VITE_APP_NAME || 'Ski Jornada';
@@ -20,19 +21,28 @@ const ICONOS = {
   check: <Icon d="M5 12l5 5 9-10" />,
   movil: <Icon><rect x="7" y="2" width="10" height="20" rx="2.5" /><path d="M11 18h2" /></Icon>,
   escudo: <Icon d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6z" />,
+  calendario: <Icon><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></Icon>,
+  revision: <Icon><path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="9" /></Icon>,
+  comparar: <Icon><path d="M7 4v16M3 8l4-4 4 4M17 20V4M21 16l-4 4-4-4" /></Icon>,
+  enlace: <Icon><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1" /></Icon>,
 };
 
 const FUNCIONES = [
   { icono: 'reloj', titulo: 'Fichaje fiable', texto: 'Entrada y salida con QR rotativo, GPS o NFC. La hora la marca el servidor, no el móvil.' },
-  { icono: 'clases', titulo: 'Clases y primas', texto: 'Cada profesor carga sus horas por disciplina y marca las primas: idioma, disca, repetida…' },
-  { icono: 'informe', titulo: 'Informe mensual', texto: 'PDF listo para imprimir, con la parte económica cuando hay tarifas cargadas.' },
-  { icono: 'panel', titulo: 'Control para administración', texto: 'Horas por profesor para cotejar con el planning de reservas y liquidar sin errores.' },
+  { icono: 'clases', titulo: 'Clases y primas', texto: 'Cada profesor carga horas por disciplina y marca las primas: idioma, disca, repetida…' },
+  { icono: 'calendario', titulo: 'Mes y temporada', texto: 'El inicio muestra las horas del mes en curso y, con un toque, los totales de la temporada.' },
+  { icono: 'informe', titulo: 'Informe económico', texto: 'PDF mensual con horas, primas e importe estimado cuando hay tarifas cargadas.' },
+  { icono: 'revision', titulo: 'Revisión de administración', texto: 'Aprobar, marcar discrepancias o pedir correcciones, con notas que ve el profesor.' },
+  { icono: 'comparar', titulo: 'Compara con tus reservas', texto: 'Cruza el resumen de instructores de tu sistema de reservas con lo cargado y detecta diferencias.' },
+  { icono: 'enlace', titulo: 'Se conecta con tus sistemas', texto: 'API con claves, webhooks firmados e importación del planning para reservas y nóminas.' },
+  { icono: 'escudo', titulo: 'Datos protegidos', texto: 'Cada escuela con su propia instancia; cada profesor ve solo lo suyo y puede exportar sus datos.' },
 ];
 
 const PASOS = [
   { n: 1, titulo: 'Entra con tu email', texto: 'Te llega un enlace. Sin contraseñas y la sesión queda abierta en tu móvil.' },
   { n: 2, titulo: 'Carga tus clases', texto: 'Horas, disciplina y primas en menos de 10 segundos.' },
-  { n: 3, titulo: 'Confirma el mes', texto: 'Tu informe se genera y administración recibe el aviso al instante.' },
+  { n: 3, titulo: 'Confirma el mes', texto: 'Administración revisa, te deja notas y compara con las reservas.' },
+  { n: 4, titulo: 'Liquida sin errores', texto: 'Horas aprobadas e informe económico listos para pagar.' },
 ];
 
 const ACCESOS = {
@@ -51,6 +61,8 @@ export default function Landing({
   cargando, pwaInstallEvent, instalarPWA, devForm, toast,
 }) {
   const [acceso, setAcceso] = useState(null);
+  const [rol, setRol] = useState('profesor');
+  const [pant, setPant] = useState(0);
   const inputRef = useRef(null);
   const abridorRef = useRef(null);
 
@@ -84,6 +96,7 @@ export default function Landing({
             <span>{APP_NAME}</span>
           </a>
           <nav className="lp-nav-links" aria-label="Secciones">
+            <a href="#pantallas">Pantallas</a>
             <a href="#funciones">Funciones</a>
             <a href="#como-funciona">Cómo funciona</a>
             <a href="#instalar">Instalar</a>
@@ -97,10 +110,10 @@ export default function Landing({
           <div className="lp-wrap lp-hero-in">
             <div className="lp-hero-copy">
               <p className="lp-eyebrow">Para escuelas de esquí</p>
-              <h1>La jornada de tu equipo, clara y lista para liquidar</h1>
+              <h1>Horas, clases y primas de tu equipo, listas para liquidar</h1>
               <p className="lp-lead">
-                Ficha, carga las clases con sus primas y genera el informe mensual.
-                Todo desde el móvil y sin contraseñas.
+                Tus profesores fichan y cargan sus clases desde el móvil. Administración revisa, compara con el sistema
+                de reservas y genera el informe económico. Sin contraseñas.
               </p>
               <div className="lp-cta">
                 <button className="lp-btn lp-btn-primary" onClick={e => abrir('profesor', e)}>Acceso profesores</button>
@@ -113,15 +126,33 @@ export default function Landing({
               </ul>
             </div>
 
-            <div className="lp-hero-visual" aria-hidden="true">
-              <div className="lp-phone">
-                <div className="lp-phone-bar" />
-                <p className="lp-phone-title">Cargar clase</p>
-                <div className="lp-field"><span>Disciplina</span><strong>Esquí</strong></div>
-                <div className="lp-field"><span>Horas</span><strong>2</strong></div>
-                <div className="lp-chips"><i className="on">✓ Idioma</i><i className="on">✓ Repetida</i><i>Disca</i></div>
-                <div className="lp-phone-btn">Cargar clase</div>
-                <div className="lp-phone-total"><span>Importe del día</span><strong>56,00 €</strong></div>
+            <div className="lp-hero-visual">
+              <Pantalla id="inicio" />
+            </div>
+          </div>
+        </section>
+
+        <section className="lp-sec lp-sec-alt" id="pantallas" aria-labelledby="t-pantallas">
+          <div className="lp-wrap">
+            <h2 id="t-pantallas">Así se ve por dentro</h2>
+            <p className="lp-lead lp-center">Pantallas reales de la app, con datos de ejemplo.</p>
+            <div className="lp-seg" role="tablist" aria-label="Elegir vista">
+              {[['profesor', 'Profesores'], ['admin', 'Administración']].map(([id, label]) => (
+                <button key={id} role="tab" aria-selected={rol === id} className={rol === id ? 'on' : ''} onClick={() => { setRol(id); setPant(0); }}>{label}</button>
+              ))}
+            </div>
+            <div className="lp-show">
+              <ul className="lp-show-list" role="tablist" aria-label="Pantallas">
+                {PANTALLAS[rol].map((p, i) => (
+                  <li key={p.id}>
+                    <button role="tab" aria-selected={pant === i} className={pant === i ? 'on' : ''} onClick={() => setPant(i)}>
+                      <strong>{p.titulo}</strong><span>{p.texto}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <div className={`lp-show-vista ${rol}`} role="tabpanel">
+                <Pantalla id={PANTALLAS[rol][pant].id} />
               </div>
             </div>
           </div>
@@ -151,18 +182,20 @@ export default function Landing({
                 <ul>
                   <li>{ICONOS.check}Fichar y desfichar</li>
                   <li>{ICONOS.check}Cargar clases con disciplina y primas</li>
-                  <li>{ICONOS.check}Consultar sus horas y su importe</li>
-                  <li>{ICONOS.check}Informe mensual en PDF</li>
+                  <li>{ICONOS.check}Ver horas e importe del mes o de la temporada</li>
+                  <li>{ICONOS.check}Notas y visto bueno de administración</li>
+                  <li>{ICONOS.check}Informe mensual y económico en PDF</li>
                 </ul>
                 <button className="lp-btn lp-btn-primary" onClick={e => abrir('profesor', e)}>Entrar como profesor</button>
               </article>
               <article className="lp-role">
                 <h3>Administración</h3>
                 <ul>
-                  <li>{ICONOS.check}Alta y baja de profesores</li>
-                  <li>{ICONOS.check}Primas y tarifas configurables</li>
-                  <li>{ICONOS.check}Horas por profesor para cotejar con reservas</li>
-                  <li>{ICONOS.check}Aprobación de días libres y documentos</li>
+                  <li>{ICONOS.check}Alta de profesores, por lista o uno a uno</li>
+                  <li>{ICONOS.check}Disciplinas, primas y tarifas configurables</li>
+                  <li>{ICONOS.check}Revisar, aprobar y comentar las horas</li>
+                  <li>{ICONOS.check}Comparar con el sistema de reservas</li>
+                  <li>{ICONOS.check}Integraciones y días libres</li>
                 </ul>
                 <button className="lp-btn lp-btn-outline" onClick={e => abrir('admin', e)}>Entrar como administración</button>
               </article>

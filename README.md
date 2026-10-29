@@ -59,6 +59,7 @@ npm run dev                     # http://localhost:5173
 
 ## Documentación
 
+- [docs/PUESTA-EN-MARCHA.md](docs/PUESTA-EN-MARCHA.md) — guía paso a paso: correo, dominios, DNS y datos de prueba
 - [docs/ALCANCE-MVP.md](docs/ALCANCE-MVP.md) — alcance, estado, riesgos y decisiones pendientes del MVP
 - [docs/COMPARATIVA.md](docs/COMPARATIVA.md) — comparar el resumen de instructores del sistema de reservas con las horas cargadas
 - [docs/INTEGRACIONES.md](docs/INTEGRACIONES.md) — API con keys, webhooks e importación de planning
