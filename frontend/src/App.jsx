@@ -836,6 +836,16 @@ function App() {
     finally { setCargando(false); }
   };
 
+  // Los PDFs están protegidos: se piden con la sesión y se abren como blob
+  const abrirArchivo = async (url) => {
+    const w = window.open('', '_blank');
+    try {
+      const r = await api.get(url, { headers: h(), responseType: 'blob' });
+      const blobUrl = URL.createObjectURL(r.data);
+      if (w) w.location.href = blobUrl; else window.location.href = blobUrl;
+    } catch { w?.close(); toast$('No se pudo abrir el archivo', 'error'); }
+  };
+
   const logout = () => { localStorage.removeItem('token'); localStorage.removeItem('user'); setToken(null); setUser(null); };
 
   // ===== ESTADO ACTUAL =====
@@ -1377,10 +1387,10 @@ function App() {
                         </p>
                       </div>
                       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                        <a href={`${API_BASE}${doc.archivoUrl}`} target="_blank" rel="noreferrer" className="btn-sm">↓ Ver original</a>
+                        <button type="button" className="btn-sm" onClick={() => abrirArchivo(doc.archivoUrl)}>↓ Ver original</button>
                         {doc.estado === 'FIRMADO' && doc.firmaUrl && (
-                          <a href={`${API_BASE}${doc.firmaUrl}`} target="_blank" rel="noreferrer"
-                            className="btn-sm" style={{ background: 'var(--success)', color: 'white', border: 'none' }}>↓ Ver firmado</a>
+                          <button type="button"
+                            className="btn-sm" style={{ background: 'var(--success)', color: 'white', border: 'none' }} onClick={() => abrirArchivo(doc.firmaUrl)}>↓ Ver firmado</button>
                         )}
                       </div>
                     </div>
@@ -1832,9 +1842,9 @@ function App() {
                           </div>
                           <span className={`estado-badge ${doc.estado === 'FIRMADO' ? 'aprobado' : 'pendiente'}`} style={{ flexShrink: 0 }}>{doc.estado === 'FIRMADO' ? '✓ Firmado' : '⏳ Pendiente'}</span>
                           <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
-                            <a href={`${API_BASE}${doc.archivoUrl}`} target="_blank" rel="noreferrer" className="btn-sm">↓ Original</a>
+                            <button type="button" className="btn-sm" onClick={() => abrirArchivo(doc.archivoUrl)}>↓ Original</button>
                             {doc.estado === 'FIRMADO' && doc.firmaUrl && (
-                              <a href={`${API_BASE}${doc.firmaUrl}`} target="_blank" rel="noreferrer" className="btn-sm" style={{ background: '#16a34a', color: 'white', border: 'none' }}>↓ Firmado</a>
+                              <button type="button" className="btn-sm" style={{ background: '#16a34a', color: 'white', border: 'none' }} onClick={() => abrirArchivo(doc.firmaUrl)}>↓ Firmado</button>
                             )}
                           </div>
                         </div>

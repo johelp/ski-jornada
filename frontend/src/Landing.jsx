@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import './Landing.css';
 
+// Marca por despliegue (variables de build de Cloudflare Pages; ver docs/MULTI-DESPLIEGUE.md)
+const APP_NAME = import.meta.env.VITE_APP_NAME || 'Ski Jornada';
+const LUGAR = import.meta.env.VITE_ESCUELA_LUGAR || '';
+const COLOR = /^#[0-9a-fA-F]{6}$/.test(import.meta.env.VITE_COLOR_PRIMARIO || '') ? import.meta.env.VITE_COLOR_PRIMARIO : null;
+
 const Icon = ({ d, children }) => (
   <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8"
     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d ? <path d={d} /> : children}</svg>
@@ -66,17 +71,17 @@ export default function Landing({
   }, [acceso]);
 
   return (
-    <div className="lp">
+    <div className="lp" style={COLOR ? { '--lp-primary': COLOR } : undefined}>
       <a className="lp-skip" href="#contenido">Saltar al contenido</a>
 
       <header className="lp-nav">
         <div className="lp-wrap lp-nav-in">
-          <a className="lp-brand" href="#top" aria-label="Ski Jornada, inicio">
+          <a className="lp-brand" href="#top" aria-label={`${APP_NAME}, inicio`}>
             <svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
-              <rect width="32" height="32" rx="8" fill="#0f4c81" />
+              <rect width="32" height="32" rx="8" fill={COLOR || '#0f4c81'} />
               <path d="M6 23l7-11 4 6 3-4 6 9z" fill="#fff" /><circle cx="22.5" cy="9" r="2.2" fill="#f97316" />
             </svg>
-            <span>Ski Jornada</span>
+            <span>{APP_NAME}</span>
           </a>
           <nav className="lp-nav-links" aria-label="Secciones">
             <a href="#funciones">Funciones</a>
@@ -195,7 +200,7 @@ export default function Landing({
       </main>
 
       <footer className="lp-foot">
-        <div className="lp-wrap">© {new Date().getFullYear()} Ski Jornada · Sierra Nevada, Granada</div>
+        <div className="lp-wrap">© {new Date().getFullYear()} {APP_NAME}{LUGAR ? ` · ${LUGAR}` : ''}</div>
       </footer>
 
       {acceso && (

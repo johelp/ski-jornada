@@ -27,8 +27,9 @@ Navegador / PWA ──HTTPS──▶ Cloudflare Pages (frontend estático)
 | `ConfigEscuela` | Datos de la escuela (nombre, CIF, color, email de avisos) |
 | `TipoClase` | **Disciplinas** configurables por el admin (Esquí, Snowboard…) |
 | `PrimaClase` | Primas configurables: `importe` (€) y `modo` `POR_HORA` \| `POR_CLASE` |
-| `ClaseDada` | Clase cargada: `fecha` (`YYYY-MM-DD`), `horas`, disciplina, N primas (m-n), notas |
+| `ClaseDada` | Clase cargada: `fecha` (`YYYY-MM-DD`), `horas`, disciplina, N primas (m-n), notas del profesor y `marca` (`OK`/`REVISAR`) + `notaAdmin` puestas por administración |
 | `ConfirmacionClases` | Mes confirmado por el profesor + **tarifas congeladas** (`tarifaHora`, `primasJson`) |
+| `RevisionMes` | Revisión de administración sobre el mes de un profesor: `estado` (`APROBADO`, `DISCREPANCIA`, `CORRECCION`, `COMENTARIO`, `PENDIENTE`) y `nota` |
 | `MagicLink` | Tokens de acceso (se guarda solo el hash SHA-256; vencen a los 15 min; un solo uso) |
 
 Las migraciones están en `backend/prisma/migrations/`. Se aplican con `npx prisma migrate deploy` (en producción, al arrancar).
@@ -52,6 +53,15 @@ Las migraciones están en `backend/prisma/migrations/`. Se aplican con `npx pris
 4. Un mes sin confirmar usa tarifas **vigentes**; uno confirmado usa las **congeladas**. Cambiar importes después no altera meses cerrados.
 5. El admin puede ver el resumen por profesor, el detalle día a día (para cotejar con el sistema de reservas), exportar CSV/PDF y **reabrir** un mes.
 
+### Revisión de administración
+1. El profesor confirma el mes → queda **por revisar** (si ya había una revisión, pasa a `PENDIENTE`).
+2. Administración abre el detalle día a día, cota con el planning y puede anotar clases (`OK`/`REVISAR` + nota) y emitir una revisión: `APROBADO`, `DISCREPANCIA`, `CORRECCION` o `COMENTARIO` (la nota es obligatoria salvo al aprobar).
+3. `CORRECCION` **reabre el mes** (borra la confirmación) para que el profesor edite y reconfirme.
+4. Cada revisión genera una notificación y un correo al profesor; el profesor ve el estado, la nota y las marcas en *Mis Clases*.
+
+### Archivos protegidos
+`/uploads/:sub/:file` exige sesión: el administrador accede a todo y el profesor solo a sus documentos y firmas. El frontend los abre con `fetch` autenticado (blob), no con enlaces directos. Los nombres se validan (`^[\w.-]+$`) contra rutas relativas.
+
 ### Fichaje
 QR con TOTP (30 s, ventana ±1), validación GPS por radio y/o NFC. El tiempo se sincroniza con el servidor (`/api/server-time`) para evitar desfases del reloj del móvil.
 
@@ -68,7 +78,7 @@ QR con TOTP (30 s, ventana ±1), validación GPS por radio y/o NFC. El tiempo se
 - Helmet, CORS restringido a `FRONTEND_URL` (admite varias separadas por coma), rate limit en login (20/15 min) y magic link (10/15 min).
 - Subidas: solo PDF/PNG/JPG, 20 MB, nombres aleatorios.
 - Los importes/tarifas los ve el propio profesor y el admin; ningún otro profesor accede a datos ajenos (los endpoints filtran por `req.user.userId`).
-- `/uploads` se sirve estático: **los nombres son aleatorios pero no hay autenticación**. Mejora pendiente (ver roadmap).
+- Los archivos subidos se sirven solo con sesión y comprobando propiedad (ver *Archivos protegidos*).
 
 ## Decisiones
 

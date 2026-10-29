@@ -1,0 +1,4 @@
+nombre,apellidos,email,telefono,tipoJornada,horasContrato,tarifaHora,rol
+Ana,Rodríguez,ana@ejemplo.com,+34600000001,COMPLETA,35,,ADMIN
+Carlos,Martínez,carlos@ejemplo.com,+34600000002,COMPLETA,35,18,PROFESOR
+Laura,García,laura@ejemplo.com,,MEDIA_JORNADA,20,16.5,PROFESOR
