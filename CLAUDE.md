@@ -52,6 +52,7 @@ Sin SMTP/Resend, el enlace mágico se imprime en la consola del backend (solo si
 - **Revisión de administración:** `RevisionMes` (estado + nota por profesor y mes) y `ClaseDada.marca/notaAdmin`. `CORRECCION` reabre el mes; al reconfirmar la revisión vuelve a `PENDIENTE`. Ver `docs/ARQUITECTURA.md`.
 - **Archivos:** `/uploads/...` exige sesión (no hay `express.static`); el frontend usa `abrirArchivo()` con blob. Registrar rutas que usen `auth` **después** de su definición (si no, falla al arrancar).
 - **Multi-despliegue:** una instancia por cliente (`docs/MULTI-DESPLIEGUE.md`, plantillas en `deploy/`). Marca por `VITE_APP_NAME`, `VITE_ESCUELA_LUGAR`, `VITE_COLOR_PRIMARIO`.
+- **Integraciones:** `/api/v1/*` con API keys (`apiAuth`), webhooks (`emitirEvento`), planning. Ver `docs/INTEGRACIONES.md`. **RGPD:** `docs/RGPD.md`; `DOCUMENTOS_HABILITADOS=false` apaga el módulo de documentos.
 - **Pruebas:** `node backend/scripts/smoke.js` (49 comprobaciones) antes de tocar auth, importes, revisión o documentos.
 
 ## Trampas conocidas

@@ -846,6 +846,14 @@ function App() {
     } catch { w?.close(); toast$('No se pudo abrir el archivo', 'error'); }
   };
 
+  const exportarMisDatos = async () => {
+    try {
+      const r = await api.get('/api/auth/me/exportar', { headers: h(), responseType: 'blob' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(r.data); a.download = 'mis-datos.json'; a.click(); URL.revokeObjectURL(a.href);
+    } catch { toast$('No se pudo exportar', 'error'); }
+  };
+
   const logout = () => { localStorage.removeItem('token'); localStorage.removeItem('user'); setToken(null); setUser(null); };
 
   // ===== ESTADO ACTUAL =====
@@ -860,7 +868,8 @@ function App() {
   const notifNoLeidas   = notificaciones.filter(n => !n.leida).length;
 
   // ===== NAVEGACIÓN =====
-  const navItems = esAdmin && !modoEmpleado
+  const docsOn = configEscuela?.documentosHabilitados !== false;
+  const navItemsTodos = esAdmin && !modoEmpleado
     ? [
         { id: 'dashboard',  icon: '📊', label: 'Panel' },
         { id: 'presencia',  icon: '🟢', label: 'Presencia' },
@@ -883,6 +892,8 @@ function App() {
         { id: 'documentos', icon: '📁', label: 'Mis Docs', badge: misDocsPendientes },
         { id: 'perfil',     icon: '⚙️', label: 'Mi Perfil' },
       ];
+
+  const navItems = docsOn ? navItemsTodos : navItemsTodos.filter(i => i.id !== 'documentos');
 
   // ===== LOGIN =====
   if (!token) {
@@ -2270,20 +2281,13 @@ function App() {
               )}
             </div>
 
-            {/* Cambiar contraseña */}
+            {/* Privacidad: derecho de acceso y portabilidad (RGPD) */}
             <div className="card">
-              <h2>Cambiar contraseña</h2>
-              <div className="form-group"><label>Contraseña actual</label>
-                <input type="password" value={cambioPass.actual} onChange={e => setCambioPass({ ...cambioPass, actual: e.target.value })} /></div>
-              <div className="form-row">
-                <div className="form-group"><label>Nueva contraseña</label>
-                  <input type="password" value={cambioPass.nueva} onChange={e => setCambioPass({ ...cambioPass, nueva: e.target.value })} /></div>
-                <div className="form-group"><label>Confirmar nueva</label>
-                  <input type="password" value={cambioPass.confirmar} onChange={e => setCambioPass({ ...cambioPass, confirmar: e.target.value })} /></div>
-              </div>
-              <button className="btn-primary" style={{ width: 'auto' }} onClick={cambiarPassword} disabled={cargando}>
-                Cambiar contraseña
-              </button>
+              <h2>Mis datos</h2>
+              <p style={{ color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                Descarga una copia de todos tus datos personales guardados en la plataforma (perfil, fichajes, clases, solicitudes y avisos).
+              </p>
+              <button className="btn-primary" style={{ width: 'auto' }} onClick={exportarMisDatos}>⬇ Exportar mis datos</button>
             </div>
 
             {/* Activar notificaciones si no están activas */}

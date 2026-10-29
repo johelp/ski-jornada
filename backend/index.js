@@ -209,6 +209,14 @@ app.get('/uploads/:sub/:file', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Error leyendo el archivo' }); }
 });
 
+// Módulo de documentos activable por despliegue (DOCUMENTOS_HABILITADOS=false lo apaga, p. ej. si las nóminas se firman en otra plataforma)
+const DOCUMENTOS_ON = process.env.DOCUMENTOS_HABILITADOS !== 'false';
+app.use((req, res, next) => {
+  if (!DOCUMENTOS_ON && (/^\/api\/(admin\/)?documentos(\/|$)/.test(req.path) || /^\/api\/admin\/profesores\/[^/]+\/documentos$/.test(req.path) || req.path.startsWith('/uploads/documentos/')))
+    return res.status(404).json({ error: 'Módulo de documentos deshabilitado' });
+  next();
+});
+
 // ============ SERVER TIME ============
 app.get('/api/server-time', (req, res) => {
   res.json({ timestamp: Date.now(), iso: new Date().toISOString() });
@@ -1044,6 +1052,7 @@ app.post('/api/documentos/:id/firmar', auth, uploadFirma.single('pdf'), async (r
       where: { id: req.params.id },
       data: { estado: 'FIRMADO', firmaPath: req.file.filename, firmadoAt: new Date() },
     });
+    emitirEvento('documento.firmado', { documentoId: updated.id, tipo: updated.tipo, mes: updated.mes, profesorId: updated.profesorId });
     res.json({ success: true, documento: { ...updated, firmaUrl: `/uploads/firmas/${updated.firmaPath}` } });
   } catch (err) {
     console.error(err);
@@ -1199,7 +1208,7 @@ async function getConfig() {
 }
 
 app.get('/api/config', async (req, res) => {
-  try { res.json(await getConfig()); } catch (err) { res.status(500).json({ error: 'Error' }); }
+  try { res.json({ ...(await getConfig()), documentosHabilitados: DOCUMENTOS_ON }); } catch (err) { res.status(500).json({ error: 'Error' }); }
 });
 
 app.put('/api/admin/config', auth, adminOnly, async (req, res) => {
@@ -1401,6 +1410,7 @@ app.get('/api/clases/informe/:mes', auth, async (req, res) => {
     const pid = req.user.role === 'ADMIN' && req.query.profesorId ? req.query.profesorId : req.user.userId;
     const informe = await construirInformeClases(pid, req.params.mes);
     if (!informe) return res.status(404).json({ error: 'Profesor no encontrado' });
+    if (req.user.role === 'ADMIN' && req.query.profesorId) informe.planning = await comparativaPlanning(pid, req.params.mes, informe);
     res.json(informe);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Error generando informe' }); }
 });
@@ -1444,6 +1454,7 @@ app.post('/api/clases/confirmar-mes', auth, async (req, res) => {
         <table style="border-collapse:collapse;background:#f0f7ff">${filas}</table>
         <p><a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}">Ver el detalle en Ski Jornada →</a></p>
       </div>`))).catch(console.error);
+    emitirEvento('clases.mes_confirmado', { email: informe.profesor.email, mes, totalHoras: informe.totalHoras, diasConClases: informe.diasConClases });
     res.json({ success: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Error confirmando el mes' }); }
 });
@@ -1502,6 +1513,7 @@ app.post('/api/admin/clases/revision', auth, adminOnly, async (req, res) => {
         <p>${escHtml(nota || 'El administrador revisó tus horas y están correctas.')}</p>
         <p><a href="${(process.env.FRONTEND_URL || 'http://localhost:5173').split(',')[0].trim()}">Abrir Ski Jornada →</a></p>
       </div>`).catch(console.error);
+    emitirEvento('clases.revision', { email: prof.email, mes, estado, nota });
     res.json({ success: true, revision: rev });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Error guardando la revisión' }); }
 });
@@ -1527,8 +1539,263 @@ app.post('/api/admin/clases/reabrir', auth, adminOnly, async (req, res) => {
     await prisma.notificacion.create({ data: {
       titulo: 'Mes reabierto', mensaje: `El administrador reabrió ${mes} para que puedas corregir tus clases.`,
       tipo: 'AVISO', profesorId, enviadaPorId: req.user.userId } });
+    emitirEvento('clases.mes_reabierto', { profesorId, mes });
     res.json({ success: true });
   } catch { res.status(500).json({ error: 'Error reabriendo el mes' }); }
+});
+
+// ============ INTEGRACIONES (API keys, webhooks, planning) ============
+const SCOPES_API = ['lectura', 'economico', 'planning'];
+const hashKey = k => crypto.createHash('sha256').update(k).digest('hex');
+
+// Autenticación por API key para sistemas externos (X-API-Key o Authorization: Bearer sj_...)
+function apiAuth(scope) {
+  return async (req, res, next) => {
+    try {
+      const raw = String(req.headers['x-api-key'] || (req.headers.authorization || '').replace(/^Bearer /, ''));
+      if (!raw.startsWith('sj_')) return res.status(401).json({ error: 'API key requerida' });
+      const k = await prisma.apiKey.findUnique({ where: { keyHash: hashKey(raw) } });
+      if (!k || !k.activa) return res.status(401).json({ error: 'API key inválida' });
+      const scopes = k.scopes.split(',');
+      if (!scopes.includes(scope)) return res.status(403).json({ error: `La key no tiene el permiso "${scope}"` });
+      req.apiKey = { id: k.id, scopes };
+      prisma.apiKey.update({ where: { id: k.id }, data: { ultimoUso: new Date() } }).catch(() => {});
+      next();
+    } catch { res.status(500).json({ error: 'Error de autenticación' }); }
+  };
+}
+app.use('/api/v1', rateLimit({ windowMs: 60 * 1000, max: 120, message: { error: 'Demasiadas peticiones' }, standardHeaders: true, legacyHeaders: false }));
+
+// Webhooks salientes firmados con HMAC-SHA256 (cabecera X-SkiJornada-Signature: sha256=<hex>)
+const EVENTOS_WEBHOOK = ['clases.mes_confirmado', 'clases.revision', 'clases.mes_reabierto', 'documento.firmado', 'planning.importado'];
+
+async function enviarWebhook(w, evento, datos) {
+  const body = JSON.stringify({ evento, ocurridoAt: new Date().toISOString(), datos });
+  const firma = crypto.createHmac('sha256', w.secret).update(body).digest('hex');
+  let estado = 0;
+  try {
+    const r = await fetch(w.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-SkiJornada-Event': evento, 'X-SkiJornada-Signature': `sha256=${firma}` },
+      body, signal: AbortSignal.timeout(5000),
+    });
+    estado = r.status;
+  } catch { estado = 0; }
+  await prisma.webhook.update({ where: { id: w.id }, data: { ultimoEstado: estado, ultimoEnvio: new Date() } }).catch(() => {});
+  return estado;
+}
+
+async function emitirEvento(evento, datos) {
+  try {
+    const hooks = await prisma.webhook.findMany({ where: { activo: true } });
+    await Promise.allSettled(hooks
+      .filter(w => w.eventos === '*' || w.eventos.split(',').includes(evento))
+      .map(w => enviarWebhook(w, evento, datos)));
+  } catch (e) { console.error('webhook:', e.message); }
+}
+
+const urlWebhookValida = u => {
+  try {
+    const x = new URL(u);
+    return x.protocol === 'https:' || (process.env.NODE_ENV !== 'production' && ['localhost', '127.0.0.1'].includes(x.hostname));
+  } catch { return false; }
+};
+
+// --- Administración de API keys ---
+app.get('/api/admin/integraciones/keys', auth, adminOnly, async (req, res) => {
+  const keys = await prisma.apiKey.findMany({ orderBy: { createdAt: 'desc' } });
+  res.json(keys.map(({ keyHash, ...k }) => ({ ...k, scopes: k.scopes.split(',') })));
+});
+app.post('/api/admin/integraciones/keys', auth, adminOnly, async (req, res) => {
+  try {
+    const nombre = String(req.body.nombre || '').trim().slice(0, 80);
+    const scopes = (Array.isArray(req.body.scopes) ? req.body.scopes : ['lectura']).filter(s => SCOPES_API.includes(s));
+    if (!nombre) return res.status(400).json({ error: 'Ponele un nombre a la key' });
+    if (!scopes.length) return res.status(400).json({ error: 'Elegí al menos un permiso' });
+    const key = `sj_${crypto.randomBytes(24).toString('base64url')}`;
+    const k = await prisma.apiKey.create({ data: { nombre, prefijo: key.slice(0, 10), keyHash: hashKey(key), scopes: scopes.join(','), creadaPorId: req.user.userId } });
+    // La key en claro se muestra UNA sola vez
+    res.json({ id: k.id, nombre: k.nombre, scopes, prefijo: k.prefijo, key });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error creando la key' }); }
+});
+app.put('/api/admin/integraciones/keys/:id', auth, adminOnly, async (req, res) => {
+  try { await prisma.apiKey.update({ where: { id: req.params.id }, data: { activa: !!req.body.activa } }); res.json({ success: true }); }
+  catch { res.status(404).json({ error: 'Key no encontrada' }); }
+});
+app.delete('/api/admin/integraciones/keys/:id', auth, adminOnly, async (req, res) => {
+  await prisma.apiKey.deleteMany({ where: { id: req.params.id } });
+  res.json({ success: true });
+});
+
+// --- Administración de webhooks ---
+app.get('/api/admin/integraciones/webhooks', auth, adminOnly, async (req, res) => {
+  const hooks = await prisma.webhook.findMany({ orderBy: { createdAt: 'desc' } });
+  res.json({ eventos: EVENTOS_WEBHOOK, webhooks: hooks.map(({ secret, ...w }) => ({ ...w, eventos: w.eventos === '*' ? ['*'] : w.eventos.split(',') })) });
+});
+app.post('/api/admin/integraciones/webhooks', auth, adminOnly, async (req, res) => {
+  try {
+    const url = String(req.body.url || '').trim();
+    if (!urlWebhookValida(url)) return res.status(400).json({ error: 'La URL debe ser https' });
+    const eventos = Array.isArray(req.body.eventos) && req.body.eventos.length
+      ? req.body.eventos.filter(e => EVENTOS_WEBHOOK.includes(e)) : ['*'];
+    if (!eventos.length) return res.status(400).json({ error: 'Eventos inválidos' });
+    const secret = `whsec_${crypto.randomBytes(24).toString('hex')}`;
+    const w = await prisma.webhook.create({ data: { url, secret, eventos: eventos.join(',') } });
+    res.json({ id: w.id, url: w.url, eventos, secret }); // el secreto se muestra una sola vez
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error creando el webhook' }); }
+});
+app.put('/api/admin/integraciones/webhooks/:id', auth, adminOnly, async (req, res) => {
+  try { await prisma.webhook.update({ where: { id: req.params.id }, data: { activo: !!req.body.activo } }); res.json({ success: true }); }
+  catch { res.status(404).json({ error: 'Webhook no encontrado' }); }
+});
+app.delete('/api/admin/integraciones/webhooks/:id', auth, adminOnly, async (req, res) => {
+  await prisma.webhook.deleteMany({ where: { id: req.params.id } });
+  res.json({ success: true });
+});
+app.post('/api/admin/integraciones/webhooks/:id/probar', auth, adminOnly, async (req, res) => {
+  const w = await prisma.webhook.findUnique({ where: { id: req.params.id } });
+  if (!w) return res.status(404).json({ error: 'Webhook no encontrado' });
+  const estado = await enviarWebhook(w, 'prueba', { mensaje: 'Evento de prueba de Ski Jornada' });
+  res.json({ estado, ok: estado >= 200 && estado < 300 });
+});
+
+// --- Planning (clases planificadas por el sistema de reservas) ---
+async function importarPlanning(items, { reemplazarMes, fuente = 'API' } = {}) {
+  if (!Array.isArray(items) || !items.length) return { error: 'Enviá una lista "items" con al menos una fila' };
+  if (items.length > 5000) return { error: 'Máximo 5000 filas por envío' };
+  const emails = [...new Set(items.map(i => String(i.email || '').toLowerCase().trim()).filter(Boolean))];
+  const profs = await prisma.profesor.findMany({ where: { email: { in: emails } }, select: { id: true, email: true } });
+  const porEmail = Object.fromEntries(profs.map(p => [p.email, p.id]));
+  const sinProfesor = emails.filter(e => !porEmail[e]);
+  let invalidas = 0;
+  const validas = [];
+  for (const i of items) {
+    const profesorId = porEmail[String(i.email || '').toLowerCase().trim()];
+    const horas = parseFloat(String(i.horas).replace(',', '.'));
+    if (!profesorId || !FECHA_RE.test(i.fecha || '') || !(horas > 0 && horas <= 24)) { if (profesorId) invalidas++; continue; }
+    validas.push({
+      profesorId, fecha: i.fecha, horas: r2(horas),
+      disciplina: i.disciplina ? String(i.disciplina).slice(0, 60) : null,
+      referencia: String(i.referencia || '').slice(0, 80), fuente,
+    });
+  }
+  if (MES_RE.test(reemplazarMes || '')) {
+    await prisma.planningClase.deleteMany({ where: { fecha: { startsWith: reemplazarMes }, profesorId: { in: Object.values(porEmail) } } });
+  }
+  for (const v of validas) {
+    await prisma.planningClase.upsert({
+      where: { profesorId_fecha_referencia: { profesorId: v.profesorId, fecha: v.fecha, referencia: v.referencia } },
+      create: v, update: { horas: v.horas, disciplina: v.disciplina, fuente: v.fuente },
+    });
+  }
+  emitirEvento('planning.importado', { filas: validas.length, fuente });
+  return { importadas: validas.length, invalidas, sinProfesor };
+}
+
+app.post('/api/v1/planning', apiAuth('planning'), async (req, res) => {
+  try {
+    const r = await importarPlanning(req.body.items, { reemplazarMes: req.body.reemplazarMes, fuente: 'API' });
+    if (r.error) return res.status(400).json({ error: r.error });
+    res.json(r);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error importando el planning' }); }
+});
+app.post('/api/admin/planning/importar', auth, adminOnly, async (req, res) => {
+  try {
+    const r = await importarPlanning(req.body.items, { reemplazarMes: req.body.reemplazarMes, fuente: 'CSV' });
+    if (r.error) return res.status(400).json({ error: r.error });
+    res.json(r);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error importando el planning' }); }
+});
+
+// Cotejo planificado vs. cargado por día (para el detalle de administración)
+async function comparativaPlanning(profesorId, mes, informe) {
+  const plan = await prisma.planningClase.findMany({ where: { profesorId, fecha: { startsWith: mes } } });
+  if (!plan.length) return null;
+  const planPorDia = {};
+  plan.forEach(p => { planPorDia[p.fecha] = r2((planPorDia[p.fecha] || 0) + p.horas); });
+  const dias = [...new Set([...Object.keys(planPorDia), ...Object.keys(informe.porDia)])].sort();
+  const filas = dias.map(fecha => {
+    const planificadas = planPorDia[fecha] || 0, cargadas = informe.porDia[fecha] || 0;
+    return { fecha, planificadas, cargadas, diferencia: r2(cargadas - planificadas) };
+  });
+  return {
+    filas,
+    totalPlanificadas: r2(filas.reduce((s, f) => s + f.planificadas, 0)),
+    totalCargadas: r2(filas.reduce((s, f) => s + f.cargadas, 0)),
+    diasConDiferencia: filas.filter(f => f.diferencia !== 0).length,
+  };
+}
+
+// --- API de lectura para integraciones (nóminas, BI, etc.) ---
+const sinEconomico = i => {
+  const { tarifaHora, importeBase, importePrimas, importeTotal, ...resto } = i;
+  return {
+    ...resto,
+    detalle: i.detalle.map(({ importe, ...c }) => c),
+    desglosePrimas: i.desglosePrimas.map(({ importe, ...d }) => d),
+  };
+};
+
+app.get('/api/v1/profesores', apiAuth('lectura'), async (req, res) => {
+  const profs = await prisma.profesor.findMany({ orderBy: { apellidos: 'asc' } });
+  const eco = req.apiKey.scopes.includes('economico');
+  res.json(profs.map(p => ({
+    id: p.id, nombre: p.nombre, apellidos: p.apellidos, email: p.email, rol: p.role, activo: p.activo,
+    tipoJornada: p.tipoJornada, horasContrato: p.horasContrato, ...(eco ? { tarifaHora: p.tarifaHora } : {}),
+  })));
+});
+
+app.get('/api/v1/informe/:mes', apiAuth('lectura'), async (req, res) => {
+  try {
+    if (!MES_RE.test(req.params.mes)) return res.status(400).json({ error: 'Mes inválido (AAAA-MM)' });
+    const where = { activo: true, role: 'PROFESOR' };
+    if (req.query.email) where.email = String(req.query.email).toLowerCase();
+    const profs = await prisma.profesor.findMany({ where, select: { id: true } });
+    const eco = req.apiKey.scopes.includes('economico');
+    const informes = await Promise.all(profs.map(p => construirInformeClases(p.id, req.params.mes)));
+    res.json(informes.filter(i => i.detalle.length || i.confirmado).map(i => {
+      const r = eco ? i : sinEconomico(i);
+      return { ...r, porDia: undefined };
+    }));
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error generando el informe' }); }
+});
+
+// ============ RGPD: exportación de datos personales ============
+async function exportarDatosProfesor(id) {
+  const [perfil, registros, libres, clases, revisiones, confirmaciones, documentos, firmas, notifs, planning] = await Promise.all([
+    prisma.profesor.findUnique({ where: { id }, select: { id: true, email: true, nombre: true, apellidos: true, telefono: true, role: true, tipoJornada: true, horasContrato: true, tarifaHora: true, horaRecordatorio: true, activo: true, createdAt: true } }),
+    prisma.registroJornada.findMany({ where: { profesorId: id }, orderBy: { timestamp: 'asc' }, select: { tipo: true, timestamp: true, zonaNombre: true, lat: true, lng: true, distancia: true, esIncidencia: true } }),
+    prisma.solicitudLibre.findMany({ where: { profesorId: id } }),
+    prisma.claseDada.findMany({ where: { profesorId: id }, include: { tipo: true, primas: true }, orderBy: { fecha: 'asc' } }),
+    prisma.revisionMes.findMany({ where: { profesorId: id } }),
+    prisma.confirmacionClases.findMany({ where: { profesorId: id } }),
+    prisma.documentoLegajo.findMany({ where: { profesorId: id }, select: { tipo: true, nombre: true, mes: true, estado: true, createdAt: true, firmadoAt: true } }),
+    prisma.firmaRegistro.findMany({ where: { profesorId: id }, select: { mes: true, estado: true, firmadoAt: true } }),
+    prisma.notificacion.findMany({ where: { profesorId: id }, select: { titulo: true, mensaje: true, tipo: true, createdAt: true } }),
+    prisma.planningClase.findMany({ where: { profesorId: id } }),
+  ]);
+  if (!perfil) return null;
+  return {
+    generadoEl: new Date().toISOString(), perfil, registrosJornada: registros, solicitudesLibres: libres,
+    clases: clases.map(c => ({ fecha: c.fecha, horas: c.horas, disciplina: c.tipo.nombre, primas: c.primas.map(p => p.nombre), notas: c.notas, marca: c.marca, notaAdmin: c.notaAdmin })),
+    revisionesMensuales: revisiones, confirmacionesMensuales: confirmaciones, documentos, firmasRegistro: firmas, notificaciones: notifs, planning,
+  };
+}
+app.get('/api/auth/me/exportar', auth, async (req, res) => {
+  try {
+    const d = await exportarDatosProfesor(req.user.userId);
+    if (!d) return res.status(404).json({ error: 'Usuario no encontrado' });
+    res.setHeader('Content-Disposition', 'attachment; filename="mis-datos.json"');
+    res.json(d);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error exportando los datos' }); }
+});
+app.get('/api/admin/profesores/:id/exportar', auth, adminOnly, async (req, res) => {
+  try {
+    const d = await exportarDatosProfesor(req.params.id);
+    if (!d) return res.status(404).json({ error: 'Profesor no encontrado' });
+    res.setHeader('Content-Disposition', 'attachment; filename="datos-profesor.json"');
+    res.json(d);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error exportando los datos' }); }
 });
 
 // ============ WHATSAPP (Baileys) ============
