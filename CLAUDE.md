@@ -35,6 +35,7 @@ Sin SMTP/Resend, el enlace mágico se imprime en la consola del backend (solo si
 - Fechas de clases: string `YYYY-MM-DD`; meses `AAAA-MM`. No usar `Date` para filtrar meses de clases (`startsWith`).
 - Cambios de esquema: siempre migración **aditiva** (producción corre `migrate deploy` al arrancar).
 - No versionar `.env`, `*.db`, `uploads/`, `node_modules/` (ver `.gitignore`).
+- La vista sin sesión es `Landing.jsx` (estilos con prefijo `.lp-` y resets de los estilos globales de `App.css`/`index.css`, que filtran sobre `header`/`nav`/`main`/`h1`). Diseño: acento naranja `#f97316` sobre texto oscuro, azul `#0f4c81`, SVG en vez de emojis, objetivos táctiles ≥48 px.
 - Vistas nuevas del frontend: componentes en `src/` que reciben `api`, `h`, `toast$`, `config`; no seguir engordando `App.jsx`.
 - Sin tests todavía: al tocar cálculos de importes o auth, verificar con `curl` o añadir tests.
 

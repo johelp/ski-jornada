@@ -6,6 +6,7 @@
 - Informe PDF del profesor (con parte económica) y vista de admin para cotejar con el planning
 - Alta de profesores por el admin con invitación por enlace mágico; sesión de 90 días renovable
 - Informes de jornada (RD 8/2019), días libres, legajo de documentos, avisos
+- Landing pública (`frontend/src/Landing.jsx` + `Landing.css`) con accesos separados para profesores y administración; el rol lo define la cuenta del email
 - PWA instalable; repo ordenado; configuración de Railway y Cloudflare Pages
 
 ## Próximo (prioridad alta)

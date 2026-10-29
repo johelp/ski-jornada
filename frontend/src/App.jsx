@@ -5,6 +5,7 @@ import QRCode from 'qrcode';
 import { generarPDFRegistro } from './pdfRegistro';
 import VistaMisClases from './VistaMisClases';
 import VistaAdminClases from './VistaAdminClases';
+import Landing from './Landing';
 import './App.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -893,32 +894,13 @@ function App() {
       finally { setCargando(false); }
     };
     return (
-      <div className="login-container">
-        <div className="login-card">
-          <div className="login-logo">⛷️</div>
-          <h1>Ski Jornada</h1>
-          <p className="login-subtitle">Control de jornada laboral</p>
-          {enlaceEnviado ? (
-            <div>
-              <p style={{ margin: '1rem 0' }}>📬 Si <strong>{emailLogin}</strong> está registrado, te enviamos un enlace para entrar. Vale 15 minutos.</p>
-              <button className="btn-ghost" onClick={() => setEnlaceEnviado(false)}>Usar otro email</button>
-            </div>
-          ) : (
-            <form onSubmit={pedirEnlace}>
-              <div className="form-group"><label>Correo electrónico</label>
-                <input type="email" value={emailLogin} onChange={e => setEmailLogin(e.target.value)} placeholder="usuario@escuela.com" required autoComplete="email" /></div>
-              <button type="submit" className="btn-primary" disabled={cargando}>
-                {cargando ? <span className="btn-spinner" /> : 'Enviarme el enlace de acceso'}
-              </button>
-              <p className="form-hint">Sin contraseña: te mandamos un enlace al correo y la sesión queda abierta en este dispositivo.</p>
-            </form>
-          )}
-          {pwaInstallEvent && (
-            <button className="btn-pwa-login" onClick={instalarPWA}>
-              📱 Añadir a pantalla de inicio
-            </button>
-          )}
-          {import.meta.env.DEV && (
+      <>
+        <Landing
+          emailLogin={emailLogin} setEmailLogin={setEmailLogin}
+          enlaceEnviado={enlaceEnviado} setEnlaceEnviado={setEnlaceEnviado}
+          pedirEnlace={pedirEnlace} cargando={cargando}
+          pwaInstallEvent={pwaInstallEvent} instalarPWA={instalarPWA} toast={toast}
+          devForm={import.meta.env.DEV && (
             <form onSubmit={handleLoginPassword} className="login-demo">
               <p>Solo desarrollo · contraseña (requiere PASSWORD_LOGIN=true)</p>
               <input type="email" name="email" placeholder="profesor@escuela.com" />
@@ -926,10 +908,9 @@ function App() {
               <button type="submit" className="btn-sm">Entrar</button>
             </form>
           )}
-        </div>
-        {toast && <div className={`toast toast-${toast.tipo}`}>{toast.msg}</div>}
+        />
         {cargando && <div className="loading-overlay"><div className="spinner" /></div>}
-      </div>
+      </>
     );
   }
 
