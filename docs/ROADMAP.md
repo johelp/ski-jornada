@@ -9,6 +9,9 @@
 - Landing pública (`frontend/src/Landing.jsx` + `Landing.css`) con accesos separados para profesores y administración; el rol lo define la cuenta del email
 - PWA instalable; repo ordenado; configuración de Railway y Cloudflare Pages
 
+## Estado y alcance
+Ver `ALCANCE-MVP.md` (estado al 29/10/2026, riesgos y decisiones).
+
 ## Piloto Snowmotion
 Ver `PILOTO-SNOWMOTION.md`: carga masiva de nóminas, archivado en Drive (cuenta de servicio), backup a Drive, importación del planning de reservas.
 

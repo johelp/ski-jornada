@@ -41,7 +41,7 @@ Estado: ✅ disponible · 🟡 disponible con límites · 🗺 planificado (ver 
 | Función | Estado | Detalle |
 |---------|--------|---------|
 | Solicitar días libres | ✅ | Vacaciones, asuntos propios, enfermedad; ve la respuesta y la observación |
-| Documentos (nóminas, contratos, certificados) | ✅ | Ve los que le sube administración, los abre y sube la versión firmada |
+| Documentos (nóminas, contratos, certificados) | ✅ (se puede apagar por despliegue con `DOCUMENTOS_HABILITADOS=false`) | Ve los que le sube administración, los abre y sube la versión firmada |
 | Firma | 🟡 | Firma dibujada (no tiene validez legal) o subida del PDF firmado a mano/digital |
 | Notificaciones | ✅ | Campana in-app + correo |
 | Perfil, teléfono, hora de recordatorio | ✅ | |
@@ -69,7 +69,8 @@ Estado: ✅ disponible · 🟡 disponible con límites · 🗺 planificado (ver 
 | Frases rápidas | ✅ | “Horas correctas”, “Discrepancia con reservas”… |
 | Reabrir un mes confirmado | ✅ | |
 | Informe PDF por profesor | ✅ | Incluye la parte económica si hay tarifas |
-| Importar el planning de reservas | 🗺 | Comparación automática planificado vs. cargado |
+| Comparativa con el resumen de instructores del sistema de reservas | ✅ | Horas, importe, tarifa y primas por instructor; vincula nombres y recuerda el vínculo. Ver `COMPARATIVA.md` |
+| Importar el planning de reservas (por día) | ✅ | Por API o CSV; el detalle de cada profesor muestra planificado vs. cargado. Pantalla en *Integraciones* |
 
 ### Informes de jornada y ausencias
 | Función | Estado | Detalle |
@@ -88,6 +89,15 @@ Estado: ✅ disponible · 🟡 disponible con límites · 🗺 planificado (ver 
 | Carga masiva y archivado en Drive | 🗺 | Ver `PILOTO-SNOWMOTION.md` |
 | Firma electrónica con validez legal | 🗺 | Autofirma / ViDeSigner |
 
+### Integraciones y datos personales
+| Función | Estado | Detalle |
+|---------|--------|---------|
+| API de lectura con API keys y alcances (`lectura`, `economico`, `planning`) | ✅ | Ver `INTEGRACIONES.md`. Sin pantalla de gestión todavía |
+| Webhooks firmados (mes confirmado, revisión, documento firmado…) | ✅ | Un intento, sin reintentos |
+| Importar planning (API y CSV) y cotejo planificado vs. cargado | 🟡 | El backend está listo; falta mostrarlo en la interfaz |
+| Exportar mis datos / datos de un profesor (RGPD) | ✅ | Botón en Perfil; admin por API |
+| Purga por plazo de conservación | ✅ | `backend/scripts/purgar.js` |
+
 ### Configuración
 | Función | Estado | Detalle |
 |---------|--------|---------|
@@ -100,4 +110,4 @@ Estado: ✅ disponible · 🟡 disponible con límites · 🗺 planificado (ver 
 - **Seguridad:** enlaces de un solo uso con hash en base, JWT, rate limit, CORS por despliegue, archivos protegidos, cada profesor solo ve sus datos.
 - **Cálculo de importes:** `horas × tarifa del profesor + Σ primas` (por hora o por clase), congelado al confirmar.
 - **Multi-despliegue:** un backend, una base y un frontend por cliente, con plantillas de variables.
-- **Pruebas:** `node backend/scripts/smoke.js` ejecuta 49 verificaciones de extremo a extremo (ver `PRUEBAS.md`).
+- **Pruebas:** `node backend/scripts/smoke.js` ejecuta 68 verificaciones de extremo a extremo (ver `PRUEBAS.md`).

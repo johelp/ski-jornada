@@ -4,9 +4,13 @@ import jsQR from 'jsqr';
 import QRCode from 'qrcode';
 import { generarPDFRegistro } from './pdfRegistro';
 import VistaMisClases from './VistaMisClases';
+import InformeClases from './InformeClases';
+import VistaIntegraciones from './VistaIntegraciones';
 import VistaAdminClases from './VistaAdminClases';
 import Landing from './Landing';
 import './App.css';
+import './theme.css';
+import Icono, { LogoMarca } from './Iconos';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const api = axios.create({ baseURL: API_BASE });
@@ -43,6 +47,21 @@ function formatTiempo(ms) {
 }
 
 const nfcDisponible = 'NDEFReader' in window;
+
+// Temporada = 12 meses desde el mes de inicio (por defecto noviembre; configurable con VITE_TEMPORADA_INICIO_MES)
+const TEMPORADA_INICIO = Math.min(12, Math.max(1, parseInt(import.meta.env.VITE_TEMPORADA_INICIO_MES) || 11));
+const pad2 = n => String(n).padStart(2, '0');
+function rangoPeriodo(periodo, ahora = new Date()) {
+  const y = ahora.getFullYear(), m = ahora.getMonth() + 1;
+  if (periodo === 'mes') return { desde: `${y}-${pad2(m)}`, hasta: `${y}-${pad2(m)}`, etiqueta: ahora.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }) };
+  const y0 = m >= TEMPORADA_INICIO ? y : y - 1;
+  const fin = TEMPORADA_INICIO === 1 ? { y: y0, m: 12 } : { y: y0 + 1, m: TEMPORADA_INICIO - 1 };
+  return {
+    desde: `${y0}-${pad2(TEMPORADA_INICIO)}`, hasta: `${fin.y}-${pad2(fin.m)}`,
+    etiqueta: TEMPORADA_INICIO === 1 ? `Temporada ${y0}` : `Temporada ${y0}-${String(fin.y).slice(2)}`,
+  };
+}
+const eurFmt = n => (n == null ? null : `${n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`);
 
 const TIPO_DOC_LABEL = { NOMINA: 'Nómina', CONTRATO: 'Contrato', CERTIFICADO: 'Certificado', OTRO: 'Otro' };
 const TIPO_DOC_ICON  = { NOMINA: '💰', CONTRATO: '📋', CERTIFICADO: '🏅', OTRO: '📄' };
@@ -237,6 +256,12 @@ function App() {
   const [toast, setToast]   = useState(null);
   const [cargando, setCargando] = useState(false);
   const [confirmarSalida, setConfirmarSalida] = useState(false);
+  const [masAbierto, setMasAbierto] = useState(false);
+  const [periodoDash, setPeriodoDash] = useState('mes');
+  const [nuevoUsuarioAbierto, setNuevoUsuarioAbierto] = useState(false);
+  const [busquedaUsuario, setBusquedaUsuario] = useState('');
+  const [tabInformeEmp, setTabInformeEmp] = useState('jornada');
+  const [clasesPeriodo, setClasesPeriodo] = useState(null);
   const [emailLogin, setEmailLogin] = useState('');
   const [enlaceEnviado, setEnlaceEnviado] = useState(false);
   const magicProcesado = useRef(false);
@@ -495,6 +520,15 @@ function App() {
       }
     }
   }, [token]);
+
+  // Totales de clases del período elegido en el inicio (mes en curso o temporada)
+  useEffect(() => {
+    if (!token) return;
+    const { desde, hasta } = rangoPeriodo(periodoDash);
+    setClasesPeriodo(null);
+    api.get(`/api/clases/periodo?desde=${desde}&hasta=${hasta}`, { headers: h() })
+      .then(r => setClasesPeriodo(r.data)).catch(() => {});
+  }, [token, periodoDash]);
 
   // Poll notifications every 60s
   useEffect(() => {
@@ -846,6 +880,14 @@ function App() {
     } catch { w?.close(); toast$('No se pudo abrir el archivo', 'error'); }
   };
 
+  const exportarMisDatos = async () => {
+    try {
+      const r = await api.get('/api/auth/me/exportar', { headers: h(), responseType: 'blob' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(r.data); a.download = 'mis-datos.json'; a.click(); URL.revokeObjectURL(a.href);
+    } catch { toast$('No se pudo exportar', 'error'); }
+  };
+
   const logout = () => { localStorage.removeItem('token'); localStorage.removeItem('user'); setToken(null); setUser(null); };
 
   // ===== ESTADO ACTUAL =====
@@ -854,13 +896,17 @@ function App() {
   const estadoFichaje  = registrosHoy[registrosHoy.length - 1]?.tipo || null;
   const esAdmin        = user?.role === 'ADMIN';
   const totalHoras     = Object.values(resumenDiario).reduce((s, d) => s + d.horas, 0).toFixed(1);
+  const rango          = rangoPeriodo(periodoDash, horaActual);
+  const diasPeriodo    = Object.entries(resumenDiario).filter(([dia]) => dia.slice(0, 7) >= rango.desde && dia.slice(0, 7) <= rango.hasta);
+  const horasPeriodo   = diasPeriodo.reduce((s, [, d]) => s + d.horas, 0).toFixed(1);
   const adminPendientes = adminSolicitudes.filter(s => s.estado === 'PENDIENTE').length;
   const docsPendientes  = documentosAdmin.filter(d => d.estado === 'PENDIENTE').length;
   const misDocsPendientes = misDocumentos.filter(d => d.estado === 'PENDIENTE').length;
   const notifNoLeidas   = notificaciones.filter(n => !n.leida).length;
 
   // ===== NAVEGACIÓN =====
-  const navItems = esAdmin && !modoEmpleado
+  const docsOn = configEscuela?.documentosHabilitados !== false;
+  const navItemsTodos = esAdmin && !modoEmpleado
     ? [
         { id: 'dashboard',  icon: '📊', label: 'Panel' },
         { id: 'presencia',  icon: '🟢', label: 'Presencia' },
@@ -871,18 +917,42 @@ function App() {
         { id: 'usuarios',   icon: '👥', label: 'Usuarios' },
         { id: 'zonas',      icon: '📍', label: 'Zonas' },
         { id: 'avisos',     icon: '🔔', label: 'Avisos' },
+        { id: 'integraciones', icon: '🔗', label: 'Integraciones' },
         { id: 'config',     icon: '🏔', label: 'Config' },
         { id: 'perfil',     icon: '👤', label: 'Mi Perfil' },
       ]
     : [
-        ...(!esAdmin ? [{ id: 'dashboard', icon: '📊', label: 'Dashboard' }] : []),
+        ...(!esAdmin ? [{ id: 'dashboard', icon: '📊', label: 'Inicio' }] : []),
         { id: 'fichar',     icon: '🕐', label: 'Fichar' },
-        { id: 'misclases',  icon: '🎿', label: 'Mis Clases' },
-        { id: 'solicitar',  icon: '📅', label: 'Días Libres' },
-        { id: 'informes',   icon: '📄', label: 'Mis Informes' },
-        { id: 'documentos', icon: '📁', label: 'Mis Docs', badge: misDocsPendientes },
-        { id: 'perfil',     icon: '⚙️', label: 'Mi Perfil' },
+        { id: 'misclases',  icon: '🎿', label: 'Clases' },
+        { id: 'solicitar',  icon: '📅', label: 'Días libres' },
+        { id: 'informes',   icon: '📄', label: 'Informes' },
+        { id: 'documentos', icon: '📁', label: 'Documentos', badge: misDocsPendientes },
+        { id: 'perfil',     icon: '⚙️', label: 'Mi perfil' },
       ];
+
+  const navItems = docsOn ? navItemsTodos : navItemsTodos.filter(i => i.id !== 'documentos');
+
+  const ICONO_NAV = {
+    dashboard: 'inicio', presencia: 'presencia', gestionar: 'solicitudes', clases: 'clases', informes: 'informe', documentos: 'docs',
+    usuarios: 'usuarios', zonas: 'zonas', avisos: 'avisos', integraciones: 'enlace', config: 'config', perfil: 'perfil', fichar: 'reloj', misclases: 'clases', solicitar: 'calendario',
+  };
+  const PRINCIPALES = esAdmin && !modoEmpleado ? ['dashboard', 'clases', 'usuarios', 'informes'] : ['dashboard', 'fichar', 'misclases', 'informes'];
+  const navPrincipal = PRINCIPALES.map(id => navItems.find(i => i.id === id)).filter(Boolean);
+  const navMas = navItems.filter(i => !PRINCIPALES.includes(i.id));
+  const irA = (item) => {
+    setVista(item.id); setMasAbierto(false); window.scrollTo({ top: 0 });
+    if (item.id === 'informes') { setInformeMensual(null); setInformeAusencias(null); }
+    if (item.id === 'presencia') cargarPresencia();
+    if (item.id === 'documentos' && esAdmin && !modoEmpleado) cargarDocumentosAdmin();
+    if (item.id === 'documentos' && (!esAdmin || modoEmpleado)) cargarMisDocumentos();
+  };
+  const BotonNav = ({ item }) => (
+    <button className={`nav-item${vista === item.id ? ' active' : ''}`} onClick={() => irA(item)} aria-current={vista === item.id ? 'page' : undefined}>
+      <Icono n={ICONO_NAV[item.id] || 'mas'} /><span>{item.label}</span>
+      {item.badge > 0 && <span className="nav-badge">{item.badge}</span>}
+    </button>
+  );
 
   // ===== LOGIN =====
   if (!token) {
@@ -926,43 +996,36 @@ function App() {
 
   return (
     <div className="app-container">
-      <header>
-        <div className="header-content">
-          <div className="header-brand">
-            <span className="header-logo">⛷️</span>
-            <h1>Ski Jornada</h1>
+      <header className="topbar">
+        <div className="topbar-in">
+          <div className="topbar-brand">
+            <LogoMarca size={30} />
+            <span>Ski Jornada</span>
           </div>
-          <div className="user-info">
-            {/* Live timer en header cuando está fichado */}
-            {estadoFichaje === 'ENTRADA' && tiempoFichado !== null && (
-              <div className="header-timer">
-                <span className="timer-dot">●</span>
-                <span className="timer-value">{formatTiempo(tiempoFichado)}</span>
-              </div>
-            )}
+          <div className="topbar-right">
             {estadoFichaje && (
-              <span className={`fichaje-status ${estadoFichaje.toLowerCase()}`}>
-                {estadoFichaje === 'ENTRADA' ? '● Dentro' : '○ Fuera'}
+              <span className={`chip-estado ${estadoFichaje === 'ENTRADA' ? 'dentro' : ''}`} role="status">
+                <span className="punto" />
+                {estadoFichaje === 'ENTRADA'
+                  ? (tiempoFichado !== null ? formatTiempo(tiempoFichado).replace(/ \d+s$/, '') : 'Dentro')
+                  : 'Fuera'}
               </span>
             )}
-            <span className="user-name">{user?.nombre} {user?.apellidos}</span>
-            <span className={`badge badge-${esAdmin ? 'admin' : 'profesor'}`}>{esAdmin ? '🛡 Admin' : '👤 Emp.'}</span>
             {esAdmin && (
-              <button
-                className={`btn-modo ${modoEmpleado ? 'btn-modo-active' : ''}`}
+              <button className={`chip-modo${modoEmpleado ? ' activo' : ''}`}
                 onClick={() => { setModoEmpleado(m => !m); setVista(modoEmpleado ? 'dashboard' : 'fichar'); }}
-                title={modoEmpleado ? 'Volver al panel de administración' : 'Cambiar a modo empleado para fichar'}
-              >
-                {modoEmpleado ? '🛡 Admin' : '🕐 Fichar'}
+                aria-pressed={modoEmpleado}>
+                {modoEmpleado ? 'Vista admin' : 'Modo empleado'}
               </button>
             )}
             {pwaInstallEvent && (
-              <button className="btn-pwa" onClick={instalarPWA} title="Instalar en pantalla de inicio">📱</button>
+              <button className="icon-btn solo-escritorio" onClick={instalarPWA} aria-label="Instalar la app"><Icono n="instalar" /></button>
             )}
-            <button className="btn-bell" onClick={() => setNotifPanel(p => !p)} title="Notificaciones">
-              🔔{notifNoLeidas > 0 && <span className="bell-badge">{notifNoLeidas > 9 ? '9+' : notifNoLeidas}</span>}
+            <button className="icon-btn" onClick={() => setNotifPanel(p => !p)} aria-label={`Notificaciones${notifNoLeidas ? `, ${notifNoLeidas} sin leer` : ''}`}>
+              <Icono n="campana" />
+              {notifNoLeidas > 0 && <span className="badge-dot">{notifNoLeidas > 9 ? '9+' : notifNoLeidas}</span>}
             </button>
-            <button onClick={logout} className="btn-logout">Salir</button>
+            <button className="icon-btn solo-escritorio" onClick={logout} aria-label="Cerrar sesión"><Icono n="salir" /></button>
           </div>
         </div>
       </header>
@@ -1006,22 +1069,42 @@ function App() {
         </div>
       )}
 
-      <nav>
-        {navItems.map(item => (
-          <button key={item.id} className={vista === item.id ? 'active' : ''}
-            onClick={() => {
-              setVista(item.id);
-              if (item.id === 'informes') { setInformeMensual(null); setInformeAusencias(null); }
-              if (item.id === 'presencia') cargarPresencia();
-              if (item.id === 'documentos' && esAdmin && !modoEmpleado) cargarDocumentosAdmin();
-              if (item.id === 'documentos' && (!esAdmin || modoEmpleado)) cargarMisDocumentos();
-            }}>
-            <span className="nav-icon">{item.icon}</span>
-            <span className="nav-label">{item.label}</span>
-            {item.badge > 0 && <span className="nav-badge">{item.badge}</span>}
-          </button>
-        ))}
+      <nav className="side-nav" aria-label="Principal">
+        {navItems.map(item => <BotonNav key={item.id} item={item} />)}
+        <div style={{ flex: 1 }} />
+        <button className="nav-item" onClick={logout}><Icono n="salir" /><span>Cerrar sesión</span></button>
       </nav>
+
+      <nav className="bottom-nav" aria-label="Principal">
+        {navPrincipal.map(item => <BotonNav key={item.id} item={item} />)}
+        {navMas.length > 0 && (
+          <button className={`nav-item${navMas.some(i => i.id === vista) ? ' active' : ''}`} onClick={() => setMasAbierto(true)} aria-haspopup="dialog">
+            <Icono n="mas" /><span>Más</span>
+            {navMas.some(i => i.badge > 0) && <span className="nav-badge">{navMas.reduce((s, i) => s + (i.badge || 0), 0)}</span>}
+          </button>
+        )}
+      </nav>
+
+      {masAbierto && (
+        <div className="sheet-overlay" onClick={() => setMasAbierto(false)}>
+          <div className="sheet" role="dialog" aria-modal="true" aria-label="Más opciones" onClick={e => e.stopPropagation()}>
+            <div className="sheet-grip" />
+            <h3>Más opciones</h3>
+            <div className="sheet-grid">
+              {navMas.map(item => (
+                <button key={item.id} className={`sheet-item${vista === item.id ? ' activo' : ''}`} onClick={() => irA(item)}>
+                  <Icono n={ICONO_NAV[item.id] || 'mas'} /><span>{item.label}</span>
+                  {item.badge > 0 && <span className="nav-badge">{item.badge}</span>}
+                </button>
+              ))}
+            </div>
+            <div className="sheet-acciones">
+              {pwaInstallEvent && <button onClick={() => { instalarPWA(); setMasAbierto(false); }}><Icono n="instalar" size={20} />Instalar la app</button>}
+              <button className="salir" onClick={logout}><Icono n="salir" size={20} />Cerrar sesión</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main>
 
@@ -1119,20 +1202,50 @@ function App() {
                   Entrada a las {registrosHoy.find(r => r.tipo === 'ENTRADA')?.hora}
                 </p>
               )}
-              <button className="btn-sm" style={{ marginTop: '0.75rem' }} onClick={() => setVista('fichar')}>
-                Ir a Fichar →
+              <button className="btn-sm" onClick={() => setVista('fichar')}>
+                {estadoFichaje === 'ENTRADA' ? 'Fichar salida' : 'Fichar entrada'}
               </button>
             </div>
 
-            <div className="stats-grid">
-              <div className="stat-card stat-blue"><span className="stat-icon">⏱</span><div>
-                <p className="stat-label">Total horas</p><p className="stat-number">{totalHoras}h</p></div></div>
-              <div className="stat-card stat-green"><span className="stat-icon">📆</span><div>
-                <p className="stat-label">Días trabajados</p><p className="stat-number">{Object.keys(resumenDiario).length}</p></div></div>
-              <div className="stat-card stat-amber"><span className="stat-icon">📋</span><div>
-                <p className="stat-label">Solicitudes pendientes</p>
-                <p className="stat-number">{solicitudes.filter(s => s.estado === 'PENDIENTE').length}</p></div></div>
+            <div className="periodo-bar">
+              <div className="segmentado" role="tablist" aria-label="Período de los totales">
+                <button role="tab" aria-selected={periodoDash === 'mes'} className={periodoDash === 'mes' ? 'activo' : ''} onClick={() => setPeriodoDash('mes')}>Este mes</button>
+                <button role="tab" aria-selected={periodoDash === 'temporada'} className={periodoDash === 'temporada' ? 'activo' : ''} onClick={() => setPeriodoDash('temporada')}>Temporada</button>
+              </div>
+              <span className="periodo-etiqueta">{rango.etiqueta}</span>
             </div>
+            <div className="stats-grid stats-2x2">
+              <div className="stat-card stat-blue"><div>
+                <p className="stat-label">Horas fichadas</p><p className="stat-number">{horasPeriodo}h</p></div></div>
+              <div className="stat-card stat-green"><div>
+                <p className="stat-label">Días trabajados</p><p className="stat-number">{diasPeriodo.length}</p></div></div>
+              <div className="stat-card stat-blue"><div>
+                <p className="stat-label">Horas de clase</p><p className="stat-number">{clasesPeriodo ? `${clasesPeriodo.totalHoras}h` : '…'}</p></div></div>
+              {clasesPeriodo?.totalImporte != null ? (
+                <div className="stat-card stat-amber"><div>
+                  <p className="stat-label">Importe estimado</p><p className="stat-number">{eurFmt(clasesPeriodo.totalImporte)}</p></div></div>
+              ) : (
+                <div className="stat-card stat-amber"><div>
+                  <p className="stat-label">Solicitudes pendientes</p>
+                  <p className="stat-number">{solicitudes.filter(s => s.estado === 'PENDIENTE').length}</p></div></div>
+              )}
+            </div>
+            {periodoDash === 'temporada' && clasesPeriodo?.meses?.some(m => m.horas > 0) && (
+              <div className="card">
+                <h2>Clases por mes</h2>
+                <div className="resumen-list">
+                  {clasesPeriodo.meses.filter(m => m.horas > 0).map(m => (
+                    <div key={m.mes} className="resumen-item">
+                      <span className="resumen-fecha">{new Date(m.mes + '-15T12:00:00').toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</span>
+                      <div className="resumen-right">
+                        <span className="resumen-horas">{m.horas} h</span>
+                        {m.importe != null && <span className="badge-ok">{eurFmt(m.importe)}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {registrosHoy.length > 0 && (
               <div className="card"><h2>Hoy</h2>
                 <div className="timeline">
@@ -1198,15 +1311,15 @@ function App() {
                 <div className="scanner-container">
                   <video ref={videoRef} className="scanner-video" playsInline muted />
                   <div className="scanner-overlay"><div className="scanner-frame" /></div>
-                  <button className="btn-ghost scanner-stop" onClick={detenerScanner}>✕ Cerrar cámara</button>
+                  <button className="btn-ghost scanner-stop" onClick={detenerScanner}><Icono n="cerrar" size={20} /> Cerrar cámara</button>
                 </div>
               ) : (
                 <>
                   <div className="scan-buttons">
-                    <button className="btn-scan" onClick={iniciarScanner}>📷 Escanear QR con cámara</button>
+                    <button className="btn-scan" onClick={iniciarScanner}><Icono n="qr" size={22} /> Escanear QR con cámara</button>
                     {nfcDisponible && (
                       <button className={`btn-scan btn-nfc ${nfcActivo ? 'active' : ''}`} onClick={iniciarNFC}>
-                        {nfcActivo ? '📡 Esperando NFC...' : '📡 Leer tag NFC'}
+                        <Icono n="nfc" size={22} /> {nfcActivo ? 'Esperando NFC…' : 'Leer tag NFC'}
                       </button>
                     )}
                   </div>
@@ -1277,9 +1390,9 @@ function App() {
               </div>
               <div className="form-group"><label>Motivo</label>
                 <select value={motivo} onChange={e => setMotivo(e.target.value)}>
-                  <option value="VACACIONES">🌴 Vacaciones</option>
-                  <option value="ASUNTO_PROPIO">📌 Asunto propio</option>
-                  <option value="ENFERMEDAD">🏥 Enfermedad</option>
+                  <option value="VACACIONES">Vacaciones</option>
+                  <option value="ASUNTO_PROPIO">Asunto propio</option>
+                  <option value="ENFERMEDAD">Enfermedad</option>
                 </select>
               </div>
               <div className="form-group"><label>Comentario (opcional)</label>
@@ -1310,15 +1423,21 @@ function App() {
         {(!esAdmin || modoEmpleado) && vista === 'informes' && (
           <div>
             <div className="card">
-              <div className="informe-selector">
-                <h2>Mi registro de jornada</h2>
+              <h2>Mis informes</h2>
+              <div className="segmentado" role="tablist" aria-label="Tipo de informe" style={{ marginBottom: 12 }}>
+                <button role="tab" aria-selected={tabInformeEmp === 'jornada'} className={tabInformeEmp === 'jornada' ? 'activo' : ''} onClick={() => setTabInformeEmp('jornada')}>Jornada</button>
+                <button role="tab" aria-selected={tabInformeEmp === 'clases'} className={tabInformeEmp === 'clases' ? 'activo' : ''} onClick={() => setTabInformeEmp('clases')}>Clases y economía</button>
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label htmlFor="inf-mes">Mes</label>
                 <div className="mes-selector">
-                  <input type="month" value={mesInforme} onChange={e => setMesInforme(e.target.value)} />
-                  <button className="btn-primary" onClick={() => cargarInforme('')} style={{ width: 'auto', padding: '0.5rem 1.25rem', marginTop: 0 }}>Ver</button>
+                  <input id="inf-mes" type="month" value={mesInforme} onChange={e => setMesInforme(e.target.value)} />
+                  {tabInformeEmp === 'jornada' && <button className="btn-primary" onClick={() => cargarInforme('')}>Ver</button>}
                 </div>
               </div>
             </div>
-            {informeMensual && (
+            {tabInformeEmp === 'clases' && <InformeClases api={api} h={h} toast$={toast$} config={configEscuela} mes={mesInforme} />}
+            {tabInformeEmp === 'jornada' && informeMensual && (
               <div className="card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
                   <h2 style={{ marginBottom: 0 }}>{informeMensual.mes}</h2>
@@ -1859,7 +1978,14 @@ function App() {
         {/* ===== USUARIOS (admin) ===== */}
         {esAdmin && !modoEmpleado && vista === 'usuarios' && (
           <div>
-            <div className="card">
+            <div className="toolbar">
+              <input type="search" className="busqueda" aria-label="Buscar usuario" placeholder="Buscar por nombre o email"
+                value={busquedaUsuario} onChange={e => setBusquedaUsuario(e.target.value)} />
+              <button className="btn-primary" onClick={() => setNuevoUsuarioAbierto(a => !a)} aria-expanded={nuevoUsuarioAbierto}>
+                {nuevoUsuarioAbierto ? 'Cerrar' : '+ Nuevo'}
+              </button>
+            </div>
+            {nuevoUsuarioAbierto && <div className="card">
               <h2>Nuevo usuario</h2>
               <div className="form-row">
                 <div className="form-group"><label>Nombre</label>
@@ -1876,8 +2002,8 @@ function App() {
               <div className="form-row">
                 <div className="form-group"><label>Rol</label>
                   <select value={nuevoUsuario.role} onChange={e => setNuevoUsuario({ ...nuevoUsuario, role: e.target.value })}>
-                    <option value="PROFESOR">👤 Profesor</option>
-                    <option value="ADMIN">🛡 Administrador</option>
+                    <option value="PROFESOR">Profesor</option>
+                    <option value="ADMIN">Administrador</option>
                   </select>
                 </div>
                 <div className="form-group"><label>Tipo de jornada</label>
@@ -1891,7 +2017,7 @@ function App() {
                 <input type="number" min="1" max="40" value={nuevoUsuario.horasContrato} onChange={e => setNuevoUsuario({ ...nuevoUsuario, horasContrato: parseInt(e.target.value) })} /></div>
               <button onClick={agregarUsuario} disabled={cargando} className="btn-primary">+ Crear usuario</button>
               <p className="form-hint">Se enviará un email con un enlace para entrar (sin contraseña).</p>
-            </div>
+            </div>}
 
             <div className="card">
               <div className="card-header">
@@ -1899,7 +2025,7 @@ function App() {
                 <button className="btn-sm" onClick={cargarProfesores}>↻ Actualizar</button>
               </div>
               <div className="profesores-grid">
-                {profesores.map(p => (
+                {profesores.filter(p => `${p.nombre} ${p.apellidos} ${p.email}`.toLowerCase().includes(busquedaUsuario.toLowerCase())).map(p => (
                   <div key={p.id} className={`profesor-card ${!p.activo ? 'inactivo' : ''}`}>
                     <div className="profesor-avatar">{p.nombre[0]}{p.apellidos[0]}</div>
                     <div className="profesor-info">
@@ -1909,7 +2035,7 @@ function App() {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
                       <span className={`badge badge-${p.role === 'ADMIN' ? 'admin' : 'profesor'}`} style={{ fontSize: '0.68rem' }}>
-                        {p.role === 'ADMIN' ? '🛡 Admin' : '👤 Prof'}
+                        {p.role === 'ADMIN' ? 'Admin' : 'Profesor'}
                       </span>
                       <span className={`badge-jornada badge ${p.tipoJornada === 'COMPLETA' ? 'completa' : 'media'}`}>
                         {p.tipoJornada === 'COMPLETA' ? `${p.horasContrato}h/sem` : 'Media'}
@@ -1920,13 +2046,13 @@ function App() {
                           setProfesorEditId(profesorEditId === p.id ? null : p.id);
                           setProfesorEditData({ nombre: p.nombre, apellidos: p.apellidos, tipoJornada: p.tipoJornada, horasContrato: p.horasContrato, telefono: p.telefono || '', horaRecordatorio: p.horaRecordatorio || '17:00', tarifaHora: p.tarifaHora ?? '', activo: p.activo });
                         }}>
-                          {profesorEditId === p.id ? '✕ Cerrar' : '✏ Editar'}
+                          {profesorEditId === p.id ? 'Cerrar' : <><Icono n="editar" size={18} /> Editar</>}
                         </button>
                         <button className="btn-sm btn-sm-bell" onClick={() => {
                           setNuevaNotif({ titulo: '', mensaje: '', tipo: 'INFO', destinatarioId: p.id });
                           setVista('avisos');
                         }} title="Enviar aviso personal">
-                          🔔 Aviso
+                          <Icono n="campana" size={18} /> Aviso
                         </button>
                       </div>
                     </div>
@@ -2192,6 +2318,9 @@ function App() {
         {(!esAdmin || modoEmpleado) && vista === 'misclases' && (
           <VistaMisClases api={api} h={h} toast$={toast$} config={configEscuela} />
         )}
+        {esAdmin && !modoEmpleado && vista === 'integraciones' && (
+          <VistaIntegraciones api={api} h={h} toast$={toast$} />
+        )}
         {esAdmin && !modoEmpleado && vista === 'clases' && (
           <VistaAdminClases api={api} h={h} toast$={toast$} config={configEscuela} />
         )}
@@ -2270,20 +2399,13 @@ function App() {
               )}
             </div>
 
-            {/* Cambiar contraseña */}
+            {/* Privacidad: derecho de acceso y portabilidad (RGPD) */}
             <div className="card">
-              <h2>Cambiar contraseña</h2>
-              <div className="form-group"><label>Contraseña actual</label>
-                <input type="password" value={cambioPass.actual} onChange={e => setCambioPass({ ...cambioPass, actual: e.target.value })} /></div>
-              <div className="form-row">
-                <div className="form-group"><label>Nueva contraseña</label>
-                  <input type="password" value={cambioPass.nueva} onChange={e => setCambioPass({ ...cambioPass, nueva: e.target.value })} /></div>
-                <div className="form-group"><label>Confirmar nueva</label>
-                  <input type="password" value={cambioPass.confirmar} onChange={e => setCambioPass({ ...cambioPass, confirmar: e.target.value })} /></div>
-              </div>
-              <button className="btn-primary" style={{ width: 'auto' }} onClick={cambiarPassword} disabled={cargando}>
-                Cambiar contraseña
-              </button>
+              <h2>Mis datos</h2>
+              <p style={{ color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                Descarga una copia de todos tus datos personales guardados en la plataforma (perfil, fichajes, clases, solicitudes y avisos).
+              </p>
+              <button className="btn-primary" style={{ width: 'auto' }} onClick={exportarMisDatos}>⬇ Exportar mis datos</button>
             </div>
 
             {/* Activar notificaciones si no están activas */}
