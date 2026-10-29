@@ -19,12 +19,16 @@ model Profesor {
   activo           Boolean  @default(true)
   telefono         String?
   horaRecordatorio String   @default("17:00")
+  tarifaHora       Float?
   createdAt        DateTime @default(now())
 
   registros                RegistroJornada[]
   solicitudes              SolicitudLibre[]
   firmasRegistro           FirmaRegistro[]
   documentos               DocumentoLegajo[]
+  clasesDadas              ClaseDada[]
+  confirmacionesClases     ConfirmacionClases[]
+  magicLinks               MagicLink[]
   notificacionesRecibidas  Notificacion[] @relation("NotifRecibidas")
   notificacionesEnviadas   Notificacion[] @relation("NotifEnviadas")
 }
@@ -125,4 +129,59 @@ model ConfigEscuela {
   email         String   @default("")
   colorPrimario String   @default("#0f4c81")
   updatedAt     DateTime @updatedAt
+}
+
+model TipoClase {
+  id      String      @id @default(uuid())
+  nombre  String      @unique
+  activo  Boolean     @default(true)
+  orden   Int         @default(0)
+  clases  ClaseDada[]
+}
+
+model PrimaClase {
+  id      String      @id @default(uuid())
+  nombre  String      @unique
+  activa  Boolean     @default(true)
+  orden   Int         @default(0)
+  importe Float?
+  modo    String      @default("POR_HORA")
+  clases  ClaseDada[]
+}
+
+model ClaseDada {
+  id         String       @id @default(uuid())
+  profesorId String
+  profesor   Profesor     @relation(fields: [profesorId], references: [id])
+  fecha      String
+  horas      Float
+  tipoId     String
+  tipo       TipoClase    @relation(fields: [tipoId], references: [id])
+  primas     PrimaClase[]
+  notas      String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@index([profesorId, fecha])
+}
+
+model ConfirmacionClases {
+  id           String    @id @default(uuid())
+  profesorId   String
+  profesor     Profesor  @relation(fields: [profesorId], references: [id])
+  mes          String
+  confirmadoAt DateTime  @default(now())
+  tarifaHora   Float?
+  primasJson   String?
+
+  @@unique([profesorId, mes])
+}
+
+model MagicLink {
+  id         String   @id @default(uuid())
+  profesorId String
+  profesor   Profesor @relation(fields: [profesorId], references: [id], onDelete: Cascade)
+  tokenHash  String   @unique
+  expiraAt   DateTime
+  createdAt  DateTime @default(now())
 }

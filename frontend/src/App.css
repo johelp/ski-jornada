@@ -1890,3 +1890,29 @@ main {
   .planilla-kpi-val { font-size: 1.2rem; }
 }
 
+
+/* ===== Clases / primas ===== */
+.chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.chip { border: 1px solid #cbd5e1; background: #fff; color: #334155; border-radius: 999px; padding: 0.4rem 0.9rem; font-size: 0.9rem; cursor: pointer; }
+.chip-on { background: var(--primary, #0f4c81); border-color: var(--primary, #0f4c81); color: #fff; }
+.chip-sm { padding: 0.1rem 0.5rem; font-size: 0.72rem; cursor: default; background: #f0f7ff; margin-right: 0.25rem; }
+.resumen-clases { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center; margin-bottom: 1rem; }
+.resumen-clases strong { display: block; font-size: 1.4rem; }
+.resumen-clases small { color: #64748b; }
+.clases-lista { display: flex; flex-direction: column; gap: 0.5rem; }
+.clase-item { display: flex; gap: 0.75rem; align-items: center; padding: 0.6rem 0.75rem; background: #f8fafc; border-radius: 8px; }
+.clase-fecha { font-weight: 700; min-width: 3rem; color: var(--primary, #0f4c81); }
+.clase-info { flex: 1; display: flex; flex-direction: column; gap: 0.15rem; }
+.clase-importe { font-weight: 600; white-space: nowrap; }
+.clase-acciones { display: flex; gap: 0.25rem; }
+.desglose { margin-top: 1rem; border-top: 1px solid #e2e8f0; padding-top: 0.75rem; }
+.desglose > div { display: flex; justify-content: space-between; padding: 0.2rem 0; }
+.desglose-total { font-weight: 700; font-size: 1.1rem; border-top: 1px solid #e2e8f0; margin-top: 0.4rem; padding-top: 0.5rem !important; }
+.tabla-scroll { overflow-x: auto; }
+.tabla-clases { width: 100%; border-collapse: collapse; }
+.tabla-clases th, .tabla-clases td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #e2e8f0; }
+.detalle-prof { margin-top: 1.25rem; border-top: 2px solid #e2e8f0; padding-top: 1rem; }
+.catalogo-lista { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
+.catalogo-item { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.catalogo-item.inactivo { opacity: 0.55; }
+.catalogo-item > input:first-child { flex: 1; min-width: 8rem; }

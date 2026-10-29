@@ -4,9 +4,9 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "seed": "node prisma/seed.js",
-    "db:setup": "npx prisma migrate deploy && node prisma/seed.js",
-    "db:reset": "npx prisma migrate reset --force && node prisma/seed.js"
+    "db:setup": "npx prisma migrate deploy && node prisma/bootstrap.js",
+    "db:reset": "npx prisma migrate reset --force && node prisma/seed.js",
+    "seed:demo": "node prisma/seed.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

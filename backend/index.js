@@ -20,6 +20,7 @@ if (!process.env.JWT_SECRET) {
 }
 const prisma = new PrismaClient();
 const app = express();
+app.set('trust proxy', 1); // detrás del proxy de Railway (IP real para el rate limit)
 
 // ============ SECURITY ============
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
@@ -37,7 +38,7 @@ const authLimiter = rateLimit({
 });
 
 // ============ UPLOADS ============
-const UPLOAD_DIR = path.join(__dirname, 'uploads');
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
 ['firmas', 'documentos'].forEach(d => fs.mkdirSync(path.join(UPLOAD_DIR, d), { recursive: true }));
 
 const storage = multer.diskStorage({
@@ -178,7 +179,92 @@ app.get('/api/server-time', (req, res) => {
 });
 
 // ============ AUTH ============
+
+// ============ MAGIC LINK ============
+const MAGIC_TTL_MIN = 15;
+const SESION_DIAS = 90;
+const hashToken = t => crypto.createHash('sha256').update(t).digest('hex');
+const firmarSesion = u => jwt.sign(
+  { userId: u.id, email: u.email, role: u.role },
+  process.env.JWT_SECRET,
+  { expiresIn: `${SESION_DIAS}d` },
+);
+const perfilSesion = u => ({
+  id: u.id, nombre: u.nombre, apellidos: u.apellidos, email: u.email,
+  role: u.role, tipoJornada: u.tipoJornada, horasContrato: u.horasContrato,
+  telefono: u.telefono, horaRecordatorio: u.horaRecordatorio, tarifaHora: u.tarifaHora,
+});
+
+// Crea el enlace y lo envía por email. `invitacion` cambia el texto para altas nuevas.
+async function enviarMagicLink(u, { invitacion = false } = {}) {
+  const token = crypto.randomBytes(32).toString('base64url');
+  await prisma.magicLink.deleteMany({ where: { OR: [{ profesorId: u.id }, { expiraAt: { lt: new Date() } }] } });
+  await prisma.magicLink.create({
+    data: { profesorId: u.id, tokenHash: hashToken(token), expiraAt: new Date(Date.now() + MAGIC_TTL_MIN * 60 * 1000) },
+  });
+  const base = (process.env.FRONTEND_URL || 'http://localhost:5173').split(',')[0].trim();
+  const url = `${base}/?magic=${token}`;
+  if (!SMTP_OK && process.env.NODE_ENV !== 'production') console.log(`🔗 [DEV] Enlace de acceso para ${u.email}: ${url}`);
+  await enviarEmail(
+    u.email,
+    invitacion ? 'Te damos la bienvenida a Ski Jornada' : 'Tu enlace de acceso a Ski Jornada',
+    `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;background:#f0f7ff;border-radius:12px">
+      <h1 style="color:#0f4c81;margin-bottom:8px">⛷️ Ski Jornada</h1>
+      <h2 style="color:#1e293b;font-weight:600">Hola, ${escHtml(u.nombre)}</h2>
+      <p style="color:#475569">${invitacion
+        ? 'El administrador creó tu cuenta. Tocá el botón para entrar; no necesitás contraseña.'
+        : 'Tocá el botón para entrar. No necesitás contraseña.'}</p>
+      <a href="${url}" style="display:inline-block;background:#0f4c81;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Entrar a Ski Jornada →</a>
+      <p style="color:#94a3b8;font-size:12px;margin-top:24px">El enlace vale ${MAGIC_TTL_MIN} minutos y se puede usar una sola vez. Si no lo pediste, ignorá este mensaje.</p>
+    </div>`,
+  );
+}
+
+const magicLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Demasiados intentos. Esperá 15 minutos.' },
+});
+
+// Pide el enlace. Respuesta idéntica exista o no el email (no revela quién tiene cuenta).
+app.post('/api/auth/magic-link', magicLimiter, async (req, res) => {
+  try {
+    const email = String(req.body.email || '').toLowerCase().trim();
+    if (!email) return res.status(400).json({ error: 'Ingresá tu email' });
+    const u = await prisma.profesor.findUnique({ where: { email } });
+    if (u && u.activo) enviarMagicLink(u).catch(console.error);
+    res.json({ success: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error interno del servidor' }); }
+});
+
+// Canjea el token del enlace por una sesión de larga duración.
+app.post('/api/auth/magic-link/verificar', magicLimiter, async (req, res) => {
+  try {
+    const token = String(req.body.token || '');
+    if (!token) return res.status(400).json({ error: 'Enlace inválido' });
+    const ml = await prisma.magicLink.findUnique({ where: { tokenHash: hashToken(token) }, include: { profesor: true } });
+    if (!ml || ml.expiraAt < new Date() || !ml.profesor.activo) {
+      return res.status(401).json({ error: 'El enlace venció o ya fue usado. Pedí uno nuevo.' });
+    }
+    // Consumo atómico: solo una petición puede borrarlo
+    const borrado = await prisma.magicLink.deleteMany({ where: { id: ml.id } });
+    if (borrado.count !== 1) return res.status(401).json({ error: 'El enlace venció o ya fue usado. Pedí uno nuevo.' });
+    res.json({ token: firmarSesion(ml.profesor), user: perfilSesion(ml.profesor) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error interno del servidor' }); }
+});
+
+// Renueva la sesión (el frontend lo llama al abrir la app → sesión "deslizante").
+app.post('/api/auth/renovar', auth, async (req, res) => {
+  try {
+    const u = await prisma.profesor.findUnique({ where: { id: req.user.userId } });
+    if (!u || !u.activo) return res.status(401).json({ error: 'Sesión inválida' });
+    res.json({ token: firmarSesion(u), user: perfilSesion(u) });
+  } catch { res.status(500).json({ error: 'Error interno del servidor' }); }
+});
+
+// Login con contraseña: solo para desarrollo/demo (PASSWORD_LOGIN=true). En producción se entra con enlace mágico.
 app.post('/api/auth/login', authLimiter, async (req, res) => {
+  if (process.env.PASSWORD_LOGIN !== 'true') return res.status(404).json({ error: 'Usá el enlace de acceso por email' });
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos' });
@@ -550,7 +636,7 @@ app.get('/api/admin/profesores', auth, adminOnly, async (req, res) => {
       select: {
         id: true, nombre: true, apellidos: true, email: true,
         tipoJornada: true, horasContrato: true, role: true, activo: true,
-        createdAt: true, telefono: true, horaRecordatorio: true,
+        createdAt: true, telefono: true, horaRecordatorio: true, tarifaHora: true,
       },
       orderBy: { apellidos: 'asc' },
     });
@@ -566,7 +652,7 @@ app.post('/api/admin/profesores', auth, adminOnly, async (req, res) => {
     const existe = await prisma.profesor.findUnique({ where: { email: email.toLowerCase().trim() } });
     if (existe) return res.status(400).json({ error: 'Ya existe un usuario con ese email' });
 
-    const password = await bcrypt.hash('ski123', 10);
+    const password = await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10); // sin contraseña usable: se entra por enlace
     const nuevo = await prisma.profesor.create({
       data: {
         email: email.toLowerCase().trim(), nombre, apellidos, password,
@@ -576,7 +662,7 @@ app.post('/api/admin/profesores', auth, adminOnly, async (req, res) => {
         telefono: telefono || null,
       },
     });
-    enviarEmailBienvenida(nuevo).catch(console.error);
+    enviarMagicLink(nuevo, { invitacion: true }).catch(console.error);
     res.json({
       success: true,
       usuario: {
@@ -593,7 +679,7 @@ app.post('/api/admin/profesores', auth, adminOnly, async (req, res) => {
 
 app.put('/api/admin/profesores/:id', auth, adminOnly, async (req, res) => {
   try {
-    const { nombre, apellidos, tipoJornada, horasContrato, activo, telefono, horaRecordatorio } = req.body;
+    const { nombre, apellidos, tipoJornada, horasContrato, activo, telefono, horaRecordatorio, tarifaHora } = req.body;
     const data = {};
     if (nombre           !== undefined) data.nombre           = nombre;
     if (apellidos        !== undefined) data.apellidos        = apellidos;
@@ -602,6 +688,7 @@ app.put('/api/admin/profesores/:id', auth, adminOnly, async (req, res) => {
     if (activo           !== undefined) data.activo           = activo;
     if (telefono         !== undefined) data.telefono         = telefono || null;
     if (horaRecordatorio !== undefined) data.horaRecordatorio = horaRecordatorio;
+    if (tarifaHora       !== undefined) data.tarifaHora       = (tarifaHora === '' || tarifaHora === null || isNaN(parseFloat(tarifaHora))) ? null : Math.max(0, parseFloat(tarifaHora));
     const prof = await prisma.profesor.update({ where: { id: req.params.id }, data });
     res.json({
       success: true,
@@ -1089,6 +1176,268 @@ app.put('/api/admin/config', auth, adminOnly, async (req, res) => {
     });
     res.json(config);
   } catch (err) { res.status(500).json({ error: 'Error guardando configuración' }); }
+});
+
+// ============ CLASES DADAS / PRIMAS ============
+const MES_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
+const r2 = n => Math.round(n * 100) / 100;
+const escHtml = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// Catálogo (tipos de clase y primas activas) para el formulario de carga
+app.get('/api/clases/catalogo', auth, async (req, res) => {
+  try {
+    const [tipos, primas] = await Promise.all([
+      prisma.tipoClase.findMany({ where: { activo: true }, orderBy: [{ orden: 'asc' }, { nombre: 'asc' }] }),
+      prisma.primaClase.findMany({ where: { activa: true }, orderBy: [{ orden: 'asc' }, { nombre: 'asc' }] }),
+    ]);
+    res.json({ tipos, primas });
+  } catch (err) { res.status(500).json({ error: 'Error obteniendo catálogo' }); }
+});
+
+// Admin: configuración de tipos y primas (alta, edición, baja lógica)
+function crudCatalogo(ruta, modelo, campoActivo, extra = () => ({})) {
+  app.get(`/api/admin/${ruta}`, auth, adminOnly, async (req, res) => {
+    try { res.json(await prisma[modelo].findMany({ orderBy: [{ orden: 'asc' }, { nombre: 'asc' }] })); }
+    catch { res.status(500).json({ error: 'Error' }); }
+  });
+  app.post(`/api/admin/${ruta}`, auth, adminOnly, async (req, res) => {
+    try {
+      const nombre = String(req.body.nombre || '').trim();
+      if (!nombre) return res.status(400).json({ error: 'El nombre es obligatorio' });
+      if (await prisma[modelo].findUnique({ where: { nombre } })) return res.status(400).json({ error: 'Ya existe uno con ese nombre' });
+      res.json(await prisma[modelo].create({ data: { nombre, ...extra(req.body) } }));
+    } catch { res.status(500).json({ error: 'Error creando' }); }
+  });
+  app.put(`/api/admin/${ruta}/:id`, auth, adminOnly, async (req, res) => {
+    try {
+      const data = {};
+      if (req.body.nombre !== undefined) {
+        const nombre = String(req.body.nombre).trim();
+        if (!nombre) return res.status(400).json({ error: 'El nombre es obligatorio' });
+        const dup = await prisma[modelo].findUnique({ where: { nombre } });
+        if (dup && dup.id !== req.params.id) return res.status(400).json({ error: 'Ya existe uno con ese nombre' });
+        data.nombre = nombre;
+      }
+      if (req.body[campoActivo] !== undefined) data[campoActivo] = !!req.body[campoActivo];
+      Object.assign(data, extra(req.body));
+      res.json(await prisma[modelo].update({ where: { id: req.params.id }, data }));
+    } catch { res.status(500).json({ error: 'Error actualizando' }); }
+  });
+}
+crudCatalogo('tipos-clase', 'tipoClase', 'activo');
+const importeONull = v => (v === '' || v === null || v === undefined || isNaN(parseFloat(v))) ? null : Math.max(0, r2(parseFloat(v)));
+crudCatalogo('primas', 'primaClase', 'activa', b => {
+  const d = {};
+  if (b.importe !== undefined) d.importe = importeONull(b.importe);
+  if (b.modo !== undefined && ['POR_HORA', 'POR_CLASE'].includes(b.modo)) d.modo = b.modo;
+  return d;
+});
+
+const incluirClase = { tipo: true, primas: true };
+const mapClase = c => ({
+  id: c.id, fecha: c.fecha, horas: c.horas, notas: c.notas,
+  tipoId: c.tipoId, tipoNombre: c.tipo.nombre,
+  primas: c.primas.map(p => ({ id: p.id, nombre: p.nombre })),
+});
+
+async function mesConfirmado(profesorId, mes) {
+  return prisma.confirmacionClases.findUnique({ where: { profesorId_mes: { profesorId, mes } } });
+}
+
+async function validarClase(body) {
+  const horas = parseFloat(body.horas);
+  if (!FECHA_RE.test(body.fecha || '') || isNaN(new Date(body.fecha).getTime())) return { error: 'Fecha inválida' };
+  if (!(horas > 0 && horas <= 12)) return { error: 'Las horas deben estar entre 0,25 y 12' };
+  if (!body.tipoId) return { error: 'Elige el tipo de clase' };
+  const tipo = await prisma.tipoClase.findUnique({ where: { id: body.tipoId } });
+  if (!tipo) return { error: 'Tipo de clase inexistente' };
+  const primaIds = Array.isArray(body.primaIds) ? [...new Set(body.primaIds)] : [];
+  const primas = primaIds.length ? await prisma.primaClase.findMany({ where: { id: { in: primaIds } } }) : [];
+  if (primas.length !== primaIds.length) return { error: 'Prima inexistente' };
+  return {
+    data: { fecha: body.fecha, horas: Math.round(horas * 4) / 4, tipoId: tipo.id, notas: (body.notas || '').toString().slice(0, 300) || null },
+    primaIds,
+  };
+}
+
+// Profesor: cargar una clase dada
+app.post('/api/clases', auth, async (req, res) => {
+  try {
+    const v = await validarClase(req.body);
+    if (v.error) return res.status(400).json({ error: v.error });
+    if (await mesConfirmado(req.user.userId, v.data.fecha.slice(0, 7)))
+      return res.status(400).json({ error: 'Ese mes ya está confirmado. Pedí al administrador que lo reabra.' });
+    const c = await prisma.claseDada.create({
+      data: { ...v.data, profesorId: req.user.userId, primas: { connect: v.primaIds.map(id => ({ id })) } },
+      include: incluirClase,
+    });
+    res.json(mapClase(c));
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error guardando la clase' }); }
+});
+
+app.put('/api/clases/:id', auth, async (req, res) => {
+  try {
+    const actual = await prisma.claseDada.findUnique({ where: { id: req.params.id } });
+    if (!actual || actual.profesorId !== req.user.userId) return res.status(404).json({ error: 'Clase no encontrada' });
+    const v = await validarClase(req.body);
+    if (v.error) return res.status(400).json({ error: v.error });
+    for (const mes of new Set([actual.fecha.slice(0, 7), v.data.fecha.slice(0, 7)]))
+      if (await mesConfirmado(req.user.userId, mes)) return res.status(400).json({ error: 'Ese mes ya está confirmado.' });
+    const c = await prisma.claseDada.update({
+      where: { id: actual.id },
+      data: { ...v.data, primas: { set: v.primaIds.map(id => ({ id })) } },
+      include: incluirClase,
+    });
+    res.json(mapClase(c));
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error actualizando la clase' }); }
+});
+
+app.delete('/api/clases/:id', auth, async (req, res) => {
+  try {
+    const actual = await prisma.claseDada.findUnique({ where: { id: req.params.id } });
+    if (!actual || actual.profesorId !== req.user.userId) return res.status(404).json({ error: 'Clase no encontrada' });
+    if (await mesConfirmado(req.user.userId, actual.fecha.slice(0, 7)))
+      return res.status(400).json({ error: 'Ese mes ya está confirmado.' });
+    await prisma.claseDada.delete({ where: { id: actual.id } });
+    res.json({ success: true });
+  } catch { res.status(500).json({ error: 'Error eliminando la clase' }); }
+});
+
+// Informe del mes de un profesor (propio; el admin puede pedir ?profesorId=)
+async function construirInformeClases(profesorId, mes) {
+  const [profesor, clases, conf, primasCat] = await Promise.all([
+    prisma.profesor.findUnique({ where: { id: profesorId }, select: { id: true, nombre: true, apellidos: true, email: true, tarifaHora: true } }),
+    prisma.claseDada.findMany({
+      where: { profesorId, fecha: { startsWith: mes } },
+      include: incluirClase, orderBy: [{ fecha: 'asc' }, { createdAt: 'asc' }],
+    }),
+    mesConfirmado(profesorId, mes),
+    prisma.primaClase.findMany(),
+  ]);
+  if (!profesor) return null;
+  // Mes confirmado → se usan las tarifas congeladas al confirmar; si no, las vigentes.
+  const tarifaHora = conf ? conf.tarifaHora : (profesor.tarifaHora ?? null);
+  const tarifasPrima = conf?.primasJson
+    ? JSON.parse(conf.primasJson)
+    : Object.fromEntries(primasCat.map(p => [p.id, { importe: p.importe, modo: p.modo }]));
+
+  const porTipo = {}, porDia = {}, desglose = {};
+  let base = null, primasTotal = null;
+  const detalle = clases.map(c => {
+    const m = mapClase(c);
+    const impBase = tarifaHora != null ? r2(c.horas * tarifaHora) : null;
+    let impPrimas = null;
+    m.primas.forEach(p => {
+      const t = tarifasPrima[p.id];
+      const d = desglose[p.nombre] || (desglose[p.nombre] = { nombre: p.nombre, horas: 0, clases: 0, importe: null });
+      d.horas = r2(d.horas + c.horas); d.clases += 1;
+      if (t && t.importe != null) {
+        const imp = r2(t.modo === 'POR_CLASE' ? t.importe : t.importe * c.horas);
+        impPrimas = r2((impPrimas || 0) + imp);
+        d.importe = r2((d.importe || 0) + imp);
+      }
+    });
+    if (impBase != null) base = r2((base || 0) + impBase);
+    if (impPrimas != null) primasTotal = r2((primasTotal || 0) + impPrimas);
+    m.importe = impBase == null && impPrimas == null ? null : r2((impBase || 0) + (impPrimas || 0));
+    porTipo[m.tipoNombre] = r2((porTipo[m.tipoNombre] || 0) + c.horas);
+    porDia[m.fecha] = r2((porDia[m.fecha] || 0) + c.horas);
+    return m;
+  });
+  const totalHoras = r2(detalle.reduce((s, c) => s + c.horas, 0));
+  const importeTotal = base == null && primasTotal == null ? null : r2((base || 0) + (primasTotal || 0));
+  return {
+    profesor: { id: profesor.id, nombre: profesor.nombre, apellidos: profesor.apellidos, email: profesor.email },
+    mes, detalle, totalHoras, porTipo, porDia,
+    desglosePrimas: Object.values(desglose),
+    diasConClases: Object.keys(porDia).length,
+    tarifaHora, importeBase: base, importePrimas: primasTotal, importeTotal,
+    confirmado: !!conf, confirmadoAt: conf?.confirmadoAt ?? null,
+  };
+}
+
+app.get('/api/clases/informe/:mes', auth, async (req, res) => {
+  try {
+    if (!MES_RE.test(req.params.mes)) return res.status(400).json({ error: 'Mes inválido (AAAA-MM)' });
+    const pid = req.user.role === 'ADMIN' && req.query.profesorId ? req.query.profesorId : req.user.userId;
+    const informe = await construirInformeClases(pid, req.params.mes);
+    if (!informe) return res.status(404).json({ error: 'Profesor no encontrado' });
+    res.json(informe);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error generando informe' }); }
+});
+
+// Profesor: confirmar las horas del mes → avisa al administrador
+app.post('/api/clases/confirmar-mes', auth, async (req, res) => {
+  try {
+    const { mes } = req.body;
+    if (!MES_RE.test(mes || '')) return res.status(400).json({ error: 'Mes inválido (AAAA-MM)' });
+    if (await mesConfirmado(req.user.userId, mes)) return res.status(400).json({ error: 'El mes ya estaba confirmado' });
+    const informe = await construirInformeClases(req.user.userId, mes);
+    if (!informe.detalle.length) return res.status(400).json({ error: 'No hay clases cargadas en ese mes' });
+    const [prof, primasCat] = await Promise.all([
+      prisma.profesor.findUnique({ where: { id: req.user.userId }, select: { tarifaHora: true } }),
+      prisma.primaClase.findMany(),
+    ]);
+    await prisma.confirmacionClases.create({ data: {
+      profesorId: req.user.userId, mes, tarifaHora: prof.tarifaHora ?? null,
+      primasJson: JSON.stringify(Object.fromEntries(primasCat.map(p => [p.id, { importe: p.importe, modo: p.modo }]))),
+    } });
+
+    const nombre = `${informe.profesor.nombre} ${informe.profesor.apellidos}`;
+    const admins = await prisma.profesor.findMany({ where: { role: 'ADMIN', activo: true }, select: { id: true, email: true } });
+    await prisma.notificacion.createMany({
+      data: admins.map(a => ({
+        titulo: 'Horas de clases confirmadas',
+        mensaje: `${nombre} confirmó ${informe.totalHoras} h de clases de ${mes}.`,
+        tipo: 'INFO', profesorId: a.id, enviadaPorId: req.user.userId,
+      })),
+    });
+    const cfg = await getConfig();
+    const destinos = [...new Set([cfg.email, ...admins.map(a => a.email)].filter(Boolean))];
+    const fila = (k, v, pre = '') => `<tr><td style="padding:4px 12px">${pre}${escHtml(k)}</td><td style="padding:4px 12px;text-align:right">${v} h</td></tr>`;
+    const filas = Object.entries(informe.porTipo).map(([k, v]) => fila(k, v)).join('')
+      + informe.desglosePrimas.map(d => fila(d.nombre, d.horas, '+ ')).join('');
+    Promise.all(destinos.map(d => enviarEmail(d, `Horas de clases confirmadas — ${nombre} (${mes})`,
+      `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
+        <h2 style="color:#0f4c81">⛷️ ${escHtml(nombre)} confirmó sus horas de ${mes}</h2>
+        <p><strong>Total:</strong> ${informe.totalHoras} h en ${informe.diasConClases} días${informe.importeTotal != null ? ` · <strong>${informe.importeTotal} €</strong>` : ''}</p>
+        <table style="border-collapse:collapse;background:#f0f7ff">${filas}</table>
+        <p><a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}">Ver el detalle en Ski Jornada →</a></p>
+      </div>`))).catch(console.error);
+    res.json({ success: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error confirmando el mes' }); }
+});
+
+// Admin: resumen de todos los profesores en un mes
+app.get('/api/admin/clases/resumen/:mes', auth, adminOnly, async (req, res) => {
+  try {
+    if (!MES_RE.test(req.params.mes)) return res.status(400).json({ error: 'Mes inválido (AAAA-MM)' });
+    const mes = req.params.mes;
+    const profesores = await prisma.profesor.findMany({
+      where: { activo: true, role: 'PROFESOR' }, orderBy: { apellidos: 'asc' }, select: { id: true },
+    });
+    const informes = await Promise.all(profesores.map(p => construirInformeClases(p.id, mes)));
+    res.json(informes.map(i => ({
+      id: i.profesor.id, nombre: i.profesor.nombre, apellidos: i.profesor.apellidos,
+      totalHoras: i.totalHoras, cantidadClases: i.detalle.length, diasConClases: i.diasConClases,
+      tarifaHora: i.tarifaHora, importeTotal: i.importeTotal,
+      confirmado: i.confirmado, confirmadoAt: i.confirmadoAt,
+    })));
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error' }); }
+});
+
+// Admin: reabrir un mes confirmado para que el profesor pueda corregir
+app.post('/api/admin/clases/reabrir', auth, adminOnly, async (req, res) => {
+  try {
+    const { profesorId, mes } = req.body;
+    if (!profesorId || !MES_RE.test(mes || '')) return res.status(400).json({ error: 'Datos inválidos' });
+    await prisma.confirmacionClases.deleteMany({ where: { profesorId, mes } });
+    await prisma.notificacion.create({ data: {
+      titulo: 'Mes reabierto', mensaje: `El administrador reabrió ${mes} para que puedas corregir tus clases.`,
+      tipo: 'AVISO', profesorId, enviadaPorId: req.user.userId } });
+    res.json({ success: true });
+  } catch { res.status(500).json({ error: 'Error reabriendo el mes' }); }
 });
 
 // ============ WHATSAPP (Baileys) ============

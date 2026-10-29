@@ -12,7 +12,15 @@ function ts(dateStr, timeStr) {
   return new Date(`${dateStr}T${timeStr}:00`);
 }
 
+async function sembrarCatalogo() {
+  const tipos = ['Esquí', 'Snowboard', 'Esquí de fondo'];
+  const primas = [['Idioma', 'POR_HORA'], ['Disca', 'POR_HORA'], ['Repetida', 'POR_CLASE']];
+  for (const nombre of tipos) await prisma.tipoClase.upsert({ where: { nombre }, update: {}, create: { nombre } });
+  for (const [nombre, modo] of primas) await prisma.primaClase.upsert({ where: { nombre }, update: {}, create: { nombre, modo } });
+}
+
 async function main() {
+  await sembrarCatalogo();
   console.log('🌱 Iniciando seed de datos demo...');
   const hash = await bcrypt.hash('ski123', 10);
 

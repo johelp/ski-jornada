@@ -18,7 +18,7 @@ approve time-off requests, generate official HR reports, and maintain a digital 
 
 ## Directory Structure
 ```
-SkiJornadaCompleto/
+
 ├── backend/
 │   ├── index.js            — complete REST API (all endpoints)
 │   ├── whatsapp.js         — optional Baileys WhatsApp module

@@ -3,6 +3,8 @@ import axios from 'axios';
 import jsQR from 'jsqr';
 import QRCode from 'qrcode';
 import { generarPDFRegistro } from './pdfRegistro';
+import VistaMisClases from './VistaMisClases';
+import VistaAdminClases from './VistaAdminClases';
 import './App.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -234,6 +236,9 @@ function App() {
   const [toast, setToast]   = useState(null);
   const [cargando, setCargando] = useState(false);
   const [confirmarSalida, setConfirmarSalida] = useState(false);
+  const [emailLogin, setEmailLogin] = useState('');
+  const [enlaceEnviado, setEnlaceEnviado] = useState(false);
+  const magicProcesado = useRef(false);
 
   // Server time
   const [serverTimeOffset, setServerTimeOffset] = useState(0);
@@ -452,6 +457,31 @@ function App() {
     const r = await api.get('/api/config');
     setConfigEscuela(r.data);
   }), []);
+
+  // Canje del enlace mágico (?magic=...) y renovación de la sesión al abrir la app
+  useEffect(() => {
+    const guardarSesion = (t, u) => {
+      localStorage.setItem('token', t); localStorage.setItem('user', JSON.stringify(u));
+      setToken(t); setUser(u);
+    };
+    const magic = new URLSearchParams(window.location.search).get('magic');
+    if (magic) {
+      if (magicProcesado.current) return;
+      magicProcesado.current = true;
+      window.history.replaceState({}, '', window.location.pathname);
+      setCargando(true);
+      api.post('/api/auth/magic-link/verificar', { token: magic })
+        .then(r => guardarSesion(r.data.token, r.data.user))
+        .catch(e => toast$(e.response?.data?.error || 'No se pudo iniciar sesión', 'error', 6000))
+        .finally(() => setCargando(false));
+      return;
+    }
+    if (token) {
+      api.post('/api/auth/renovar', null, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => guardarSesion(r.data.token, r.data.user))
+        .catch(e => { if (e.response?.status === 401) logout(); });
+    }
+  }, []);
 
   useEffect(() => {
     if (token && user) {
@@ -824,6 +854,7 @@ function App() {
         { id: 'dashboard',  icon: '📊', label: 'Panel' },
         { id: 'presencia',  icon: '🟢', label: 'Presencia' },
         { id: 'gestionar',  icon: '✅', label: 'Solicitudes', badge: adminPendientes },
+        { id: 'clases',     icon: '🎿', label: 'Clases' },
         { id: 'informes',   icon: '📄', label: 'Informes' },
         { id: 'documentos', icon: '📁', label: 'Documentos', badge: docsPendientes },
         { id: 'usuarios',   icon: '👥', label: 'Usuarios' },
@@ -835,6 +866,7 @@ function App() {
     : [
         ...(!esAdmin ? [{ id: 'dashboard', icon: '📊', label: 'Dashboard' }] : []),
         { id: 'fichar',     icon: '🕐', label: 'Fichar' },
+        { id: 'misclases',  icon: '🎿', label: 'Mis Clases' },
         { id: 'solicitar',  icon: '📅', label: 'Días Libres' },
         { id: 'informes',   icon: '📄', label: 'Mis Informes' },
         { id: 'documentos', icon: '📁', label: 'Mis Docs', badge: misDocsPendientes },
@@ -843,7 +875,15 @@ function App() {
 
   // ===== LOGIN =====
   if (!token) {
-    const handleLogin = async (e) => {
+    const pedirEnlace = async (e) => {
+      e.preventDefault(); setCargando(true);
+      try {
+        await api.post('/api/auth/magic-link', { email: emailLogin });
+        setEnlaceEnviado(true);
+      } catch (err) { toast$(err.response?.data?.error || 'No se pudo enviar el enlace', 'error'); }
+      finally { setCargando(false); }
+    };
+    const handleLoginPassword = async (e) => {
       e.preventDefault(); setCargando(true);
       try {
         const res = await api.post('/api/auth/login', { email: e.target.email.value, password: e.target.password.value });
@@ -858,25 +898,34 @@ function App() {
           <div className="login-logo">⛷️</div>
           <h1>Ski Jornada</h1>
           <p className="login-subtitle">Control de jornada laboral</p>
-          <form onSubmit={handleLogin}>
-            <div className="form-group"><label>Correo electrónico</label>
-              <input type="email" name="email" placeholder="usuario@escuela.com" required /></div>
-            <div className="form-group"><label>Contraseña</label>
-              <input type="password" name="password" placeholder="••••••••" required /></div>
-            <button type="submit" className="btn-primary" disabled={cargando}>
-              {cargando ? <span className="btn-spinner" /> : 'Iniciar sesión'}
-            </button>
-          </form>
+          {enlaceEnviado ? (
+            <div>
+              <p style={{ margin: '1rem 0' }}>📬 Si <strong>{emailLogin}</strong> está registrado, te enviamos un enlace para entrar. Vale 15 minutos.</p>
+              <button className="btn-ghost" onClick={() => setEnlaceEnviado(false)}>Usar otro email</button>
+            </div>
+          ) : (
+            <form onSubmit={pedirEnlace}>
+              <div className="form-group"><label>Correo electrónico</label>
+                <input type="email" value={emailLogin} onChange={e => setEmailLogin(e.target.value)} placeholder="usuario@escuela.com" required autoComplete="email" /></div>
+              <button type="submit" className="btn-primary" disabled={cargando}>
+                {cargando ? <span className="btn-spinner" /> : 'Enviarme el enlace de acceso'}
+              </button>
+              <p className="form-hint">Sin contraseña: te mandamos un enlace al correo y la sesión queda abierta en este dispositivo.</p>
+            </form>
+          )}
           {pwaInstallEvent && (
             <button className="btn-pwa-login" onClick={instalarPWA}>
               📱 Añadir a pantalla de inicio
             </button>
           )}
-          <div className="login-demo">
-            <p>Acceso de prueba</p>
-            <code>profesor@escuela.com · ski123</code>
-            <code>admin@escuela.com · ski123</code>
-          </div>
+          {import.meta.env.DEV && (
+            <form onSubmit={handleLoginPassword} className="login-demo">
+              <p>Solo desarrollo · contraseña (requiere PASSWORD_LOGIN=true)</p>
+              <input type="email" name="email" placeholder="profesor@escuela.com" />
+              <input type="password" name="password" placeholder="ski123" />
+              <button type="submit" className="btn-sm">Entrar</button>
+            </form>
+          )}
         </div>
         {toast && <div className={`toast toast-${toast.tipo}`}>{toast.msg}</div>}
         {cargando && <div className="loading-overlay"><div className="spinner" /></div>}
@@ -1640,7 +1689,8 @@ function App() {
                                       <span className="planilla-email">{p.email}</span>
                                     </td>
                                     <td className="planilla-td planilla-center">
-                                      <span className={`badge-jornada badge ${p.tipoJornada === 'COMPLETA' ? 'completa' : 'media'}`}>
+                                      {p.tarifaHora != null && <small>{p.tarifaHora} €/h</small>}
+                      <span className={`badge-jornada badge ${p.tipoJornada === 'COMPLETA' ? 'completa' : 'media'}`}>
                                         {p.tipoJornada === 'COMPLETA' ? `${p.horasContrato}h` : 'Media'}
                                       </span>
                                     </td>
@@ -1849,7 +1899,7 @@ function App() {
               <div className="form-group"><label>Horas/semana</label>
                 <input type="number" min="1" max="40" value={nuevoUsuario.horasContrato} onChange={e => setNuevoUsuario({ ...nuevoUsuario, horasContrato: parseInt(e.target.value) })} /></div>
               <button onClick={agregarUsuario} disabled={cargando} className="btn-primary">+ Crear usuario</button>
-              <p className="form-hint">Se enviará un email de bienvenida con las credenciales (contraseña inicial: ski123).</p>
+              <p className="form-hint">Se enviará un email con un enlace para entrar (sin contraseña).</p>
             </div>
 
             <div className="card">
@@ -1877,7 +1927,7 @@ function App() {
                       <div style={{ display: 'flex', gap: '0.4rem', marginTop: '4px', flexWrap: 'wrap' }}>
                         <button className="btn-sm" onClick={() => {
                           setProfesorEditId(profesorEditId === p.id ? null : p.id);
-                          setProfesorEditData({ nombre: p.nombre, apellidos: p.apellidos, tipoJornada: p.tipoJornada, horasContrato: p.horasContrato, telefono: p.telefono || '', horaRecordatorio: p.horaRecordatorio || '17:00', activo: p.activo });
+                          setProfesorEditData({ nombre: p.nombre, apellidos: p.apellidos, tipoJornada: p.tipoJornada, horasContrato: p.horasContrato, telefono: p.telefono || '', horaRecordatorio: p.horaRecordatorio || '17:00', tarifaHora: p.tarifaHora ?? '', activo: p.activo });
                         }}>
                           {profesorEditId === p.id ? '✕ Cerrar' : '✏ Editar'}
                         </button>
@@ -1913,6 +1963,8 @@ function App() {
                           <div className="form-group"><label>Horas/semana</label>
                             <input type="number" min="1" max="40" value={profesorEditData.horasContrato || 35} onChange={e => setProfesorEditData({ ...profesorEditData, horasContrato: parseInt(e.target.value) })} /></div>
                         </div>
+                        <div className="form-group"><label>Tarifa por hora de clase (€, opcional)</label>
+                          <input type="number" min="0" step="0.5" placeholder="Ej. 18" value={profesorEditData.tarifaHora ?? ''} onChange={e => setProfesorEditData({ ...profesorEditData, tarifaHora: e.target.value })} /></div>
                         <div className="form-group">
                           <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
                             <input type="checkbox" checked={profesorEditData.activo !== false} onChange={e => setProfesorEditData({ ...profesorEditData, activo: e.target.checked })} />
@@ -2146,6 +2198,13 @@ function App() {
         )}
 
         {/* ===== MI PERFIL ===== */}
+        {(!esAdmin || modoEmpleado) && vista === 'misclases' && (
+          <VistaMisClases api={api} h={h} toast$={toast$} config={configEscuela} />
+        )}
+        {esAdmin && !modoEmpleado && vista === 'clases' && (
+          <VistaAdminClases api={api} h={h} toast$={toast$} config={configEscuela} />
+        )}
+
         {vista === 'perfil' && (
           <div>
             {/* Cabecera de perfil */}

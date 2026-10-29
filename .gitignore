@@ -5,6 +5,6 @@ dist/
 !.env.example
 *.db
 *.db-journal
-SkiJornadaCompleto/backend/uploads/
-SkiJornadaCompleto/backend/whatsapp-session/
+backend/uploads/
+backend/whatsapp-session/
 .DS_Store
