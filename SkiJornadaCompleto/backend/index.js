@@ -13,6 +13,11 @@ const fs         = require('fs');
 const { PrismaClient } = require('@prisma/client');
 
 dotenv.config();
+
+if (!process.env.JWT_SECRET) {
+  console.error('❌ Falta JWT_SECRET en las variables de entorno. Abortando.');
+  process.exit(1);
+}
 const prisma = new PrismaClient();
 const app = express();
 
@@ -158,7 +163,7 @@ function fechaLocal(date) {
 const auth = (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'No autorizado' });
-  try { req.user = jwt.verify(token, process.env.JWT_SECRET || 'mi-secreto'); next(); }
+  try { req.user = jwt.verify(token, process.env.JWT_SECRET); next(); }
   catch { res.status(401).json({ error: 'Token inválido' }); }
 };
 
@@ -186,7 +191,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
 
     const token = jwt.sign(
       { userId: u.id, email: u.email, role: u.role },
-      process.env.JWT_SECRET || 'mi-secreto',
+      process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
     res.json({
