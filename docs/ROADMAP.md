@@ -7,6 +7,8 @@
 - Alta de profesores por el admin con invitación por enlace mágico; sesión de 90 días renovable
 - Informes de jornada (RD 8/2019), días libres, legajo de documentos, avisos
 - Landing pública (`frontend/src/Landing.jsx` + `Landing.css`) con accesos separados para profesores y administración; el rol lo define la cuenta del email
+- Acceso por invitación: cuenta de empresa, importación de la lista, adhesión, revocación inmediata, roles y registro de actividad (`ACCESO-Y-ALTAS.md`)
+- App a pantalla completa con pantalla de apertura animada, atajos y aviso de instalación (`APP-MOVIL.md`)
 - PWA instalable; repo ordenado; configuración de Railway y Cloudflare Pages
 
 ## Estado y alcance
@@ -17,7 +19,8 @@ Ver `PILOTO-SNOWMOTION.md`: carga masiva de nóminas, archivado en Drive (cuenta
 
 ## Próximo (prioridad alta)
 1. **Revisión UX/UI** de toda la app (mobile first): jerarquía visual, contraste de inputs, formulario de carga de clases con 1 mano, estados vacíos, accesibilidad. Probar la PWA en iOS y Android reales.
-2. **Código de 6 dígitos** además del enlace mágico, por el problema de iOS (la PWA instalada no comparte almacenamiento con Safari).
+2. **Doble verificación para administración** y cambio de email desde la interfaz; caducidad de invitaciones sin usar.
+3. **Código de 6 dígitos** además del enlace mágico, por el problema de iOS (la PWA instalada no comparte almacenamiento con Safari).
 3. **Verificar el envío de correos en producción** (Resend + DNS) y plantilla visual de los correos.
 4. **Backups automáticos** de `prod.db` y `uploads`.
 

@@ -20,6 +20,8 @@ model Profesor {
   telefono         String?
   horaRecordatorio String   @default("17:00")
   tarifaHora       Float?
+  adheridoAt       DateTime?
+  esPrincipal      Boolean  @default(false)
   createdAt        DateTime @default(now())
 
   registros                RegistroJornada[]
@@ -247,4 +249,18 @@ model AliasProfesor {
   nombreExterno String   @unique
   profesorId    String
   createdAt     DateTime @default(now())
+}
+
+// Registro de acciones sensibles de administración (altas, bajas, roles, invitaciones, integraciones)
+model AuditoriaLog {
+  id            String   @id @default(uuid())
+  actorId       String?
+  actorEmail    String?
+  accion        String
+  objetivoId    String?
+  objetivoEmail String?
+  detalle       String?
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
 }

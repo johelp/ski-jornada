@@ -27,8 +27,9 @@ async function main() {
   // ── Usuarios ─────────────────────────────────────────────
   const admin = await prisma.profesor.upsert({
     where: { email: 'admin@escuela.com' },
-    update: { password: hash },
+    update: { password: hash, esPrincipal: true },
     create: {
+      esPrincipal: true,
       email: 'admin@escuela.com', nombre: 'Ana', apellidos: 'Rodríguez',
       password: hash, tipoJornada: 'COMPLETA', horasContrato: 35, role: 'ADMIN',
     },

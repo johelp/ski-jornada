@@ -4,13 +4,20 @@ Estado: ✅ disponible · 🟡 disponible con límites · 🗺 planificado (ver 
 
 ## 1. Acceso y cuentas
 
+> Modelo: la escuela tiene una cuenta de administración (puede ser de empresa) que carga y **invita** a su equipo; nadie se registra por su cuenta. Ver `ACCESO-Y-ALTAS.md`.
+
 | Función | Estado | Detalle |
 |---------|--------|---------|
 | Ingreso por enlace mágico | ✅ | El usuario escribe su email y recibe un enlace de un solo uso (vence en 15 min). Sin contraseñas |
 | Sesión persistente | ✅ | 90 días, se renueva al abrir la app. Cierre de sesión manual |
 | Dos accesos: profesor y administración | ✅ | Desde la landing; el rol lo define la cuenta. El admin puede alternar a “modo empleado” |
 | Alta de profesores (uno a uno) | ✅ | Admin → Usuarios. Envía el enlace de invitación por correo |
-| Alta masiva por CSV | ✅ | `backend/prisma/import-profesores.js` (ver `MULTI-DESPLIEGUE.md`) |
+| Importar la lista de profesores | ✅ | *Usuarios → Importar lista* (pegar o subir CSV) o `import-profesores.js`. Idempotente |
+| Invitaciones | ✅ | Al importar, *Invitar a los pendientes* o *Reenviar invitación*. Estados: Invitado · sin entrar → Activo → Inactivo |
+| Cuenta de administración de empresa | ✅ | Sin apellidos; la cuenta principal crea otros administradores y cambia roles |
+| Baja con revocación inmediata | ✅ | La sesión abierta deja de funcionar al instante |
+| Registro de actividad de administración | ✅ | Altas, bajas, roles, importaciones, invitaciones, claves, revisiones |
+| App instalable a pantalla completa | ✅ | Pantalla de apertura animada, atajos y aviso de instalación (`APP-MOVIL.md`) |
 | Baja lógica y reactivación | ✅ | Un usuario inactivo no puede entrar y conserva su historial |
 | Código de 6 dígitos para iPhone | 🗺 | Para la PWA instalada en iOS |
 
@@ -110,4 +117,4 @@ Estado: ✅ disponible · 🟡 disponible con límites · 🗺 planificado (ver 
 - **Seguridad:** enlaces de un solo uso con hash en base, JWT, rate limit, CORS por despliegue, archivos protegidos, cada profesor solo ve sus datos.
 - **Cálculo de importes:** `horas × tarifa del profesor + Σ primas` (por hora o por clase), congelado al confirmar.
 - **Multi-despliegue:** un backend, una base y un frontend por cliente, con plantillas de variables.
-- **Pruebas:** `node backend/scripts/smoke.js` ejecuta 68 verificaciones de extremo a extremo (ver `PRUEBAS.md`).
+- **Pruebas:** `node backend/scripts/smoke.js` ejecuta 85 verificaciones de extremo a extremo (ver `PRUEBAS.md`).

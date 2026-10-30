@@ -47,11 +47,20 @@ El informe incluye `revision` (`{estado, nota, revisadoAt}` o `null`) y, por cla
 
 `importe*` es `null` si no hay tarifa ni importes de prima cargados.
 
+## Equipo, invitaciones y auditoría 🛡
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| POST | `/api/admin/profesores/importar` | `{filas:[{nombre, apellidos, email, telefono?, tipoJornada?, horasContrato?, tarifaHora?}], invitar?}` (máx. 300). Crea/actualiza profesores (nunca administradores). Devuelve `{creados, actualizados, errores[], invitados}` |
+| POST | `/api/admin/profesores/:id/invitar` | Reenvía la invitación |
+| POST | `/api/admin/profesores/invitar-pendientes` | Invita a todos los activos que aún no entraron (máx. 300) |
+| PUT | `/api/admin/profesores/:id/rol` | `{role: "ADMIN"\|"PROFESOR"}`. Solo la cuenta principal |
+| GET | `/api/admin/auditoria?limit=50` | Registro de actividad de administración |
+
 ## Profesores 🛡
 | Método | Ruta | Descripción |
 |--------|------|-------------|
 | GET | `/api/admin/profesores` | Lista (incluye `tarifaHora`) |
-| POST | `/api/admin/profesores` | Alta + envío del enlace de invitación |
+| POST | `/api/admin/profesores` | Alta + invitación. `role: "ADMIN"` solo desde la cuenta principal; los apellidos son opcionales en cuentas de administración |
 | PUT | `/api/admin/profesores/:id` | `nombre, apellidos, tipoJornada, horasContrato, activo, telefono, horaRecordatorio, tarifaHora` |
 | DELETE | `/api/admin/profesores/:id` | Baja lógica |
 

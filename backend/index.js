@@ -177,11 +177,28 @@ function fechaLocal(date) {
 }
 
 // ============ MIDDLEWARE ============
-const auth = (req, res, next) => {
+// La sesión (JWT) identifica al usuario, pero cada petición se contrasta con la base: una baja o un cambio de rol
+// surten efecto de inmediato (caché de 10 s por usuario, que se invalida al editar).
+const _cacheUsuarios = new Map();
+async function usuarioVigente(id) {
+  const c = _cacheUsuarios.get(id);
+  if (c && Date.now() - c.at < 10000) return c.u;
+  const u = await prisma.profesor.findUnique({ where: { id }, select: { id: true, email: true, role: true, activo: true, esPrincipal: true } });
+  _cacheUsuarios.set(id, { at: Date.now(), u });
+  return u;
+}
+const invalidarUsuario = id => _cacheUsuarios.delete(id);
+
+const auth = async (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'No autorizado' });
-  try { req.user = jwt.verify(token, process.env.JWT_SECRET); next(); }
-  catch { res.status(401).json({ error: 'Token inválido' }); }
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const u = await usuarioVigente(payload.userId);
+    if (!u || !u.activo) return res.status(401).json({ error: 'Cuenta desactivada o inexistente' });
+    req.user = { userId: u.id, email: u.email, role: u.role, esPrincipal: u.esPrincipal };
+    next();
+  } catch { res.status(401).json({ error: 'Token inválido' }); }
 };
 
 const adminOnly = (req, res, next) => {
@@ -236,7 +253,7 @@ const firmarSesion = u => jwt.sign(
 const perfilSesion = u => ({
   id: u.id, nombre: u.nombre, apellidos: u.apellidos, email: u.email,
   role: u.role, tipoJornada: u.tipoJornada, horasContrato: u.horasContrato,
-  telefono: u.telefono, horaRecordatorio: u.horaRecordatorio, tarifaHora: u.tarifaHora,
+  telefono: u.telefono, horaRecordatorio: u.horaRecordatorio, tarifaHora: u.tarifaHora, esPrincipal: u.esPrincipal,
 });
 
 // Crea el enlace y lo envía por email. `invitacion` cambia el texto para altas nuevas.
@@ -270,13 +287,24 @@ const magicLimiter = rateLimit({
   message: { error: 'Demasiados intentos. Esperá 15 minutos.' },
 });
 
+// Máximo 1 enlace por minuto y 5 por hora para cada email (evita inundar la bandeja de alguien)
+const _pedidosEnlace = new Map();
+function permitirEnlace(email) {
+  const ahora = Date.now();
+  const previos = (_pedidosEnlace.get(email) || []).filter(t => ahora - t < 3600000);
+  if (previos.length >= 5 || (previos.length && ahora - previos[previos.length - 1] < 60000)) { _pedidosEnlace.set(email, previos); return false; }
+  _pedidosEnlace.set(email, [...previos, ahora]);
+  return true;
+}
+setInterval(() => { const l = Date.now() - 3600000; for (const [k, v] of _pedidosEnlace) if (!v.some(t => t > l)) _pedidosEnlace.delete(k); }, 600000).unref();
+
 // Pide el enlace. Respuesta idéntica exista o no el email (no revela quién tiene cuenta).
 app.post('/api/auth/magic-link', magicLimiter, async (req, res) => {
   try {
     const email = String(req.body.email || '').toLowerCase().trim();
     if (!email) return res.status(400).json({ error: 'Ingresá tu email' });
     const u = await prisma.profesor.findUnique({ where: { email } });
-    if (u && u.activo) enviarMagicLink(u).catch(console.error);
+    if (u && u.activo && permitirEnlace(email)) enviarMagicLink(u).catch(console.error);
     res.json({ success: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Error interno del servidor' }); }
 });
@@ -293,7 +321,12 @@ app.post('/api/auth/magic-link/verificar', magicLimiter, async (req, res) => {
     // Consumo atómico: solo una petición puede borrarlo
     const borrado = await prisma.magicLink.deleteMany({ where: { id: ml.id } });
     if (borrado.count !== 1) return res.status(401).json({ error: 'El enlace venció o ya fue usado. Pedí uno nuevo.' });
-    res.json({ token: firmarSesion(ml.profesor), user: perfilSesion(ml.profesor) });
+    let usuario = ml.profesor;
+    if (!usuario.adheridoAt) { // primera entrada: el invitado se adhiere
+      usuario = await prisma.profesor.update({ where: { id: usuario.id }, data: { adheridoAt: new Date() } });
+      invalidarUsuario(usuario.id);
+    }
+    res.json({ token: firmarSesion(usuario), user: perfilSesion(usuario) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Error interno del servidor' }); }
 });
 
@@ -680,7 +713,7 @@ app.get('/api/admin/profesores', auth, adminOnly, async (req, res) => {
       select: {
         id: true, nombre: true, apellidos: true, email: true,
         tipoJornada: true, horasContrato: true, role: true, activo: true,
-        createdAt: true, telefono: true, horaRecordatorio: true, tarifaHora: true,
+        createdAt: true, telefono: true, horaRecordatorio: true, tarifaHora: true, adheridoAt: true, esPrincipal: true,
       },
       orderBy: { apellidos: 'asc' },
     });
@@ -691,7 +724,11 @@ app.get('/api/admin/profesores', auth, adminOnly, async (req, res) => {
 app.post('/api/admin/profesores', auth, adminOnly, async (req, res) => {
   try {
     const { nombre, apellidos, email, tipoJornada, horasContrato, role, telefono } = req.body;
-    if (!nombre || !apellidos || !email) return res.status(400).json({ error: 'Nombre, apellidos y email son obligatorios' });
+    const esAdminNuevo = role === 'ADMIN';
+    if (esAdminNuevo && !req.user.esPrincipal) return res.status(403).json({ error: 'Solo la cuenta principal puede crear administradores' });
+    // Una cuenta de administración puede ser de empresa (sin apellidos); un profesor necesita nombre y apellidos
+    if (!nombre || !email || (!apellidos && !esAdminNuevo)) return res.status(400).json({ error: esAdminNuevo ? 'Nombre y email son obligatorios' : 'Nombre, apellidos y email son obligatorios' });
+    if (!EMAIL_RE.test(String(email).trim())) return res.status(400).json({ error: 'Email inválido' });
 
     const existe = await prisma.profesor.findUnique({ where: { email: email.toLowerCase().trim() } });
     if (existe) return res.status(400).json({ error: 'Ya existe un usuario con ese email' });
@@ -699,7 +736,7 @@ app.post('/api/admin/profesores', auth, adminOnly, async (req, res) => {
     const password = await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10); // sin contraseña usable: se entra por enlace
     const nuevo = await prisma.profesor.create({
       data: {
-        email: email.toLowerCase().trim(), nombre, apellidos, password,
+        email: email.toLowerCase().trim(), nombre, apellidos: apellidos || '', password,
         tipoJornada: tipoJornada || 'COMPLETA',
         horasContrato: parseInt(horasContrato) || 35,
         role: role === 'ADMIN' ? 'ADMIN' : 'PROFESOR',
@@ -707,6 +744,7 @@ app.post('/api/admin/profesores', auth, adminOnly, async (req, res) => {
       },
     });
     enviarMagicLink(nuevo, { invitacion: true }).catch(console.error);
+    await auditar(req, nuevo.role === 'ADMIN' ? 'usuario.crear_admin' : 'usuario.crear', nuevo);
     res.json({
       success: true,
       usuario: {
@@ -729,11 +767,21 @@ app.put('/api/admin/profesores/:id', auth, adminOnly, async (req, res) => {
     if (apellidos        !== undefined) data.apellidos        = apellidos;
     if (tipoJornada      !== undefined) data.tipoJornada      = tipoJornada;
     if (horasContrato    !== undefined) data.horasContrato    = parseInt(horasContrato);
-    if (activo           !== undefined) data.activo           = activo;
+    if (activo           !== undefined) {
+      data.activo = !!activo;
+      if (!activo) { // baja: no dejar la escuela sin administración ni tocar a la cuenta principal
+        const objetivo = await prisma.profesor.findUnique({ where: { id: req.params.id } });
+        if (objetivo && objetivo.id === req.user.userId) return res.status(400).json({ error: 'No puedes darte de baja a ti mismo' });
+        const e = objetivo && await validarBajaAdmin(objetivo);
+        if (e) return res.status(400).json({ error: e });
+      }
+    }
     if (telefono         !== undefined) data.telefono         = telefono || null;
     if (horaRecordatorio !== undefined) data.horaRecordatorio = horaRecordatorio;
     if (tarifaHora       !== undefined) data.tarifaHora       = (tarifaHora === '' || tarifaHora === null || isNaN(parseFloat(tarifaHora))) ? null : Math.max(0, parseFloat(tarifaHora));
     const prof = await prisma.profesor.update({ where: { id: req.params.id }, data });
+    invalidarUsuario(prof.id);
+    await auditar(req, activo === false ? 'usuario.baja' : activo === true ? 'usuario.alta' : 'usuario.editar', prof, { campos: Object.keys(data).filter(k => k !== 'tarifaHora') });
     res.json({
       success: true,
       profesor: {
@@ -749,9 +797,131 @@ app.delete('/api/admin/profesores/:id', auth, adminOnly, async (req, res) => {
   try {
     const { id } = req.params;
     if (id === req.user.userId) return res.status(400).json({ error: 'No puedes eliminar tu propia cuenta' });
+    const objetivo = await prisma.profesor.findUnique({ where: { id } });
+    if (!objetivo) return res.status(404).json({ error: 'Usuario no encontrado' });
+    const e = await validarBajaAdmin(objetivo);
+    if (e) return res.status(400).json({ error: e });
     await prisma.profesor.update({ where: { id }, data: { activo: false } });
+    invalidarUsuario(id);
+    await auditar(req, 'usuario.baja', objetivo);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: 'Error desactivando usuario' }); }
+});
+
+// ============ ACCESO: invitaciones, roles y auditoría ============
+// Modelo: la escuela tiene una cuenta de administración (puede ser una cuenta de empresa). Administración carga la
+// lista de profesores y los invita; cada profesor "se adhiere" al entrar por primera vez con su email.
+// Nadie puede crear una cuenta por su cuenta: solo entra quien está en la lista y está activo.
+
+async function auditar(req, accion, objetivo, detalle) {
+  try {
+    await prisma.auditoriaLog.create({ data: {
+      actorId: req.user?.userId || null, actorEmail: req.user?.email || null, accion,
+      objetivoId: objetivo?.id || null, objetivoEmail: objetivo?.email || null, detalle: detalle ? JSON.stringify(detalle) : null,
+    } });
+  } catch (e) { console.error('auditoria:', e.message); }
+}
+
+const dormir = ms => new Promise(r => setTimeout(r, ms));
+// Envía invitaciones en segundo plano y de una en una (los proveedores de correo limitan la velocidad)
+async function enviarInvitaciones(usuarios) {
+  for (const u of usuarios) {
+    try { await enviarMagicLink(u, { invitacion: true }); } catch (e) { console.error('invitación:', u.email, e.message); }
+    await dormir(600);
+  }
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const adminsActivos = () => prisma.profesor.count({ where: { role: 'ADMIN', activo: true } });
+
+// Impide dejar la escuela sin administración o dar de baja a la cuenta principal
+async function validarBajaAdmin(objetivo) {
+  if (objetivo.esPrincipal) return 'La cuenta principal no se puede dar de baja';
+  if (objetivo.role === 'ADMIN' && (await adminsActivos()) <= 1) return 'Tiene que quedar al menos un administrador activo';
+  return null;
+}
+
+// Reenviar la invitación a un usuario
+app.post('/api/admin/profesores/:id/invitar', auth, adminOnly, async (req, res) => {
+  try {
+    const u = await prisma.profesor.findUnique({ where: { id: req.params.id } });
+    if (!u || !u.activo) return res.status(404).json({ error: 'Usuario no encontrado o inactivo' });
+    await enviarMagicLink(u, { invitacion: true });
+    await auditar(req, 'usuario.invitacion_reenviada', u);
+    res.json({ success: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'No se pudo enviar la invitación' }); }
+});
+
+// Invitar de una vez a todos los que todavía no entraron
+app.post('/api/admin/profesores/invitar-pendientes', auth, adminOnly, async (req, res) => {
+  try {
+    const pendientes = await prisma.profesor.findMany({ where: { activo: true, adheridoAt: null, NOT: { id: req.user.userId } } });
+    if (!pendientes.length) return res.json({ success: true, enviadas: 0 });
+    if (pendientes.length > 300) return res.status(400).json({ error: 'Demasiados pendientes a la vez (máx. 300)' });
+    enviarInvitaciones(pendientes);
+    await auditar(req, 'usuario.invitaciones_masivas', null, { cantidad: pendientes.length });
+    res.json({ success: true, enviadas: pendientes.length });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'No se pudieron enviar las invitaciones' }); }
+});
+
+// Cargar la lista de profesores (siempre con rol PROFESOR; idempotente por email)
+app.post('/api/admin/profesores/importar', auth, adminOnly, async (req, res) => {
+  try {
+    const { filas, invitar } = req.body;
+    if (!Array.isArray(filas) || !filas.length) return res.status(400).json({ error: 'La lista está vacía' });
+    if (filas.length > 300) return res.status(400).json({ error: 'Máximo 300 filas por carga' });
+    let creados = 0, actualizados = 0;
+    const errores = [], nuevos = [];
+    for (const [i, f] of filas.entries()) {
+      const email = String(f.email || '').toLowerCase().trim();
+      const nombre = String(f.nombre || '').trim();
+      if (!EMAIL_RE.test(email) || !nombre) { errores.push({ fila: i + 1, motivo: 'Falta el nombre o el email es inválido', email }); continue; }
+      const tarifa = f.tarifaHora === '' || f.tarifaHora == null ? null : parseFloat(String(f.tarifaHora).replace(',', '.'));
+      if (tarifa != null && (isNaN(tarifa) || tarifa < 0)) { errores.push({ fila: i + 1, motivo: 'Tarifa inválida', email }); continue; }
+      const datos = {
+        nombre, apellidos: String(f.apellidos || '').trim(), telefono: f.telefono ? String(f.telefono).trim() : null,
+        tipoJornada: f.tipoJornada === 'MEDIA_JORNADA' ? 'MEDIA_JORNADA' : 'COMPLETA',
+        horasContrato: parseInt(f.horasContrato) || 35, tarifaHora: tarifa,
+      };
+      const existe = await prisma.profesor.findUnique({ where: { email } });
+      if (existe) {
+        if (existe.role === 'ADMIN') { errores.push({ fila: i + 1, motivo: 'Es un administrador: no se modifica desde la importación', email }); continue; }
+        await prisma.profesor.update({ where: { email }, data: { ...datos, activo: true } });
+        invalidarUsuario(existe.id); actualizados++;
+      } else {
+        const nuevo = await prisma.profesor.create({ data: { ...datos, email, role: 'PROFESOR', password: await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10) } });
+        nuevos.push(nuevo); creados++;
+      }
+    }
+    if (invitar && nuevos.length) enviarInvitaciones(nuevos);
+    await auditar(req, 'usuario.importacion', null, { creados, actualizados, errores: errores.length, invitados: invitar ? nuevos.length : 0 });
+    res.json({ creados, actualizados, errores, invitados: invitar ? nuevos.length : 0 });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error importando la lista' }); }
+});
+
+// Cambiar de rol: solo la cuenta principal. Siempre debe quedar un administrador activo.
+app.put('/api/admin/profesores/:id/rol', auth, adminOnly, async (req, res) => {
+  try {
+    if (!req.user.esPrincipal) return res.status(403).json({ error: 'Solo la cuenta principal puede cambiar roles' });
+    const role = req.body.role === 'ADMIN' ? 'ADMIN' : 'PROFESOR';
+    const u = await prisma.profesor.findUnique({ where: { id: req.params.id } });
+    if (!u) return res.status(404).json({ error: 'Usuario no encontrado' });
+    if (u.esPrincipal) return res.status(400).json({ error: 'No se puede cambiar el rol de la cuenta principal' });
+    if (u.role === role) return res.json({ success: true });
+    if (role === 'PROFESOR') { const e = await validarBajaAdmin(u); if (e) return res.status(400).json({ error: e }); }
+    await prisma.profesor.update({ where: { id: u.id }, data: { role } });
+    invalidarUsuario(u.id);
+    await auditar(req, 'usuario.rol', u, { de: u.role, a: role });
+    res.json({ success: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error cambiando el rol' }); }
+});
+
+app.get('/api/admin/auditoria', auth, adminOnly, async (req, res) => {
+  try {
+    const limite = Math.min(parseInt(req.query.limit) || 50, 200);
+    const filas = await prisma.auditoriaLog.findMany({ orderBy: { createdAt: 'desc' }, take: limite });
+    res.json(filas.map(f => ({ ...f, detalle: f.detalle ? JSON.parse(f.detalle) : null })));
+  } catch { res.status(500).json({ error: 'Error' }); }
 });
 
 // ============ INFORMES ============
@@ -1536,6 +1706,7 @@ app.post('/api/admin/clases/revision', auth, adminOnly, async (req, res) => {
         <p><a href="${(process.env.FRONTEND_URL || 'http://localhost:5173').split(',')[0].trim()}">Abrir Ski Jornada →</a></p>
       </div>`).catch(console.error);
     emitirEvento('clases.revision', { email: prof.email, mes, estado, nota });
+    await auditar(req, 'clases.revision', prof, { mes, estado });
     res.json({ success: true, revision: rev });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Error guardando la revisión' }); }
 });
@@ -1637,6 +1808,7 @@ app.post('/api/admin/integraciones/keys', auth, adminOnly, async (req, res) => {
     const key = `sj_${crypto.randomBytes(24).toString('base64url')}`;
     const k = await prisma.apiKey.create({ data: { nombre, prefijo: key.slice(0, 10), keyHash: hashKey(key), scopes: scopes.join(','), creadaPorId: req.user.userId } });
     // La key en claro se muestra UNA sola vez
+    await auditar(req, 'integracion.key_crear', null, { nombre: k.nombre, scopes });
     res.json({ id: k.id, nombre: k.nombre, scopes, prefijo: k.prefijo, key });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Error creando la key' }); }
 });
@@ -1663,6 +1835,7 @@ app.post('/api/admin/integraciones/webhooks', auth, adminOnly, async (req, res) 
     if (!eventos.length) return res.status(400).json({ error: 'Eventos inválidos' });
     const secret = `whsec_${crypto.randomBytes(24).toString('hex')}`;
     const w = await prisma.webhook.create({ data: { url, secret, eventos: eventos.join(',') } });
+    await auditar(req, 'integracion.webhook_crear', null, { url: w.url, eventos });
     res.json({ id: w.id, url: w.url, eventos, secret }); // el secreto se muestra una sola vez
   } catch (err) { console.error(err); res.status(500).json({ error: 'Error creando el webhook' }); }
 });
