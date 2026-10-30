@@ -81,7 +81,9 @@ Cada cliente tiene su **propio despliegue y base de datos** (ver `MULTI-DESPLIEG
 | Interruptor del módulo de documentos | ✅ `DOCUMENTOS_HABILITADOS=false` |
 | Región de alojamiento en la UE | ⚠ **Pendiente de configurar**: el servicio actual de pruebas está en `us-west2`. Para clientes con datos reales crear el servicio y el volumen en `europe-west4` |
 | Copias de seguridad cifradas y probadas | ⚠ **Pendiente** (ver `PILOTO-SNOWMOTION.md`, opción E) |
-| Registro de auditoría de accesos y cambios | ⚠ **Pendiente** (ver `ROADMAP.md`) |
+| Registro de actividad de administración (altas, bajas, roles, importaciones, invitaciones, revisiones) | ✅ `GET /api/admin/auditoria` (quién, qué, cuándo). No registra accesos de lectura |
+| Baja con revocación inmediata de la sesión | ✅ |
+| Solo entra quien está en la lista de la escuela; sin registro público | ✅ (`ACCESO-Y-ALTAS.md`) |
 | Cifrado en reposo del volumen | ⚠ Depende del proveedor; verificar |
 | Doble factor para administración | ⚠ No implementado; el acceso depende del correo del administrador (proteger su cuenta con 2FA) |
 

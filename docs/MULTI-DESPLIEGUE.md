@@ -1,5 +1,7 @@
 # Multi-despliegue: una instancia por cliente
 
+> Cada instancia tiene una **cuenta principal** de administración (`ADMIN_EMAIL`). Puede ser una cuenta de empresa: `ADMIN_NOMBRE=Administración` y `ADMIN_APELLIDOS` vacío. Esa cuenta carga la lista de profesores e invita. Ver `ACCESO-Y-ALTAS.md`.
+
 Cada cliente (escuela) tiene **su propio despliegue**: backend, base de datos y frontend independientes. El código es el mismo; lo que cambia son las variables. Así los datos quedan aislados y cada cliente puede tener su dominio, marca y correo.
 
 ```

@@ -2,7 +2,7 @@
 
 ## Prueba de humo automática (API)
 
-`backend/scripts/smoke.js` recorre el proceso completo con una cuenta de administración y dos de profesor: permisos, carga de clases, importes, confirmación y bloqueo, revisión (discrepancia, corrección, aprobación), anotaciones por clase, notificaciones, documentos (subida, firma y acceso protegido) y limpieza. **68 verificaciones** (incluye API keys, planning, exportación de datos y comparativa con reservas).
+`backend/scripts/smoke.js` recorre el proceso completo con una cuenta de administración y dos de profesor: permisos, carga de clases, importes, confirmación y bloqueo, revisión (discrepancia, corrección, aprobación), anotaciones por clase, notificaciones, documentos (subida, firma y acceso protegido) y limpieza. **85 verificaciones** (incluye API keys, planning, exportación de datos, comparativa con reservas y control de acceso: importación, invitaciones, bajas con revocación inmediata, roles y auditoría).
 
 ```bash
 # Backend local con datos demo
@@ -47,4 +47,4 @@ Sale con código 1 si algo falla.
 
 ## Resultado de la última ejecución
 
-Probado en local el 29/10/2026: prueba de humo **68/68 correctas**. Pantallas verificadas en navegador: landing (375 px y 1024 px), acceso por enlace mágico, carga y consulta de clases del profesor, resumen y detalle de administración, revisión con discrepancia y anotación de una clase (visible luego en la cuenta del profesor) y apertura protegida de un documento. Sin verificar todavía: envío real de correos, instalación de la PWA en un móvil, fichaje por QR/GPS/NFC en dispositivo.
+Probado en local el 29/10/2026: prueba de humo **85/85 correctas**. Pantallas verificadas en navegador: landing (375 px y 1024 px), acceso por enlace mágico, carga y consulta de clases del profesor, resumen y detalle de administración, revisión con discrepancia y anotación de una clase (visible luego en la cuenta del profesor) y apertura protegida de un documento. Sin verificar todavía: envío real de correos, instalación de la PWA en un móvil, fichaje por QR/GPS/NFC en dispositivo.

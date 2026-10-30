@@ -2,11 +2,11 @@
   "name": "Ski Jornada",
   "short_name": "SkiJornada",
   "description": "Control de jornada laboral para escuela de esquí",
-  "start_url": "/",
+  "start_url": "/?origen=pwa",
   "display": "standalone",
   "background_color": "#0f4c81",
   "theme_color": "#0f4c81",
-  "orientation": "any",
+  "orientation": "portrait-primary",
   "icons": [
     {
       "src": "/icon-192.png",
@@ -39,5 +39,35 @@
   ],
   "lang": "es",
   "id": "/",
-  "scope": "/"
+  "scope": "/",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "shortcuts": [
+    {
+      "name": "Fichar",
+      "short_name": "Fichar",
+      "description": "Registrar entrada o salida",
+      "url": "/?vista=fichar",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Cargar clase",
+      "short_name": "Clase",
+      "description": "Cargar una clase dada",
+      "url": "/?vista=misclases",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
 }

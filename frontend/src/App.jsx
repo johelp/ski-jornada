@@ -6,6 +6,8 @@ import { generarPDFRegistro } from './pdfRegistro';
 import VistaMisClases from './VistaMisClases';
 import InformeClases from './InformeClases';
 import VistaIntegraciones from './VistaIntegraciones';
+import ImportarLista from './ImportarLista';
+import InstalarBanner from './InstalarBanner';
 import VistaAdminClases from './VistaAdminClases';
 import Landing from './Landing';
 import './App.css';
@@ -47,6 +49,13 @@ function formatTiempo(ms) {
 }
 
 const nfcDisponible = 'NDEFReader' in window;
+
+const ETIQUETA_AUDITORIA = {
+  'usuario.crear': 'Alta de profesor', 'usuario.crear_admin': 'Alta de administración', 'usuario.baja': 'Baja', 'usuario.alta': 'Reactivación',
+  'usuario.editar': 'Edición', 'usuario.rol': 'Cambio de rol', 'usuario.importacion': 'Importación de lista',
+  'usuario.invitacion_reenviada': 'Invitación reenviada', 'usuario.invitaciones_masivas': 'Invitaciones a pendientes',
+  'integracion.key_crear': 'Clave de API creada', 'integracion.webhook_crear': 'Webhook creado', 'clases.revision': 'Revisión de horas',
+};
 
 // Temporada = 12 meses desde el mes de inicio (por defecto noviembre; configurable con VITE_TEMPORADA_INICIO_MES)
 const TEMPORADA_INICIO = Math.min(12, Math.max(1, parseInt(import.meta.env.VITE_TEMPORADA_INICIO_MES) || 11));
@@ -260,6 +269,8 @@ function App() {
   const [periodoDash, setPeriodoDash] = useState('mes');
   const [nuevoUsuarioAbierto, setNuevoUsuarioAbierto] = useState(false);
   const [busquedaUsuario, setBusquedaUsuario] = useState('');
+  const [importarAbierto, setImportarAbierto] = useState(false);
+  const [auditoria, setAuditoria] = useState(null);
   const [tabInformeEmp, setTabInformeEmp] = useState('jornada');
   const [clasesPeriodo, setClasesPeriodo] = useState(null);
   const [emailLogin, setEmailLogin] = useState('');
@@ -530,6 +541,16 @@ function App() {
       .then(r => setClasesPeriodo(r.data)).catch(() => {});
   }, [token, periodoDash]);
 
+  // Atajos de la app instalada (manifest): /?vista=fichar, /?vista=misclases
+  useEffect(() => {
+    if (!token || !user) return;
+    const v = new URLSearchParams(window.location.search).get('vista');
+    if (!v) return;
+    if (user.role === 'ADMIN' && ['fichar', 'misclases', 'solicitar'].includes(v)) setModoEmpleado(true);
+    setVista(v);
+    window.history.replaceState({}, '', window.location.pathname);
+  }, [token]);
+
   // Poll notifications every 60s
   useEffect(() => {
     if (!token) return;
@@ -712,17 +733,38 @@ function App() {
   };
 
   const agregarUsuario = async () => {
-    if (!nuevoUsuario.nombre || !nuevoUsuario.apellidos || !nuevoUsuario.email) {
-      toast$('Nombre, apellidos y email son obligatorios', 'warning'); return;
+    const esEmpresa = nuevoUsuario.role === 'ADMIN';
+    if (!nuevoUsuario.nombre || !nuevoUsuario.email || (!esEmpresa && !nuevoUsuario.apellidos)) {
+      toast$(esEmpresa ? 'Nombre y email son obligatorios' : 'Nombre, apellidos y email son obligatorios', 'warning'); return;
     }
     setCargando(true);
     try {
       await api.post('/api/admin/profesores', nuevoUsuario, { headers: h() });
-      toast$('Usuario creado. Se ha enviado email de bienvenida.', 'success', 5000);
+      toast$('Usuario creado. Se envió la invitación por correo.', 'success', 5000);
       cargarProfesores();
       setNuevoUsuario({ nombre: '', apellidos: '', email: '', tipoJornada: 'COMPLETA', horasContrato: 35, role: 'PROFESOR', telefono: '' });
     } catch (err) { toast$(err.response?.data?.error || 'Error al crear usuario', 'error'); }
     finally { setCargando(false); }
+  };
+
+  const invitarUno = async (p) => {
+    try { await api.post(`/api/admin/profesores/${p.id}/invitar`, null, { headers: h() }); toast$(`Invitación enviada a ${p.email}`, 'success'); }
+    catch (e) { toast$(e.response?.data?.error || 'No se pudo enviar', 'error'); }
+  };
+  const invitarPendientes = async () => {
+    try {
+      const r = await api.post('/api/admin/profesores/invitar-pendientes', null, { headers: h() });
+      toast$(r.data.enviadas ? `${r.data.enviadas} invitaciones en camino` : 'No hay pendientes', 'success');
+    } catch (e) { toast$(e.response?.data?.error || 'No se pudo enviar', 'error'); }
+  };
+  const cambiarRol = async (p, role) => {
+    if (!window.confirm(role === 'ADMIN' ? `¿Dar acceso de administración a ${p.nombre}?` : `¿Quitar el acceso de administración a ${p.nombre}?`)) return;
+    try { await api.put(`/api/admin/profesores/${p.id}/rol`, { role }, { headers: h() }); toast$('Rol actualizado', 'success'); cargarProfesores(); }
+    catch (e) { toast$(e.response?.data?.error || 'No se pudo cambiar el rol', 'error'); }
+  };
+  const cargarAuditoria = async () => {
+    try { setAuditoria((await api.get('/api/admin/auditoria?limit=40', { headers: h() })).data); }
+    catch { toast$('No se pudo cargar el registro', 'error'); }
   };
 
   const guardarEdicionProfesor = async () => {
@@ -989,6 +1031,7 @@ function App() {
             </form>
           )}
         />
+        <InstalarBanner evento={pwaInstallEvent} onInstalar={instalarPWA} />
         {cargando && <div className="loading-overlay"><div className="spinner" /></div>}
       </>
     );
@@ -1084,6 +1127,8 @@ function App() {
           </button>
         )}
       </nav>
+
+      <InstalarBanner evento={pwaInstallEvent} onInstalar={instalarPWA} />
 
       {masAbierto && (
         <div className="sheet-overlay" onClick={() => setMasAbierto(false)}>
@@ -1985,12 +2030,19 @@ function App() {
                 {nuevoUsuarioAbierto ? 'Cerrar' : '+ Nuevo'}
               </button>
             </div>
+            <div className="action-buttons">
+              <button className="btn-sm" onClick={() => setImportarAbierto(a => !a)} aria-expanded={importarAbierto}><Icono n="mas1" size={18} /> Importar lista</button>
+              <button className="btn-sm" onClick={invitarPendientes} disabled={!profesores.some(p => p.activo && !p.adheridoAt && p.id !== user?.id)}>
+                <Icono n="enlace" size={18} /> Invitar a los pendientes ({profesores.filter(p => p.activo && !p.adheridoAt && p.id !== user?.id).length})
+              </button>
+            </div>
+            {importarAbierto && <ImportarLista api={api} h={h} toast$={toast$} onTerminado={cargarProfesores} onCerrar={() => setImportarAbierto(false)} />}
             {nuevoUsuarioAbierto && <div className="card">
               <h2>Nuevo usuario</h2>
               <div className="form-row">
                 <div className="form-group"><label>Nombre</label>
                   <input type="text" placeholder="Nombre" value={nuevoUsuario.nombre} onChange={e => setNuevoUsuario({ ...nuevoUsuario, nombre: e.target.value })} /></div>
-                <div className="form-group"><label>Apellidos</label>
+                <div className="form-group"><label>{nuevoUsuario.role === 'ADMIN' ? 'Apellidos (opcional en cuentas de empresa)' : 'Apellidos'}</label>
                   <input type="text" placeholder="Apellidos" value={nuevoUsuario.apellidos} onChange={e => setNuevoUsuario({ ...nuevoUsuario, apellidos: e.target.value })} /></div>
               </div>
               <div className="form-row">
@@ -2003,7 +2055,7 @@ function App() {
                 <div className="form-group"><label>Rol</label>
                   <select value={nuevoUsuario.role} onChange={e => setNuevoUsuario({ ...nuevoUsuario, role: e.target.value })}>
                     <option value="PROFESOR">Profesor</option>
-                    <option value="ADMIN">Administrador</option>
+                    {user?.esPrincipal && <option value="ADMIN">Administración</option>}
                   </select>
                 </div>
                 <div className="form-group"><label>Tipo de jornada</label>
@@ -2027,7 +2079,7 @@ function App() {
               <div className="profesores-grid">
                 {profesores.filter(p => `${p.nombre} ${p.apellidos} ${p.email}`.toLowerCase().includes(busquedaUsuario.toLowerCase())).map(p => (
                   <div key={p.id} className={`profesor-card ${!p.activo ? 'inactivo' : ''}`}>
-                    <div className="profesor-avatar">{p.nombre[0]}{p.apellidos[0]}</div>
+                    <div className="profesor-avatar">{(p.nombre?.[0] || '') + (p.apellidos?.[0] || '')}</div>
                     <div className="profesor-info">
                       <strong>{p.nombre} {p.apellidos}</strong>
                       <small>{p.email}</small>
@@ -2040,7 +2092,10 @@ function App() {
                       <span className={`badge-jornada badge ${p.tipoJornada === 'COMPLETA' ? 'completa' : 'media'}`}>
                         {p.tipoJornada === 'COMPLETA' ? `${p.horasContrato}h/sem` : 'Media'}
                       </span>
-                      {!p.activo && <span className="estado-badge rechazado">Inactivo</span>}
+                      {!p.activo ? <span className="estado-badge rechazado">Inactivo</span>
+                        : p.adheridoAt ? <span className="estado-badge aprobado">Activo</span>
+                        : <span className="estado-badge pendiente">Invitado · sin entrar</span>}
+                      {p.esPrincipal && <span className="badge badge-admin">Principal</span>}
                       <div style={{ display: 'flex', gap: '0.4rem', marginTop: '4px', flexWrap: 'wrap' }}>
                         <button className="btn-sm" onClick={() => {
                           setProfesorEditId(profesorEditId === p.id ? null : p.id);
@@ -2048,6 +2103,14 @@ function App() {
                         }}>
                           {profesorEditId === p.id ? 'Cerrar' : <><Icono n="editar" size={18} /> Editar</>}
                         </button>
+                        {p.activo && !p.adheridoAt && (
+                          <button className="btn-sm" onClick={() => invitarUno(p)}><Icono n="enlace" size={18} /> Reenviar invitación</button>
+                        )}
+                        {user?.esPrincipal && !p.esPrincipal && p.activo && (
+                          <button className="btn-sm" onClick={() => cambiarRol(p, p.role === 'ADMIN' ? 'PROFESOR' : 'ADMIN')}>
+                            {p.role === 'ADMIN' ? 'Quitar administración' : 'Dar administración'}
+                          </button>
+                        )}
                         <button className="btn-sm btn-sm-bell" onClick={() => {
                           setNuevaNotif({ titulo: '', mensaje: '', tipo: 'INFO', destinatarioId: p.id });
                           setVista('avisos');
@@ -2097,6 +2160,23 @@ function App() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div className="card">
+              <div className="card-header">
+                <h2>Actividad de administración</h2>
+                <button className="btn-sm" onClick={cargarAuditoria}>{auditoria ? 'Actualizar' : 'Ver registro'}</button>
+              </div>
+              {auditoria && (!auditoria.length ? <p className="form-hint">Sin actividad registrada.</p> : (
+                <div className="resumen-list">
+                  {auditoria.map(a => (
+                    <div key={a.id} className="resumen-item" style={{ alignItems: 'flex-start', flexDirection: 'column', gap: 2 }}>
+                      <strong>{ETIQUETA_AUDITORIA[a.accion] || a.accion}{a.objetivoEmail ? ` · ${a.objetivoEmail}` : ''}</strong>
+                      <small className="form-hint">{new Date(a.createdAt).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · {a.actorEmail || 'sistema'}</small>
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
 
             {/* Estado WhatsApp */}

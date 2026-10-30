@@ -4,18 +4,59 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0f4c81" />
-    <meta name="description" content="Control de jornada laboral para escuela de esquí" />
+    <meta name="description" content="Control de jornada, clases y primas para escuelas de esquí" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Ski Jornada" />
+    <meta name="format-detection" content="telephone=no" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <link rel="manifest" href="/manifest.json" />
     <title>Ski Jornada</title>
+    <style>
+      /* Pantalla de apertura: se pinta antes de que cargue la app y se retira al montarla */
+      html, body { background: #0f4c81; }
+      #splash { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; align-content: center; gap: 18px;
+        background: radial-gradient(120% 90% at 50% 0%, #1d6fa4 0%, #0f4c81 55%, #0b3a63 100%); color: #fff;
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; transition: opacity .45s ease, transform .45s ease; }
+      #splash.fuera { opacity: 0; transform: scale(1.04); pointer-events: none; }
+      #splash svg { width: 96px; height: 96px; overflow: visible; }
+      #splash .caja { fill: #fff; opacity: 0; animation: sp-caja .5s ease-out .05s forwards; }
+      #splash .monte { fill: none; stroke: #0f4c81; stroke-width: 2.2; stroke-linejoin: round; stroke-dasharray: 60; stroke-dashoffset: 60; animation: sp-trazo .7s ease-out .3s forwards; }
+      #splash .monte-r { fill: #0f4c81; opacity: 0; animation: sp-rel .3s ease-out .85s forwards; }
+      #splash .sol { fill: #f97316; transform-origin: 22.5px 9px; transform: scale(0); animation: sp-sol .45s cubic-bezier(.3,1.6,.5,1) .8s forwards; }
+      #splash h1 { margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; opacity: 0; transform: translateY(8px); animation: sp-txt .5s ease-out .9s forwards; }
+      #splash p { margin: -10px 0 0; opacity: 0; font-size: .9rem; color: rgba(255,255,255,.8); animation: sp-txt .5s ease-out 1.05s forwards; }
+      @keyframes sp-caja { to { opacity: 1; } }
+      @keyframes sp-trazo { to { stroke-dashoffset: 0; } }
+      @keyframes sp-rel { to { opacity: 1; } }
+      @keyframes sp-sol { to { transform: scale(1); } }
+      @keyframes sp-txt { to { opacity: 1; transform: none; } }
+      @media (prefers-reduced-motion: reduce) {
+        #splash *, #splash { animation: none !important; transition: opacity .2s !important; }
+        #splash .caja, #splash .monte-r, #splash h1, #splash p { opacity: 1; transform: none; }
+        #splash .sol { transform: none; } #splash .monte { stroke-dashoffset: 0; }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <div id="splash" aria-hidden="true">
+      <svg viewBox="0 0 32 32">
+        <rect class="caja" width="32" height="32" rx="8" />
+        <path class="monte" d="M6 23l7-11 4 6 3-4 6 9z" />
+        <path class="monte-r" d="M6 23l7-11 4 6 3-4 6 9z" />
+        <circle class="sol" cx="22.5" cy="9" r="2.2" />
+      </svg>
+      <h1>Ski Jornada</h1>
+      <p>Cargando tu jornada…</p>
+    </div>
+    <script>
+      // Solo en el primer arranque de cada sesión: en navegaciones internas no molesta
+      try { if (sessionStorage.getItem('splash')) document.getElementById('splash').remove(); else sessionStorage.setItem('splash', '1'); } catch (e) {}
+      window.__inicio = Date.now();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
