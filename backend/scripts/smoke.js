@@ -209,6 +209,15 @@ const pdf = nombre => {
   check('queda registro de bajas, altas y cambios de rol', ['usuario.baja', 'usuario.alta', 'usuario.rol', 'usuario.importacion'].every(a => aud.some(x => x.accion === a)));
   await http('PUT', `/api/admin/profesores/${tmp.id}`, { token: admin, body: { activo: false } });
 
+  seccion('6e. Operación: salud y copia de seguridad');
+  const salud = await http('GET', '/api/salud');
+  check('el chequeo de salud comprueba la base de datos', salud.status === 200 && salud.data.ok === true);
+  const bk = await http('GET', '/api/admin/backup/descargar', { token: admin });
+  const cab = bk.status === 200 && bk.data.byteLength > 1000 ? Buffer.from(bk.data.slice(0, 15)).toString('latin1') : '';
+  check('la cuenta principal descarga una copia SQLite válida', cab === 'SQLite format 3');
+  check('el profesor no puede descargar copias → 403', (await http('GET', '/api/admin/backup/descargar', { token: prof })).status === 403);
+  check('una ruta inexistente de la API devuelve 404 JSON', (await http('GET', '/api/no-existe', { token: admin })).status === 404);
+
   seccion('7. Limpieza');
   await http('POST', '/api/admin/clases/reabrir', { token: admin, body: { profesorId: me.id, mes: MES } });
   check('elimina la clase de prueba', (await http('DELETE', `/api/clases/${claseId}`, { token: prof })).status === 200);

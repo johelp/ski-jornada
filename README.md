@@ -59,6 +59,8 @@ npm run dev                     # http://localhost:5173
 
 ## Documentación
 
+- [docs/CHECKLIST-PRODUCCION.md](docs/CHECKLIST-PRODUCCION.md) — qué falta antes de abrir una instancia a usuarios reales
+- [docs/OPERACION.md](docs/OPERACION.md) — salud, despliegues, copias, secretos, restauración e incidentes
 - [docs/ACCESO-Y-ALTAS.md](docs/ACCESO-Y-ALTAS.md) — quién puede entrar: cuenta de administración, lista de profesores, invitaciones y bajas
 - [docs/APP-MOVIL.md](docs/APP-MOVIL.md) — instalar la app, pantalla completa, atajos y pantalla de apertura
 - [docs/PUESTA-EN-MARCHA.md](docs/PUESTA-EN-MARCHA.md) — guía paso a paso: correo, dominios, DNS y datos de prueba
@@ -74,6 +76,7 @@ npm run dev                     # http://localhost:5173
 - [docs/API.md](docs/API.md) — referencia de endpoints
 - [docs/DEPLOY.md](docs/DEPLOY.md) — producción paso a paso (Railway, Cloudflare Pages, Resend, DNS)
 - [docs/ROADMAP.md](docs/ROADMAP.md) — estado, deuda técnica y próximos pasos
+- [SECURITY.md](SECURITY.md) — cómo informar de una vulnerabilidad · [CHANGELOG.md](CHANGELOG.md) — historial de cambios
 - [CLAUDE.md](CLAUDE.md) — convenciones y trampas conocidas para quien continúe el desarrollo
 
 ## Estado

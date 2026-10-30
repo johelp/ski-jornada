@@ -3,7 +3,7 @@
   "build": { "builder": "NIXPACKS", "buildCommand": "npm install && npx prisma generate" },
   "deploy": {
     "startCommand": "npx prisma migrate deploy && node prisma/bootstrap.js && node index.js",
-    "healthcheckPath": "/api/server-time",
+    "healthcheckPath": "/api/salud",
     "restartPolicyType": "ON_FAILURE"
   }
 }

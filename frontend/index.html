@@ -52,11 +52,7 @@
       <h1>Ski Jornada</h1>
       <p>Cargando tu jornada…</p>
     </div>
-    <script>
-      // Solo en el primer arranque de cada sesión: en navegaciones internas no molesta
-      try { if (sessionStorage.getItem('splash')) document.getElementById('splash').remove(); else sessionStorage.setItem('splash', '1'); } catch (e) {}
-      window.__inicio = Date.now();
-    </script>
+    <script src="/boot.js"></script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

@@ -290,7 +290,6 @@ function App() {
 
   // Profile editing (own)
   const [perfilEdit, setPerfilEdit] = useState(null);
-  const [cambioPass, setCambioPass] = useState({ actual: '', nueva: '', confirmar: '' });
 
   // Admin editing employee
   const [profesorEditId, setProfesorEditId] = useState(null);
@@ -792,18 +791,6 @@ function App() {
     finally { setCargando(false); }
   };
 
-  const cambiarPassword = async () => {
-    if (!cambioPass.actual || !cambioPass.nueva) { toast$('Rellena todos los campos', 'warning'); return; }
-    if (cambioPass.nueva !== cambioPass.confirmar) { toast$('Las contraseñas no coinciden', 'warning'); return; }
-    if (cambioPass.nueva.length < 6) { toast$('La contraseña debe tener al menos 6 caracteres', 'warning'); return; }
-    setCargando(true);
-    try {
-      await api.put('/api/auth/cambiar-password', { passwordActual: cambioPass.actual, passwordNueva: cambioPass.nueva }, { headers: h() });
-      toast$('Contraseña cambiada correctamente', 'success');
-      setCambioPass({ actual: '', nueva: '', confirmar: '' });
-    } catch (err) { toast$(err.response?.data?.error || 'Error al cambiar contraseña', 'error'); }
-    finally { setCargando(false); }
-  };
 
   const agregarZona = async () => {
     if (!nuevaZona.nombre) { toast$('El nombre de la zona es obligatorio', 'warning'); return; }
