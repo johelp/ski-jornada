@@ -1,6 +1,6 @@
 # ⛷️ Ski Jornada
 
-Web app instalable (PWA) para escuelas de esquí: **fichaje de jornada**, **carga de clases con primas**, **informes mensuales y económicos** y **gestión de profesores**. El acceso es por **enlace mágico** (sin contraseñas) y la sesión queda abierta en el dispositivo.
+Web app instalable (PWA) para escuelas de esquí: **fichaje de jornada**, **carga de clases con primas**, **informes mensuales y económicos** y **gestión de profesores**. El acceso es por **enlace mágico** (sin contraseñas) y la sesión queda abierta en el dispositivo. **La escuela crea su cuenta de administración (puede ser de empresa), carga la lista de profesores y los invita**: solo entra quien está en la lista.
 
 ## Qué hace
 
@@ -59,6 +59,8 @@ npm run dev                     # http://localhost:5173
 
 ## Documentación
 
+- [docs/ACCESO-Y-ALTAS.md](docs/ACCESO-Y-ALTAS.md) — quién puede entrar: cuenta de administración, lista de profesores, invitaciones y bajas
+- [docs/APP-MOVIL.md](docs/APP-MOVIL.md) — instalar la app, pantalla completa, atajos y pantalla de apertura
 - [docs/PUESTA-EN-MARCHA.md](docs/PUESTA-EN-MARCHA.md) — guía paso a paso: correo, dominios, DNS y datos de prueba
 - [docs/ALCANCE-MVP.md](docs/ALCANCE-MVP.md) — alcance, estado, riesgos y decisiones pendientes del MVP
 - [docs/COMPARATIVA.md](docs/COMPARATIVA.md) — comparar el resumen de instructores del sistema de reservas con las horas cargadas

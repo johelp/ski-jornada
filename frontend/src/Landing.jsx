@@ -5,6 +5,7 @@ import { Pantalla, PANTALLAS } from './Mockups';
 // Marca por despliegue (variables de build de Cloudflare Pages; ver docs/MULTI-DESPLIEGUE.md)
 const APP_NAME = import.meta.env.VITE_APP_NAME || 'Ski Jornada';
 const LUGAR = import.meta.env.VITE_ESCUELA_LUGAR || '';
+const CONTACTO = /^\S+@\S+\.\S+$/.test(import.meta.env.VITE_CONTACTO_EMAIL || '') ? import.meta.env.VITE_CONTACTO_EMAIL : null;
 const COLOR = /^#[0-9a-fA-F]{6}$/.test(import.meta.env.VITE_COLOR_PRIMARIO || '') ? import.meta.env.VITE_COLOR_PRIMARIO : null;
 
 const Icon = ({ d, children }) => (
@@ -39,20 +40,20 @@ const FUNCIONES = [
 ];
 
 const PASOS = [
-  { n: 1, titulo: 'Entra con tu email', texto: 'Te llega un enlace. Sin contraseñas y la sesión queda abierta en tu móvil.' },
-  { n: 2, titulo: 'Carga tus clases', texto: 'Horas, disciplina y primas en menos de 10 segundos.' },
-  { n: 3, titulo: 'Confirma el mes', texto: 'Administración revisa, te deja notas y compara con las reservas.' },
-  { n: 4, titulo: 'Liquida sin errores', texto: 'Horas aprobadas e informe económico listos para pagar.' },
+  { n: 1, titulo: 'La escuela crea su cuenta', texto: 'Una cuenta de administración, que puede ser de empresa y no de una persona concreta.' },
+  { n: 2, titulo: 'Carga la lista del equipo', texto: 'Importa los profesores y sus correos, o invítalos uno a uno.' },
+  { n: 3, titulo: 'Cada profesor se une', texto: 'Recibe su invitación, entra con su email y queda activo. Sin contraseñas.' },
+  { n: 4, titulo: 'Se carga, se revisa y se liquida', texto: 'Los profesores cargan sus horas; administración revisa, compara y paga.' },
 ];
 
 const ACCESOS = {
   profesor: {
     titulo: 'Acceso profesores',
-    texto: 'Ingresa con el email con el que te dio de alta tu escuela.',
+    texto: 'Entra con el email con el que tu escuela te invitó. ¿No te llega el enlace? Pídele a administración que te invite.',
   },
   admin: {
     titulo: 'Acceso administración',
-    texto: 'Ingresa con el email de administrador de tu escuela.',
+    texto: 'Entra con el correo de la cuenta de administración de tu escuela. Puede ser una cuenta de empresa, como administracion@tuescuela.com.',
   },
 };
 
@@ -112,17 +113,17 @@ export default function Landing({
               <p className="lp-eyebrow">Para escuelas de esquí</p>
               <h1>Horas, clases y primas de tu equipo, listas para liquidar</h1>
               <p className="lp-lead">
-                Tus profesores fichan y cargan sus clases desde el móvil. Administración revisa, compara con el sistema
-                de reservas y genera el informe económico. Sin contraseñas.
+                La escuela da de alta su cuenta de administración y carga la lista de su equipo. Cada profesor recibe su
+                invitación, ficha y carga sus clases desde el móvil, y administración revisa, compara con reservas y liquida.
               </p>
               <div className="lp-cta">
                 <button className="lp-btn lp-btn-primary" onClick={e => abrir('profesor', e)}>Acceso profesores</button>
                 <button className="lp-btn lp-btn-outline" onClick={e => abrir('admin', e)}>Acceso administración</button>
               </div>
               <ul className="lp-trust">
-                <li>{ICONOS.correo}<span>Entras con un enlace al correo</span></li>
-                <li>{ICONOS.movil}<span>Funciona como app instalable</span></li>
-                <li>{ICONOS.escudo}<span>Cada quien ve solo lo suyo</span></li>
+                <li>{ICONOS.escudo}<span>Solo entra quien está en la lista de la escuela</span></li>
+                <li>{ICONOS.correo}<span>Acceso por enlace al correo, sin contraseñas</span></li>
+                <li>{ICONOS.movil}<span>App a pantalla completa, instalable</span></li>
               </ul>
             </div>
 
@@ -175,29 +176,31 @@ export default function Landing({
 
         <section className="lp-sec lp-sec-alt" aria-labelledby="t-roles">
           <div className="lp-wrap">
-            <h2 id="t-roles">Una app, dos accesos</h2>
+            <h2 id="t-roles">Administración invita, el equipo se une</h2>
             <div className="lp-roles">
               <article className="lp-role">
-                <h3>Profesores</h3>
+                <h3>Administración</h3>
+                <p className="lp-hint">La cuenta de la escuela: puede ser de empresa, no tiene que ser una persona.</p>
                 <ul>
-                  <li>{ICONOS.check}Fichar y desfichar</li>
-                  <li>{ICONOS.check}Cargar clases con disciplina y primas</li>
-                  <li>{ICONOS.check}Ver horas e importe del mes o de la temporada</li>
+                  <li>{ICONOS.check}Carga la lista de profesores o los invita uno a uno</li>
+                  <li>{ICONOS.check}Ve quién ya entró y reenvía invitaciones</li>
+                  <li>{ICONOS.check}Disciplinas, primas y tarifas configurables</li>
+                  <li>{ICONOS.check}Revisa, aprueba y comenta las horas</li>
+                  <li>{ICONOS.check}Compara con el sistema de reservas</li>
+                </ul>
+                <button className="lp-btn lp-btn-primary" onClick={e => abrir('admin', e)}>Entrar como administración</button>
+              </article>
+              <article className="lp-role">
+                <h3>Profesores invitados</h3>
+                <p className="lp-hint">Solo pueden entrar los que están en la lista de su escuela.</p>
+                <ul>
+                  <li>{ICONOS.check}Reciben la invitación por correo</li>
+                  <li>{ICONOS.check}Fichan y cargan clases con sus primas</li>
+                  <li>{ICONOS.check}Ven horas e importe del mes o de la temporada</li>
                   <li>{ICONOS.check}Notas y visto bueno de administración</li>
                   <li>{ICONOS.check}Informe mensual y económico en PDF</li>
                 </ul>
-                <button className="lp-btn lp-btn-primary" onClick={e => abrir('profesor', e)}>Entrar como profesor</button>
-              </article>
-              <article className="lp-role">
-                <h3>Administración</h3>
-                <ul>
-                  <li>{ICONOS.check}Alta de profesores, por lista o uno a uno</li>
-                  <li>{ICONOS.check}Disciplinas, primas y tarifas configurables</li>
-                  <li>{ICONOS.check}Revisar, aprobar y comentar las horas</li>
-                  <li>{ICONOS.check}Comparar con el sistema de reservas</li>
-                  <li>{ICONOS.check}Integraciones y días libres</li>
-                </ul>
-                <button className="lp-btn lp-btn-outline" onClick={e => abrir('admin', e)}>Entrar como administración</button>
+                <button className="lp-btn lp-btn-outline" onClick={e => abrir('profesor', e)}>Entrar como profesor</button>
               </article>
             </div>
           </div>
@@ -214,6 +217,16 @@ export default function Landing({
             </ol>
           </div>
         </section>
+
+        {CONTACTO && (
+          <section className="lp-sec" aria-labelledby="t-alta">
+            <div className="lp-wrap lp-center-block">
+              <h2 id="t-alta">¿Tienes una escuela?</h2>
+              <p className="lp-lead lp-center">Te damos de alta con tu cuenta de administración y te ayudamos a cargar la lista de tu equipo.</p>
+              <a className="lp-btn lp-btn-primary" href={`mailto:${CONTACTO}?subject=${encodeURIComponent('Alta de mi escuela en ' + APP_NAME)}`}>Solicitar el alta de mi escuela</a>
+            </div>
+          </section>
+        )}
 
         <section className="lp-sec lp-sec-alt" id="instalar" aria-labelledby="t-instalar">
           <div className="lp-wrap lp-install">

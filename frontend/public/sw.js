@@ -2,7 +2,7 @@
 // Proporciona instalación PWA y caché básico de assets estáticos.
 // Los recordatorios de navegador se programan desde la app (App.jsx).
 
-const CACHE_NAME = 'ski-jornada-v1';
+const CACHE_NAME = 'ski-jornada-v2';
 const STATIC_ASSETS = ['/', '/src/main.jsx', '/src/App.jsx', '/src/App.css'];
 
 self.addEventListener('install', (event) => {

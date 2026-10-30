@@ -30,6 +30,7 @@ Navegador / PWA ──HTTPS──▶ Cloudflare Pages (frontend estático)
 | `ClaseDada` | Clase cargada: `fecha` (`YYYY-MM-DD`), `horas`, disciplina, N primas (m-n), notas del profesor y `marca` (`OK`/`REVISAR`) + `notaAdmin` puestas por administración |
 | `ConfirmacionClases` | Mes confirmado por el profesor + **tarifas congeladas** (`tarifaHora`, `primasJson`) |
 | `RevisionMes` | Revisión de administración sobre el mes de un profesor: `estado` (`APROBADO`, `DISCREPANCIA`, `CORRECCION`, `COMENTARIO`, `PENDIENTE`) y `nota` |
+| `AuditoriaLog` | Registro de acciones sensibles de administración (quién, qué, sobre quién, cuándo) |
 | `MagicLink` | Tokens de acceso (se guarda solo el hash SHA-256; vencen a los 15 min; un solo uso) |
 
 Las migraciones están en `backend/prisma/migrations/`. Se aplican con `npx prisma migrate deploy` (en producción, al arrancar).
@@ -52,6 +53,12 @@ Las migraciones están en `backend/prisma/migrations/`. Se aplican con `npx pris
    `horas × tarifaHora` (si el profesor tiene tarifa) `+ Σ primas` donde cada prima suma `importe × horas` (`POR_HORA`) o `importe` (`POR_CLASE`).
 4. Un mes sin confirmar usa tarifas **vigentes**; uno confirmado usa las **congeladas**. Cambiar importes después no altera meses cerrados.
 5. El admin puede ver el resumen por profesor, el detalle día a día (para cotejar con el sistema de reservas), exportar CSV/PDF y **reabrir** un mes.
+
+### Acceso y roles
+- Cada petición pasa por `auth`, que **contrasta el JWT con la base** (usuario activo y rol vigente; caché de 10 s que se invalida al editar): una baja o un cambio de rol surten efecto al instante.
+- `Profesor.esPrincipal` marca la cuenta principal (se fija en `bootstrap.js` con `ADMIN_EMAIL`): única que crea administradores y cambia roles. Siempre debe quedar al menos un administrador activo.
+- `Profesor.adheridoAt` se rellena al primer acceso con enlace (invitado → activo).
+- Pedir un enlace está limitado por email (1/min, 5/h) además de por IP. Ver `ACCESO-Y-ALTAS.md`.
 
 ### Revisión de administración
 1. El profesor confirma el mes → queda **por revisar** (si ya había una revisión, pasa a `PENDIENTE`).

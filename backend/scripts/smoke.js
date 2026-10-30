@@ -176,6 +176,39 @@ const pdf = nombre => {
   check('con el alias reconoce al instructor', cmp2.data.resultado[0].via === 'alias');
   check('el profesor no puede comparar → 403', (await http('POST', '/api/admin/comparativa', { token: prof, body: { mes: MES, filas: [] } })).status === 403);
 
+  seccion('6d. Acceso: lista de profesores, invitaciones, bajas y roles');
+  const emailTmp = `smoke.${Date.now()}@ejemplo.test`;
+  const imp = await http('POST', '/api/admin/profesores/importar', { token: admin, body: { filas: [
+    { nombre: 'Prueba', apellidos: 'Smoke', email: emailTmp, tipoJornada: 'COMPLETA', horasContrato: 30, tarifaHora: '17,5' },
+    { nombre: '', apellidos: 'Sin nombre', email: 'no-es-un-email' },
+  ], invitar: false } });
+  check('importa la lista: crea válidos y rechaza inválidos', imp.status === 200 && imp.data.creados === 1 && imp.data.errores.length === 1);
+  const listaUsr = (await http('GET', '/api/admin/profesores', { token: admin })).data;
+  const tmp = listaUsr.find(u => u.email === emailTmp);
+  check('el invitado figura como pendiente (aún no se adhirió)', tmp && tmp.adheridoAt === null && tmp.tarifaHora === 17.5);
+  check('reimportar es idempotente (actualiza)', (await http('POST', '/api/admin/profesores/importar', { token: admin, body: { filas: [{ nombre: 'Prueba', apellidos: 'Smoke 2', email: emailTmp }] } })).data.actualizados === 1);
+  check('la importación no toca a los administradores', (await http('POST', '/api/admin/profesores/importar', { token: admin, body: { filas: [{ nombre: 'X', email: 'admin@escuela.com' }] } })).data.errores.length === 1);
+  check('reenvía la invitación a un pendiente', (await http('POST', `/api/admin/profesores/${tmp.id}/invitar`, { token: admin })).status === 200);
+  check('el profesor no puede importar ni invitar → 403', (await http('POST', '/api/admin/profesores/importar', { token: prof, body: { filas: [{ nombre: 'a', email: 'a@b.co' }] } })).status === 403);
+  const adminMe = (await http('GET', '/api/admin/profesores', { token: admin })).data.find(u => u.email === (process.env.ADMIN_EMAIL || 'admin@escuela.com'));
+  check('no puede darse de baja a sí mismo', (await http('PUT', `/api/admin/profesores/${adminMe.id}`, { token: admin, body: { activo: false } })).status === 400);
+  check('la cuenta principal no se da de baja', (await http('DELETE', `/api/admin/profesores/${adminMe.id}`, { token: admin })).status === 400);
+  const p2 = listaUsr.find(u => u.email === (process.env.PROF2_EMAIL || 'laura.garcia@escuela.com'));
+  check('crea una cuenta de empresa (administración sin apellidos)', (await http('POST', '/api/admin/profesores', { token: admin, body: { nombre: 'Administración', apellidos: '', email: `empresa.${Date.now()}@ejemplo.test`, role: 'ADMIN' } })).status === 200);
+  check('un profesor sin apellidos se rechaza', (await http('POST', '/api/admin/profesores', { token: admin, body: { nombre: 'Solo', email: `x.${Date.now()}@ejemplo.test` } })).status === 400);
+  check('la cuenta principal cambia roles', (await http('PUT', `/api/admin/profesores/${p2.id}/rol`, { token: admin, body: { role: 'ADMIN' } })).status === 200);
+  check('…y puede revertirlos', (await http('PUT', `/api/admin/profesores/${p2.id}/rol`, { token: admin, body: { role: 'PROFESOR' } })).status === 200);
+  check('no se cambia el rol de la cuenta principal', (await http('PUT', `/api/admin/profesores/${adminMe.id}/rol`, { token: admin, body: { role: 'PROFESOR' } })).status === 400);
+  // Baja → la sesión del usuario deja de funcionar al instante
+  check('antes de la baja su sesión funciona', (await http('GET', '/api/clases/catalogo', { token: prof2 })).status === 200);
+  await http('PUT', `/api/admin/profesores/${p2.id}`, { token: admin, body: { activo: false } });
+  check('tras la baja su sesión se revoca de inmediato → 401', (await http('GET', '/api/clases/catalogo', { token: prof2 })).status === 401);
+  await http('PUT', `/api/admin/profesores/${p2.id}`, { token: admin, body: { activo: true } });
+  check('al reactivarlo recupera el acceso', (await http('GET', '/api/clases/catalogo', { token: prof2 })).status === 200);
+  const aud = (await http('GET', '/api/admin/auditoria?limit=50', { token: admin })).data;
+  check('queda registro de bajas, altas y cambios de rol', ['usuario.baja', 'usuario.alta', 'usuario.rol', 'usuario.importacion'].every(a => aud.some(x => x.accion === a)));
+  await http('PUT', `/api/admin/profesores/${tmp.id}`, { token: admin, body: { activo: false } });
+
   seccion('7. Limpieza');
   await http('POST', '/api/admin/clases/reabrir', { token: admin, body: { profesorId: me.id, mes: MES } });
   check('elimina la clase de prueba', (await http('DELETE', `/api/clases/${claseId}`, { token: prof })).status === 200);

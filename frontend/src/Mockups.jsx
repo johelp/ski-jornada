@@ -10,6 +10,7 @@ export const PANTALLAS = {
   admin: [
     { id: 'resumen', titulo: 'Resumen del mes', texto: 'Horas, importe y estado de cada profesor de un vistazo.' },
     { id: 'revision', titulo: 'Revisión', texto: 'Aprueba, marca discrepancias o pide correcciones con una nota.' },
+    { id: 'equipo', titulo: 'Equipo e invitaciones', texto: 'Importa la lista, invita a los pendientes y ve quién ya entró.' },
     { id: 'comparativa', titulo: 'Comparar con reservas', texto: 'Cruza el resumen de tu sistema de reservas con las horas cargadas.' },
   ],
 };
@@ -106,6 +107,17 @@ export function Pantalla({ id }) {
           <div className="mk-class"><b>27/10</b><span>Esquí · 3 h <i>Idioma</i></span><em className="ok">OK</em></div>
           <div className="mk-class warn"><b>28/10</b><span>Esquí · 2 h</span><em className="wa">Revisar</em></div>
           <div className="mk-class"><b>29/10</b><span>Esquí · 1 h <i>Repetida</i></span><em className="ok">OK</em></div>
+        </Escritorio>
+      );
+    case 'equipo':
+      return (
+        <Escritorio ruta="Usuarios">
+          <div className="mk-actions"><span>Importar lista</span><span>Invitar a los pendientes (3)</span></div>
+          <div className="mk-class"><b>CM</b><span>Carlos Martínez <i>profesor</i></span><em className="ok">Activo</em></div>
+          <div className="mk-class"><b>LG</b><span>Laura García <i>profesor</i></span><em className="ok">Activo</em></div>
+          <div className="mk-class warn"><b>SP</b><span>Sofía Pérez <i>profesor</i></span><em className="wa">Invitado · sin entrar</em></div>
+          <div className="mk-class warn"><b>MT</b><span>Miguel Torres <i>profesor</i></span><em className="wa">Invitado · sin entrar</em></div>
+          <div className="mk-class"><b>AD</b><span>Administración <i>cuenta de empresa</i></span><em className="ok">Principal</em></div>
         </Escritorio>
       );
     default:

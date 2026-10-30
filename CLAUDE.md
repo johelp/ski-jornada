@@ -54,6 +54,7 @@ Sin SMTP/Resend, el enlace mágico se imprime en la consola del backend (solo si
 - **Multi-despliegue:** una instancia por cliente (`docs/MULTI-DESPLIEGUE.md`, plantillas en `deploy/`). Marca por `VITE_APP_NAME`, `VITE_ESCUELA_LUGAR`, `VITE_COLOR_PRIMARIO`.
 - **Integraciones:** `/api/v1/*` con API keys (`apiAuth`), webhooks (`emitirEvento`), planning. Ver `docs/INTEGRACIONES.md`. **RGPD:** `docs/RGPD.md`; `DOCUMENTOS_HABILITADOS=false` apaga el módulo de documentos.
 - **Comparativa con reservas:** `docs/COMPARATIVA.md` (`/api/admin/comparativa`, alias de nombres, lector del CSV en `frontend/src/comparativa.js`). No versionar CSV con datos de personas.
+- **Acceso:** sin registro público; `auth` contrasta el JWT con la base (baja/rol inmediatos); `esPrincipal` crea administradores; `adheridoAt` marca el primer acceso; auditoría en `AuditoriaLog`. Ver `docs/ACCESO-Y-ALTAS.md`. **App móvil:** `docs/APP-MOVIL.md` (splash en `index.html`, `InstalarBanner`, atajos del manifest).
 - **Pruebas:** `node backend/scripts/smoke.js` (49 comprobaciones) antes de tocar auth, importes, revisión o documentos.
 
 ## Trampas conocidas

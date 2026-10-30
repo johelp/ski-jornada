@@ -242,3 +242,7 @@ body:has(.lp) { background: #fff; }
   .lp-show-vista.admin { justify-content: flex-start; }
 }
 @media (max-width: 899px) { .mk-body { grid-template-columns: 1fr; } .mk-side { display: none; } .mk-tiles.four { grid-template-columns: 1fr 1fr; } }
+
+.lp-center-block { text-align: center; display: grid; gap: 14px; justify-items: center; }
+.lp-center-block h2 { margin-bottom: 0 !important; }
+.lp-role .lp-hint { margin-top: -4px; }

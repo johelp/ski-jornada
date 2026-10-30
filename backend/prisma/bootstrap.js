@@ -22,11 +22,11 @@ async function main() {
   }
   await prisma.profesor.upsert({
     where: { email },
-    update: { role: 'ADMIN', activo: true },
+    update: { role: 'ADMIN', activo: true, esPrincipal: true },
     create: {
-      email, role: 'ADMIN',
+      email, role: 'ADMIN', esPrincipal: true,
       nombre: process.env.ADMIN_NOMBRE || 'Admin',
-      apellidos: process.env.ADMIN_APELLIDOS || 'Escuela',
+      apellidos: process.env.ADMIN_APELLIDOS ?? '', // puede ser una cuenta de empresa (sin apellidos)
       password: await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10), // se entra por enlace mágico
     },
   });
