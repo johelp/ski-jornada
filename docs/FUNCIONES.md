@@ -120,7 +120,8 @@ Estado: ✅ disponible · 🟡 disponible con límites · 🗺 planificado (ver 
 |---------|--------|---------|
 | Datos de la escuela y email de avisos | ✅ | Nombre, CIF, dirección, color |
 | Marca de la landing por despliegue | ✅ | Variables `VITE_*` (ver `MULTI-DESPLIEGUE.md`) |
-| WhatsApp (recordatorios) | 🟡 | Opcional, requiere instalar Baileys |
+| WhatsApp (avisos y recordatorios) | ✅ | Opcional: «Generar QR» en Integraciones activa un número emisor; solo a quien lo pide en su perfil. No es la API oficial (ver `INTEGRACIONES.md`) |
+| Webhooks y claves de API con casos de uso | ✅ | Pestaña *Ideas*, ejemplo de uso y eventos de solicitudes; protección contra SSRF |
 
 ## 4. Transversal
 

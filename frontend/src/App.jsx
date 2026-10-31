@@ -332,7 +332,6 @@ function App() {
   const [documentosAdmin, setDocumentosAdmin]       = useState([]);
   const [docFiltro, setDocFiltro]                   = useState('todos');
   const [pdfIncluirExtras, setPdfIncluirExtras]     = useState(false);
-  const [whatsappStatus, setWhatsappStatus]         = useState(null);
   const [presencia, setPresencia]                   = useState(null);
   const [notificaciones, setNotificaciones]         = useState([]);
   const [notifPanel, setNotifPanel]                 = useState(false);
@@ -557,7 +556,6 @@ function App() {
       if (user.role === 'ADMIN') {
         cargarAdminSolicitudes(); cargarProfesores(); cargarZonasAdmin(); cargarDocumentosAdmin(); cargarResumenAdmin();
         cargarNotifAdmin();
-        api.get('/api/whatsapp/status', { headers: h() }).then(r => setWhatsappStatus(r.data)).catch(() => {});
       }
     }
   }, [token]);
@@ -2166,22 +2164,6 @@ function App() {
               ))}
             </div>
 
-            {/* Estado WhatsApp */}
-            {whatsappStatus && (
-              <div className="card">
-                <h2>WhatsApp Baileys</h2>
-                {!whatsappStatus.enabled ? (
-                  <p style={{ color: 'var(--text-muted)' }}>WhatsApp deshabilitado. Añade <code>WHATSAPP_ENABLED=true</code> al .env e instala: <code>npm install @whiskeysockets/baileys</code></p>
-                ) : whatsappStatus.connected ? (
-                  <p style={{ color: 'var(--success)' }}>✓ Conectado — recordatorios automáticos activos</p>
-                ) : (
-                  <div>
-                    <p style={{ color: 'var(--warning)' }}>⚠ No conectado. Escanea el QR desde tu teléfono:</p>
-                    <a href={`${API_BASE}/api/whatsapp/qr`} target="_blank" rel="noreferrer" className="btn-sm">Ver QR de conexión →</a>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         )}
 
@@ -2424,6 +2406,7 @@ function App() {
                     apellidos: user?.apellidos || '',
                     telefono: user?.telefono || '',
                     horaRecordatorio: user?.horaRecordatorio || '17:00',
+                    avisosWhatsapp: !!user?.avisosWhatsapp,
                   })}>✏ Editar</button>
                 )}
               </div>
@@ -2444,6 +2427,12 @@ function App() {
                       <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Recibirás una notificación a esta hora si sigues fichado</small>
                     </div>
                   </div>
+                  {configEscuela?.whatsappActivo && (
+                    <label className="opcion" style={{ marginBottom: 12 }}>
+                      <input type="checkbox" checked={!!perfilEdit.avisosWhatsapp} onChange={e => setPerfilEdit({ ...perfilEdit, avisosWhatsapp: e.target.checked })} />
+                      <span><strong>Recibir avisos por WhatsApp</strong><small>Respuestas a tus solicitudes, revisión de horas y recordatorios. Necesita tu teléfono con prefijo. Puedes desactivarlo cuando quieras.</small></span>
+                    </label>
+                  )}
                   <div className="action-buttons">
                     <button className="btn-approve" onClick={guardarPerfil} disabled={cargando}>Guardar cambios</button>
                     <button className="btn-ghost" onClick={() => setPerfilEdit(null)}>Cancelar</button>
@@ -2454,6 +2443,7 @@ function App() {
                   <div className="perfil-info-row"><span>Nombre completo</span><strong>{user?.nombre} {user?.apellidos}</strong></div>
                   <div className="perfil-info-row"><span>Email</span><strong>{user?.email}</strong></div>
                   <div className="perfil-info-row"><span>Teléfono WhatsApp</span><strong>{user?.telefono || <em style={{ color: 'var(--text-muted)' }}>No configurado</em>}</strong></div>
+                  {configEscuela?.whatsappActivo && <div className="perfil-info-row"><span>Avisos por WhatsApp</span><strong>{user?.avisosWhatsapp ? '✓ Activados' : 'Desactivados'}</strong></div>}
                   <div className="perfil-info-row"><span>Recordatorio de salida</span><strong>{user?.horaRecordatorio || '17:00'}</strong></div>
                   <div className="perfil-info-row"><span>Notificaciones</span>
                     <strong>

@@ -294,7 +294,7 @@ const firmarSesion = u => jwt.sign(
 const perfilSesion = u => ({
   id: u.id, nombre: u.nombre, apellidos: u.apellidos, email: u.email,
   role: u.role, tipoJornada: u.tipoJornada, horasContrato: u.horasContrato,
-  telefono: u.telefono, horaRecordatorio: u.horaRecordatorio, tarifaHora: u.tarifaHora, esPrincipal: u.esPrincipal,
+  telefono: u.telefono, horaRecordatorio: u.horaRecordatorio, tarifaHora: u.tarifaHora, esPrincipal: u.esPrincipal, avisosWhatsapp: u.avisosWhatsapp,
 });
 
 // Crea el enlace y lo envía por email. `invitacion` cambia el texto para altas nuevas.
@@ -351,7 +351,7 @@ setInterval(() => { const l = Date.now() - 3600000; for (const [k, v] of _pedido
 app.post('/api/auth/magic-link', enlaceLimiter, async (req, res) => {
   try {
     const email = String(req.body.email || '').toLowerCase().trim();
-    if (!email) return res.status(400).json({ error: 'Ingresá tu email' });
+    if (!email) return res.status(400).json({ error: 'Introduce tu email' });
     const u = await prisma.profesor.findUnique({ where: { email } });
     if (u && u.activo && permitirEnlace(email)) enviarMagicLink(u).catch(console.error);
     res.json({ success: true });
@@ -365,11 +365,11 @@ app.post('/api/auth/magic-link/verificar', verificarLimiter, async (req, res) =>
     if (!token) return res.status(400).json({ error: 'Enlace inválido' });
     const ml = await prisma.magicLink.findUnique({ where: { tokenHash: hashToken(token) }, include: { profesor: true } });
     if (!ml || ml.expiraAt < new Date() || !ml.profesor.activo) {
-      return res.status(401).json({ error: 'El enlace venció o ya fue usado. Pedí uno nuevo.' });
+      return res.status(401).json({ error: 'El enlace venció o ya fue usado. Pide uno nuevo.' });
     }
     // Consumo atómico: solo una petición puede borrarlo
     const borrado = await prisma.magicLink.deleteMany({ where: { id: ml.id } });
-    if (borrado.count !== 1) return res.status(401).json({ error: 'El enlace venció o ya fue usado. Pedí uno nuevo.' });
+    if (borrado.count !== 1) return res.status(401).json({ error: 'El enlace venció o ya fue usado. Pide uno nuevo.' });
     res.json(await abrirSesion(ml.profesor));
   } catch (err) { console.error(err); res.status(500).json({ error: 'Error interno del servidor' }); }
 });
@@ -424,7 +424,7 @@ app.post('/api/auth/renovar', auth, async (req, res) => {
 
 // Login con contraseña: solo para desarrollo/demo (PASSWORD_LOGIN=true). En producción se entra con enlace mágico.
 app.post('/api/auth/login', authLimiter, async (req, res) => {
-  if (process.env.PASSWORD_LOGIN !== 'true') return res.status(404).json({ error: 'Usá el enlace de acceso por email' });
+  if (process.env.PASSWORD_LOGIN !== 'true') return res.status(404).json({ error: 'Usa el enlace de acceso por email' });
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos' });
@@ -461,24 +461,29 @@ app.get('/api/auth/me', auth, async (req, res) => {
     res.json({
       id: u.id, nombre: u.nombre, apellidos: u.apellidos, email: u.email,
       role: u.role, tipoJornada: u.tipoJornada, horasContrato: u.horasContrato,
-      telefono: u.telefono, horaRecordatorio: u.horaRecordatorio,
+      telefono: u.telefono, horaRecordatorio: u.horaRecordatorio, avisosWhatsapp: u.avisosWhatsapp,
     });
   } catch (err) { res.status(500).json({ error: 'Error obteniendo perfil' }); }
 });
 
 app.put('/api/auth/me', auth, async (req, res) => {
   try {
-    const { nombre, apellidos, telefono, horaRecordatorio } = req.body;
+    const { nombre, apellidos, telefono, horaRecordatorio, avisosWhatsapp } = req.body;
     const data = {};
     if (nombre            !== undefined) data.nombre           = nombre;
     if (apellidos         !== undefined) data.apellidos        = apellidos;
     if (telefono          !== undefined) data.telefono         = telefono || null;
+    if (avisosWhatsapp    !== undefined) data.avisosWhatsapp   = !!avisosWhatsapp;
     if (horaRecordatorio  !== undefined) data.horaRecordatorio = horaRecordatorio;
+    if (data.avisosWhatsapp) {
+      const tel = data.telefono !== undefined ? data.telefono : (await prisma.profesor.findUnique({ where: { id: req.user.userId }, select: { telefono: true } }))?.telefono;
+      if (!tel || !whatsapp.normalizar(tel)) return res.status(400).json({ error: 'Para recibir avisos por WhatsApp indica tu teléfono con prefijo (ej. +34612345678)' });
+    }
     const u = await prisma.profesor.update({ where: { id: req.user.userId }, data });
     res.json({
       id: u.id, nombre: u.nombre, apellidos: u.apellidos, email: u.email,
       role: u.role, tipoJornada: u.tipoJornada, horasContrato: u.horasContrato,
-      telefono: u.telefono, horaRecordatorio: u.horaRecordatorio,
+      telefono: u.telefono, horaRecordatorio: u.horaRecordatorio, avisosWhatsapp: u.avisosWhatsapp,
     });
   } catch (err) { res.status(500).json({ error: 'Error actualizando perfil' }); }
 });
@@ -685,6 +690,10 @@ app.get('/api/fichaje/historial', auth, async (req, res) => {
 app.post('/api/libres/solicitar', auth, async (req, res) => {
   try {
     const { fechaInicio, fechaFin, motivo, comentario } = req.body;
+    const ini = new Date(fechaInicio), fin = new Date(fechaFin);
+    if (isNaN(ini) || isNaN(fin)) return res.status(400).json({ error: 'Indica fechas válidas' });
+    if (fin < ini) return res.status(400).json({ error: 'La fecha final no puede ser anterior a la inicial' });
+    if (!String(motivo || '').trim()) return res.status(400).json({ error: 'Indica el motivo' });
     const sol = await prisma.solicitudLibre.create({
       data: {
         profesorId: req.user.userId,
@@ -692,6 +701,7 @@ app.post('/api/libres/solicitar', auth, async (req, res) => {
         motivo, comentario: comentario || '', estado: 'PENDIENTE',
       },
     });
+    emitirEvento('solicitud.creada', { id: sol.id, profesorId: sol.profesorId, fechaInicio: sol.fechaInicio, fechaFin: sol.fechaFin, motivo: sol.motivo });
     res.json({ success: true, solicitud: sol });
   } catch (err) {
     console.error(err);
@@ -735,6 +745,8 @@ app.post('/api/admin/solicitudes/:id/responder', auth, adminOnly, async (req, re
         fechaRespuesta: new Date(),
       },
     });
+    emitirEvento('solicitud.respondida', { id: sol.id, profesorId: sol.profesorId, estado: sol.estado, observacion: sol.observacion });
+    avisarWhatsapp([sol.profesorId], `tu solicitud de días libres fue ${req.body.aprobado ? 'APROBADA ✅' : 'RECHAZADA ❌'}.${req.body.observacion ? ` ${req.body.observacion}` : ''}`);
     res.json({ success: true, solicitud: sol });
   } catch (err) { res.status(500).json({ error: 'Error respondiendo solicitud' }); }
 });
@@ -1476,6 +1488,7 @@ app.post('/api/admin/notificaciones', auth, adminOnly, async (req, res) => {
     await prisma.notificacion.createMany({
       data: destinatarios.map(p => ({ titulo, mensaje, tipo, profesorId: p.id, enviadaPorId: req.user.userId })),
     });
+    avisarWhatsapp(destinatarios.map(p => p.id), `${titulo}. ${mensaje}`);
     res.json({ success: true, enviadas: destinatarios.length });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Error enviando notificación' }); }
 });
@@ -1510,7 +1523,7 @@ async function getConfig() {
 }
 
 app.get('/api/config', async (req, res) => {
-  try { res.json({ ...(await getConfig()), documentosHabilitados: DOCUMENTOS_ON }); } catch (err) { res.status(500).json({ error: 'Error' }); }
+  try { res.json({ ...(await getConfig()), documentosHabilitados: DOCUMENTOS_ON, whatsappActivo: WHATSAPP_PERMITIDO && whatsapp.conectado() }); } catch (err) { res.status(500).json({ error: 'Error' }); }
 });
 
 app.put('/api/admin/config', auth, adminOnly, async (req, res) => {
@@ -1614,7 +1627,7 @@ app.post('/api/clases', auth, async (req, res) => {
     const v = await validarClase(req.body);
     if (v.error) return res.status(400).json({ error: v.error });
     if (await mesConfirmado(req.user.userId, v.data.fecha.slice(0, 7)))
-      return res.status(400).json({ error: 'Ese mes ya está confirmado. Pedí al administrador que lo reabra.' });
+      return res.status(400).json({ error: 'Ese mes ya está confirmado. Pide al administrador que lo reabra.' });
     const c = await prisma.claseDada.create({
       data: { ...v.data, profesorId: req.user.userId, primas: { connect: v.primaIds.map(id => ({ id })) } },
       include: incluirClase,
@@ -1810,7 +1823,7 @@ app.post('/api/admin/clases/revision', auth, adminOnly, async (req, res) => {
     if (!profesorId || !MES_RE.test(mes || '')) return res.status(400).json({ error: 'Datos inválidos' });
     if (!ESTADOS_REVISION.includes(estado)) return res.status(400).json({ error: 'Estado de revisión inválido' });
     if (['DISCREPANCIA', 'CORRECCION', 'COMENTARIO'].includes(estado) && !nota)
-      return res.status(400).json({ error: 'Escribí una nota para el profesor' });
+      return res.status(400).json({ error: 'Escribe una nota para el profesor' });
     const prof = await prisma.profesor.findUnique({ where: { id: profesorId } });
     if (!prof) return res.status(404).json({ error: 'Profesor no encontrado' });
 
@@ -1831,6 +1844,7 @@ app.post('/api/admin/clases/revision', auth, adminOnly, async (req, res) => {
       mensaje: nota || 'El administrador revisó tus horas y están correctas.',
       tipo: estado === 'APROBADO' ? 'INFO' : 'AVISO', profesorId, enviadaPorId: req.user.userId,
     } });
+    avisarWhatsapp([profesorId], `${titulos[estado]} (${mes}).${nota ? ` ${nota}` : ''}`);
     enviarEmail(prof.email, `${titulos[estado]} (${mes})`,
       `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
         <h2 style="color:#0f4c81">⛷️ ${titulos[estado]} — ${mes}</h2>
@@ -1864,6 +1878,7 @@ app.post('/api/admin/clases/reabrir', auth, adminOnly, async (req, res) => {
     await prisma.notificacion.create({ data: {
       titulo: 'Mes reabierto', mensaje: `El administrador reabrió ${mes} para que puedas corregir tus clases.`,
       tipo: 'AVISO', profesorId, enviadaPorId: req.user.userId } });
+    avisarWhatsapp([profesorId], `administración reabrió ${mes} para que corrijas tus clases.`);
     emitirEvento('clases.mes_reabierto', { profesorId, mes });
     res.json({ success: true });
   } catch { res.status(500).json({ error: 'Error reabriendo el mes' }); }
@@ -1892,15 +1907,33 @@ function apiAuth(scope) {
 app.use('/api/v1', rateLimit({ windowMs: 60 * 1000, max: 120, message: { error: 'Demasiadas peticiones' }, standardHeaders: true, legacyHeaders: false }));
 
 // Webhooks salientes firmados con HMAC-SHA256 (cabecera X-SkiJornada-Signature: sha256=<hex>)
-const EVENTOS_WEBHOOK = ['clases.mes_confirmado', 'clases.revision', 'clases.mes_reabierto', 'documento.firmado', 'planning.importado'];
+const EVENTOS_WEBHOOK = ['clases.mes_confirmado', 'clases.revision', 'clases.mes_reabierto', 'solicitud.creada', 'solicitud.respondida', 'documento.firmado', 'planning.importado'];
+
+// Un webhook nunca debe poder llamar a la red interna (SSRF): se resuelve el host y se rechazan IP privadas
+const dns = require('dns').promises;
+const net = require('net');
+function ipPrivada(ip) {
+  if (net.isIPv6(ip)) { const l = ip.toLowerCase(); return l === '::1' || l.startsWith('fc') || l.startsWith('fd') || l.startsWith('fe80') || l.startsWith('::ffff:') && ipPrivada(l.slice(7)); }
+  const [a, b] = ip.split('.').map(Number);
+  return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
+}
+async function destinoPublico(url) {
+  const u = new URL(url);
+  if (process.env.NODE_ENV !== 'production' && ['localhost', '127.0.0.1'].includes(u.hostname)) return true;
+  const host = u.hostname.replace(/^\[|\]$/g, '');
+  if (net.isIP(host)) return !ipPrivada(host);
+  const dirs = await dns.lookup(host, { all: true });
+  return dirs.length > 0 && dirs.every(d => !ipPrivada(d.address));
+}
 
 async function enviarWebhook(w, evento, datos) {
   const body = JSON.stringify({ evento, ocurridoAt: new Date().toISOString(), datos });
   const firma = crypto.createHmac('sha256', w.secret).update(body).digest('hex');
   let estado = 0;
   try {
+    if (!(await destinoPublico(w.url))) throw new Error('destino no permitido');
     const r = await fetch(w.url, {
-      method: 'POST',
+      method: 'POST', redirect: 'manual',
       headers: { 'Content-Type': 'application/json', 'X-SkiJornada-Event': evento, 'X-SkiJornada-Signature': `sha256=${firma}` },
       body, signal: AbortSignal.timeout(5000),
     });
@@ -1935,8 +1968,8 @@ app.post('/api/admin/integraciones/keys', auth, adminOnly, async (req, res) => {
   try {
     const nombre = String(req.body.nombre || '').trim().slice(0, 80);
     const scopes = (Array.isArray(req.body.scopes) ? req.body.scopes : ['lectura']).filter(s => SCOPES_API.includes(s));
-    if (!nombre) return res.status(400).json({ error: 'Ponele un nombre a la key' });
-    if (!scopes.length) return res.status(400).json({ error: 'Elegí al menos un permiso' });
+    if (!nombre) return res.status(400).json({ error: 'Pon un nombre a la clave' });
+    if (!scopes.length) return res.status(400).json({ error: 'Elige al menos un permiso' });
     const key = `sj_${crypto.randomBytes(24).toString('base64url')}`;
     const k = await prisma.apiKey.create({ data: { nombre, prefijo: key.slice(0, 10), keyHash: hashKey(key), scopes: scopes.join(','), creadaPorId: req.user.userId } });
     // La key en claro se muestra UNA sola vez
@@ -1962,6 +1995,7 @@ app.post('/api/admin/integraciones/webhooks', auth, adminOnly, async (req, res) 
   try {
     const url = String(req.body.url || '').trim();
     if (!urlWebhookValida(url)) return res.status(400).json({ error: 'La URL debe ser https' });
+    if (!(await destinoPublico(url).catch(() => false))) return res.status(400).json({ error: 'La URL debe apuntar a un servidor público (no a una red interna)' });
     const eventos = Array.isArray(req.body.eventos) && req.body.eventos.length
       ? req.body.eventos.filter(e => EVENTOS_WEBHOOK.includes(e)) : ['*'];
     if (!eventos.length) return res.status(400).json({ error: 'Eventos inválidos' });
@@ -1988,7 +2022,7 @@ app.post('/api/admin/integraciones/webhooks/:id/probar', auth, adminOnly, async 
 
 // --- Planning (clases planificadas por el sistema de reservas) ---
 async function importarPlanning(items, { reemplazarMes, fuente = 'API' } = {}) {
-  if (!Array.isArray(items) || !items.length) return { error: 'Enviá una lista "items" con al menos una fila' };
+  if (!Array.isArray(items) || !items.length) return { error: 'Envía una lista "items" con al menos una fila' };
   if (items.length > 5000) return { error: 'Máximo 5000 filas por envío' };
   const emails = [...new Set(items.map(i => String(i.email || '').toLowerCase().trim()).filter(Boolean))];
   const profs = await prisma.profesor.findMany({ where: { email: { in: emails } }, select: { id: true, email: true } });
@@ -2359,67 +2393,89 @@ app.get('/api/admin/legal/aceptaciones', auth, adminOnly, async (req, res) => {
   } catch { res.status(500).json({ error: 'Error' }); }
 });
 
-// ============ WHATSAPP (Baileys) ============
-// Carga condicional — requiere WHATSAPP_ENABLED=true en .env y ejecutar: npm install @whiskeysockets/baileys
-let whatsapp = null;
-if (process.env.WHATSAPP_ENABLED === 'true') {
+// ============ WHATSAPP (opcional, Baileys) ============
+// Desactivado por defecto. Administración lo activa desde Integraciones → WhatsApp («Generar QR»).
+// WHATSAPP_ENABLED=false lo oculta por completo. Solo se escribe a quien lo pidió (avisosWhatsapp) y tiene teléfono.
+const whatsapp = require('./whatsapp');
+const WHATSAPP_PERMITIDO = process.env.WHATSAPP_ENABLED !== 'false';
+whatsapp.configurar(process.env.WHATSAPP_DIR || path.join(path.dirname(rutaBaseDatos()), 'whatsapp'));
+if (WHATSAPP_PERMITIDO) whatsapp.arrancarSiActivo().catch(e => console.error('WhatsApp:', e.message));
+
+const whatsappOn = (req, res, next) => (WHATSAPP_PERMITIDO ? next() : res.status(404).json({ error: 'WhatsApp no está habilitado en este despliegue' }));
+
+app.get('/api/admin/whatsapp', auth, adminOnly, async (req, res) => {
+  if (!WHATSAPP_PERMITIDO) return res.json({ permitido: false, estado: 'deshabilitado' });
+  const [est, optin] = await Promise.all([
+    whatsapp.estadoActual(),
+    prisma.profesor.count({ where: { activo: true, avisosWhatsapp: true, NOT: { telefono: null } } }),
+  ]);
+  res.json({ permitido: true, ...est, destinatarios: optin });
+});
+app.post('/api/admin/whatsapp/iniciar', auth, adminOnly, whatsappOn, async (req, res) => {
+  const est = await whatsapp.iniciar();
+  await auditar(req, 'whatsapp.activar', null, {});
+  res.json({ permitido: true, ...est });
+});
+app.post('/api/admin/whatsapp/detener', auth, adminOnly, whatsappOn, async (req, res) => {
+  const est = await whatsapp.detener();
+  await auditar(req, 'whatsapp.desactivar', null, {});
+  res.json({ permitido: true, ...est });
+});
+app.post('/api/admin/whatsapp/desvincular', auth, adminOnly, whatsappOn, async (req, res) => {
+  const est = await whatsapp.desvincular();
+  await auditar(req, 'whatsapp.desvincular', null, {});
+  res.json({ permitido: true, ...est });
+});
+app.post('/api/admin/whatsapp/probar', auth, adminOnly, whatsappOn, async (req, res) => {
   try {
-    whatsapp = require('./whatsapp');
-    whatsapp.init().catch(console.error);
-    console.log('📱 WhatsApp Baileys: módulo cargado');
-  } catch (e) {
-    console.warn('⚠️  WhatsApp Baileys no disponible:', e.message);
-  }
+    const tel = req.body.telefono || (await prisma.profesor.findUnique({ where: { id: req.user.userId }, select: { telefono: true } }))?.telefono;
+    if (!tel) return res.status(400).json({ error: 'Indica un teléfono o completa el tuyo en Mi perfil' });
+    await whatsapp.enviar(tel, '⛷️ Mensaje de prueba de Ski Jornada. Si lo lees, WhatsApp está bien conectado.');
+    res.json({ success: true });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// Avisa por WhatsApp a quien lo activó en su perfil (sin bloquear ni fallar la operación principal)
+async function avisarWhatsapp(profesorIds, texto) {
+  try {
+    if (!WHATSAPP_PERMITIDO || !whatsapp.conectado()) return 0;
+    const dest = await prisma.profesor.findMany({
+      where: { id: { in: profesorIds }, activo: true, avisosWhatsapp: true, NOT: { telefono: null } },
+      select: { nombre: true, telefono: true },
+    });
+    dest.forEach(d => whatsapp.enviar(d.telefono, `⛷️ *${process.env.VITE_APP_NAME || 'Ski Jornada'}* — Hola ${d.nombre}: ${texto}`).catch(() => {}));
+    return dest.length;
+  } catch { return 0; }
 }
 
-app.get('/api/whatsapp/status', auth, adminOnly, (req, res) => {
-  if (!whatsapp) return res.json({ enabled: false, status: 'disabled' });
-  res.json({ enabled: true, ...whatsapp.getStatus() });
-});
-
-app.get('/api/whatsapp/qr', auth, adminOnly, (req, res) => {
-  if (!whatsapp) return res.status(503).json({ error: 'WhatsApp no habilitado' });
-  const qr = whatsapp.getQR();
-  if (!qr) return res.json({ connected: true });
-  res.json({ qr });
-});
-
-app.post('/api/whatsapp/test', auth, adminOnly, async (req, res) => {
-  if (!whatsapp) return res.status(503).json({ error: 'WhatsApp no habilitado' });
-  const { telefono, mensaje } = req.body;
-  try {
-    await whatsapp.enviarMensaje(telefono, mensaje || 'Test desde Ski Jornada ⛷️');
-    res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
 // ============ RECORDATORIOS AUTOMÁTICOS ============
-// Comprueba cada minuto si algún empleado necesita recordatorio de desfichaje
+// Cada minuto (hora de Madrid): recordatorio de salida a quien está fichado y, a fin de mes, de confirmar horas.
+const claveMes = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+const recordadoMes = new Set();
 setInterval(async () => {
   try {
+    if (!WHATSAPP_PERMITIDO || !whatsapp.conectado()) return;
     const ahora = new Date();
-    const hh = ahora.getHours();
-    const mm = ahora.getMinutes();
+    const hh = ahora.getHours(), mm = ahora.getMinutes();
+    const inicioDia = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
 
-    const profesores = await prisma.profesor.findMany({
-      where: { activo: true, NOT: { telefono: null } },
-    });
-
+    const profesores = await prisma.profesor.findMany({ where: { activo: true, avisosWhatsapp: true, NOT: { telefono: null } } });
     for (const p of profesores) {
       const [rh, rm] = (p.horaRecordatorio || '17:00').split(':').map(Number);
       if (hh !== rh || mm !== rm) continue;
+      const ultReg = await prisma.registroJornada.findFirst({ where: { profesorId: p.id, timestamp: { gte: inicioDia } }, orderBy: { timestamp: 'desc' } });
+      if (ultReg?.tipo === 'ENTRADA') avisarWhatsapp([p.id], `son las ${p.horaRecordatorio} y sigues fichado. Recuerda fichar la salida.`);
+    }
 
-      const inicioDia = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
-      const finDia    = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 23, 59, 59);
-      const ultReg    = await prisma.registroJornada.findFirst({
-        where: { profesorId: p.id, timestamp: { gte: inicioDia, lte: finDia } },
-        orderBy: { timestamp: 'desc' },
-      });
-
-      if (ultReg?.tipo === 'ENTRADA' && whatsapp?.getStatus().connected && p.telefono) {
-        const msg = `⛷️ *Ski Jornada* — Hola ${p.nombre}, son las ${p.horaRecordatorio}. Recuerda fichar la salida.`;
-        whatsapp.enviarMensaje(p.telefono, msg).catch(() => {});
-      }
+    // Últimos 2 días del mes, a las 10:00: quien tiene clases cargadas y no confirmó
+    const ultimoDia = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0).getDate();
+    const clave = `${claveMes(ahora)}-${ahora.getDate()}`;
+    if (hh === 10 && mm === 0 && ahora.getDate() >= ultimoDia - 1 && !recordadoMes.has(clave)) {
+      recordadoMes.add(clave);
+      const mes = claveMes(ahora);
+      const conClases = await prisma.claseDada.findMany({ where: { fecha: { startsWith: mes } }, distinct: ['profesorId'], select: { profesorId: true } });
+      const confirmados = new Set((await prisma.confirmacionClases.findMany({ where: { mes }, select: { profesorId: true } })).map(c => c.profesorId));
+      avisarWhatsapp(conClases.map(c => c.profesorId).filter(id => !confirmados.has(id)), `el mes termina: revisa y confirma tus horas de clases de ${mes}.`);
     }
   } catch {}
 }, 60 * 1000);
@@ -2443,7 +2499,7 @@ const servidor = app.listen(PORT, () => {
   console.log(`  Ski Jornada API — http://localhost:${PORT}`);
   if (process.env.PASSWORD_LOGIN === 'true') console.log('  Demo (PASSWORD_LOGIN): admin@escuela.com / profesor@escuela.com · ski123');
   console.log(RESEND_KEY ? '  📧 Email: Resend' : SMTP_OK ? '  📧 Email: SMTP' : '  📧 Email: modo consola');
-  console.log(`  📱 WhatsApp: ${process.env.WHATSAPP_ENABLED === 'true' ? 'habilitado' : 'deshabilitado'}`);
+  console.log(`  📱 WhatsApp: ${WHATSAPP_PERMITIDO ? 'disponible (se activa desde Integraciones)' : 'deshabilitado'}`);
   console.log('========================================');
 });
 

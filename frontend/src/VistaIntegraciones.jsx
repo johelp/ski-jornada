@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Icono from './Iconos';
 
 const SCOPES = [
@@ -10,8 +10,123 @@ const fechaHora = f => (f ? new Date(f).toLocaleString('es-ES', { day: '2-digit'
 const mesActual = () => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; };
 
 // Gestión de integraciones: API keys, webhooks e importación del planning (CSV)
+const IDEAS = [
+  { icono: '📅', titulo: 'Sistema de reservas → planning', desc: 'El sistema de reservas envía cada día las clases planificadas. En el detalle de cada profesor ves planificado frente a cargado y las diferencias.', como: 'Clave con permiso «Planning» + POST /api/v1/planning, o CSV a mano.', tab: 'planning' },
+  { icono: '🧾', titulo: 'Gestoría y nóminas', desc: 'La gestoría (o tu hoja de cálculo) descarga cada mes horas, primas e importes ya aprobados, sin pedirlos por correo.', como: 'Clave «Lectura» + «Económico» + GET /api/v1/informe/AAAA-MM.', tab: 'keys' },
+  { icono: '🔔', titulo: 'Avisos en Slack, Teams o email', desc: 'Cuando un profesor confirma el mes o pide días libres, llega un aviso al canal de administración. Se monta sin programar con Make, Zapier o n8n.', como: 'Webhook con los eventos «clases.mes_confirmado» y «solicitud.creada».', tab: 'hooks' },
+  { icono: '📊', titulo: 'Hoja de cálculo o panel propio', desc: 'Cada mes aprobado se añade solo a una hoja de Google o a un panel de BI para seguir el coste de personal por temporada.', como: 'Webhook «clases.revision» → Make/Zapier → Google Sheets.', tab: 'hooks' },
+  { icono: '💬', titulo: 'WhatsApp al equipo', desc: 'Respuesta a las solicitudes, revisión de horas, recordatorio de salida y de confirmar el mes, solo a quien lo activó en su perfil.', como: 'Desde esta pantalla: «Generar QR» con un número dedicado.', tab: 'whatsapp' },
+];
+
+function Ideas({ ir }) {
+  return (
+    <div className="card">
+      <h2>Qué puedes conectar</h2>
+      <p className="form-hint">Todo es opcional: la plataforma funciona sola. Estas son las conexiones más útiles para una escuela.</p>
+      <div className="catalogo-lista">
+        {IDEAS.map(i => (
+          <div key={i.titulo} className="item-integracion">
+            <div><strong>{i.icono} {i.titulo}</strong><small>{i.desc}</small><small><em>{i.como}</em></small></div>
+            <button className="btn-sm" onClick={() => ir(i.tab)}>Configurar</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const ESTADO_WA = {
+  no_instalado: ['Módulo no instalado', 'El servidor no incluye el módulo de WhatsApp. Contacta con quien administra la instalación.'],
+  detenido: ['Desactivado', 'No se envía ningún mensaje. Pulsa «Generar QR» para activarlo.'],
+  iniciando: ['Iniciando…', 'Conectando con WhatsApp.'],
+  esperando_qr: ['Esperando el escaneo', 'En el móvil del número que enviará los mensajes: WhatsApp → Ajustes → Dispositivos vinculados → Vincular un dispositivo.'],
+  conectado: ['Conectado', 'Listo para enviar avisos.'],
+  error: ['Error', 'No se pudo conectar. Inténtalo de nuevo.'],
+};
+
+function WhatsApp({ api, h, toast$ }) {
+  const [wa, setWa] = useState(null);
+  const [tel, setTel] = useState('');
+  const [ocupado, setOcupado] = useState(false);
+  const timer = useRef(null);
+
+  const cargar = useCallback(async () => {
+    try { const r = await api.get('/api/admin/whatsapp', { headers: h() }); setWa(r.data); return r.data; } catch { return null; }
+  }, []);
+  useEffect(() => { cargar(); }, [cargar]);
+  // Mientras se conecta o espera el QR, se consulta cada 3 s (el QR de WhatsApp se renueva solo)
+  useEffect(() => {
+    clearInterval(timer.current);
+    if (wa && ['iniciando', 'esperando_qr'].includes(wa.estado)) timer.current = setInterval(cargar, 3000);
+    return () => clearInterval(timer.current);
+  }, [wa?.estado]);
+
+  const accion = async (ruta, ok) => {
+    setOcupado(true);
+    try { const r = await api.post(`/api/admin/whatsapp/${ruta}`, null, { headers: h() }); setWa(w => ({ ...w, ...r.data })); if (ok) toast$(ok, 'success'); }
+    catch (e) { toast$(e.response?.data?.error || 'Error', 'error'); }
+    finally { setOcupado(false); }
+  };
+  const probar = async () => {
+    setOcupado(true);
+    try { await api.post('/api/admin/whatsapp/probar', { telefono: tel || undefined }, { headers: h() }); toast$('Mensaje de prueba enviado ✓', 'success'); }
+    catch (e) { toast$(e.response?.data?.error || 'No se pudo enviar', 'error'); }
+    finally { setOcupado(false); }
+  };
+
+  if (!wa) return <div className="card"><div className="empty-state"><p>Cargando…</p></div></div>;
+  if (wa.permitido === false) return <div className="card"><h2>WhatsApp</h2><p className="form-hint">Este despliegue no tiene WhatsApp habilitado.</p></div>;
+  const [titulo, ayuda] = ESTADO_WA[wa.estado] || ESTADO_WA.detenido;
+  const activo = ['iniciando', 'esperando_qr', 'conectado'].includes(wa.estado);
+
+  return (
+    <>
+      <div className="card">
+        <h2>WhatsApp <span className={`estado-badge ${wa.estado === 'conectado' ? 'aprobado' : wa.estado === 'error' ? 'rechazado' : 'pendiente'}`}>{titulo}</span></h2>
+        <p className="form-hint">{wa.detalle || ayuda}</p>
+        {wa.estado === 'conectado' && <p>Número vinculado: <strong>{wa.numero ? `+${wa.numero}` : '—'}</strong> · Hoy: {wa.enviadosHoy}/{wa.maxDia} mensajes · Reciben avisos: <strong>{wa.destinatarios}</strong> profesor{wa.destinatarios === 1 ? '' : 'es'}</p>}
+        {wa.estado === 'esperando_qr' && (
+          <div className="qr-whatsapp">
+            {wa.qr ? <img src={wa.qr} alt="Código QR para vincular WhatsApp" width="260" height="260" /> : <p className="form-hint">Generando el código…</p>}
+            <small>El código se renueva solo cada pocos segundos.</small>
+          </div>
+        )}
+        <div className="action-buttons" style={{ marginTop: 12 }}>
+          {!activo && <button className="btn-primary" disabled={ocupado || !wa.instalado} onClick={() => accion('iniciar')}>{wa.vinculado ? 'Activar' : 'Generar QR'}</button>}
+          {activo && <button className="btn-sm" disabled={ocupado} onClick={() => accion('detener', 'WhatsApp desactivado')}>Desactivar</button>}
+          {wa.vinculado && <button className="btn-sm" disabled={ocupado} onClick={() => window.confirm('Se cerrará la sesión en el móvil y habrá que escanear un QR nuevo. ¿Continuar?') && accion('desvincular', 'Número desvinculado')}>Desvincular número</button>}
+        </div>
+      </div>
+
+      {wa.estado === 'conectado' && (
+        <div className="card">
+          <h2>Mensaje de prueba</h2>
+          <div className="form-group"><label htmlFor="wa-tel">Teléfono (vacío = el tuyo de «Mi perfil»)</label>
+            <input id="wa-tel" type="tel" placeholder="+34612345678" value={tel} onChange={e => setTel(e.target.value)} /></div>
+          <button className="btn-primary" disabled={ocupado} onClick={probar}>Enviar prueba</button>
+        </div>
+      )}
+
+      <div className="card">
+        <h2>Qué se envía</h2>
+        <ul className="lista-simple">
+          <li>Respuesta a una solicitud de días libres (aprobada o rechazada).</li>
+          <li>Revisión de horas (aprobadas, discrepancia, corrección) y mes reabierto.</li>
+          <li>Avisos de administración (se envían también por WhatsApp).</li>
+          <li>Recordatorio de fichar la salida y, los 2 últimos días del mes, de confirmar las horas.</li>
+        </ul>
+        <p className="form-hint"><strong>Solo a quien lo active en su perfil</strong> y tenga teléfono. Los mensajes salen en cola, con pausas y un tope diario.</p>
+        <div className="revision revision-pendiente" role="note">
+          <strong>Importante</strong>
+          <p>Usa un <strong>número dedicado</strong>, no el personal ni el de atención al cliente. Este sistema no es la API oficial de WhatsApp: no cumple sus condiciones de uso y WhatsApp puede bloquear el número. Mantén pocos mensajes y solo a personas que los esperan.</p>
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function VistaIntegraciones({ api, h, toast$ }) {
-  const [tab, setTab] = useState('keys');
+  const [tab, setTab] = useState('ideas');
   const [keys, setKeys] = useState([]);
   const [hooks, setHooks] = useState({ eventos: [], webhooks: [] });
   const [nuevaKey, setNuevaKey] = useState({ nombre: '', scopes: ['lectura'] });
@@ -68,6 +183,8 @@ export default function VistaIntegraciones({ api, h, toast$ }) {
   return (
     <div>
       <div className="informe-tabs">
+        <button className={`btn-tab${tab === 'ideas' ? ' active' : ''}`} onClick={() => setTab('ideas')}>Ideas</button>
+        <button className={`btn-tab${tab === 'whatsapp' ? ' active' : ''}`} onClick={() => setTab('whatsapp')}>WhatsApp</button>
         <button className={`btn-tab${tab === 'keys' ? ' active' : ''}`} onClick={() => setTab('keys')}>Claves de API</button>
         <button className={`btn-tab${tab === 'hooks' ? ' active' : ''}`} onClick={() => setTab('hooks')}>Webhooks</button>
         <button className={`btn-tab${tab === 'planning' ? ' active' : ''}`} onClick={() => setTab('planning')}>Planning</button>
@@ -84,6 +201,9 @@ export default function VistaIntegraciones({ api, h, toast$ }) {
           </div>
         </div>
       )}
+
+      {tab === 'ideas' && <Ideas ir={setTab} />}
+      {tab === 'whatsapp' && <WhatsApp api={api} h={h} toast$={toast$} />}
 
       {tab === 'keys' && (
         <>
@@ -103,6 +223,12 @@ export default function VistaIntegraciones({ api, h, toast$ }) {
               </div>
             </div>
             <button className="btn-primary" onClick={crearKey}>Crear clave</button>
+          </div>
+          <div className="card">
+            <h2>Cómo usar una clave</h2>
+            <p className="form-hint">Se envía en la cabecera <code>X-API-Key</code>. Ejemplo (horas del mes de todo el equipo):</p>
+            <code className="secreto" style={{ whiteSpace: 'pre-wrap' }}>{`curl -H "X-API-Key: sj_…" \\\n  ${api.defaults.baseURL}/api/v1/informe/${mesActual()}`}</code>
+            <p className="form-hint">Endpoints: <code>GET /api/v1/profesores</code> · <code>GET /api/v1/informe/AAAA-MM</code> (?email=) · <code>POST /api/v1/planning</code>. Documentación completa en <code>docs/INTEGRACIONES.md</code>.</p>
           </div>
           <div className="card">
             <h2>Claves ({keys.length})</h2>

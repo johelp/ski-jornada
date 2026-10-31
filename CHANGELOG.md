@@ -5,6 +5,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Fechas AAA
 ## [Sin publicar]
 
 ### Añadido
+- **WhatsApp activable desde la administración:** botón «Generar QR» (Integraciones → WhatsApp) que arranca el servidor Baileys, estado en vivo, desactivar y desvincular; avisos solo a quien los activa en su perfil; cola con pausas y tope diario; la sesión persiste en el volumen.
+- **Integraciones:** pestaña *Ideas* con casos de uso, ejemplo de uso de la clave, eventos `solicitud.creada` y `solicitud.respondida`, protección SSRF en webhooks, validación de fechas en solicitudes y textos en español de España.
 - **Acceso desde la app instalada:** código de 6 dígitos en el correo y en la pantalla de acceso (HMAC, 5 intentos, límite por email) para entrar sin salir de la app en iPhone.
 - **Sesión persistente:** renovación al volver a primer plano, copia en IndexedDB, almacenamiento persistente, y un fallo temporal de la base ya no cierra la sesión (503 en lugar de 401).
 - **Panel de administración práctico:** `GET /api/admin/resumen` y nuevo inicio con lo pendiente (solicitudes por estado con aprobación directa, horas por revisar, discrepancias, documentos sin firmar, próximas ausencias, invitados sin entrar).

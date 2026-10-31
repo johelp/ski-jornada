@@ -11,3 +11,4 @@ backend/whatsapp-session/
 .DS_Store
 backend/prisma/demo/
 *.log
+backend/whatsapp/

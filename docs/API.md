@@ -87,5 +87,5 @@ El informe incluye `revision` (`{estado, nota, revisadoAt}` o `null`) y, por cla
 ## Avisos y configuración
 `GET /api/notificaciones` · `POST /api/notificaciones/leer-todas` · `POST /api/notificaciones/:id/leer` · 🛡 `GET|POST /api/admin/notificaciones` · 🛡 `DELETE /api/admin/notificaciones/:id` · `GET /api/config` · 🛡 `PUT /api/admin/config`
 
-## WhatsApp (opcional, `WHATSAPP_ENABLED=true`)
-🛡 `GET /api/whatsapp/status` · 🛡 `GET /api/whatsapp/qr` · 🛡 `POST /api/whatsapp/test`
+## WhatsApp (opcional; `WHATSAPP_ENABLED=false` lo oculta)
+🛡 `GET /api/admin/whatsapp` (estado y QR en imagen) · 🛡 `POST /api/admin/whatsapp/iniciar` («Generar QR») · 🛡 `POST …/detener` · 🛡 `POST …/desvincular` · 🛡 `POST …/probar {telefono?}` · `PUT /api/auth/me {avisosWhatsapp}` (opt-in del profesor)
