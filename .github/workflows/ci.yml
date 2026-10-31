@@ -29,6 +29,8 @@ jobs:
           for i in $(seq 1 30); do curl -sf http://localhost:3000/api/salud && break || sleep 1; done
       - name: Prueba de humo
         run: node scripts/smoke.js
+        env:
+          API_LOG: ${{ github.workspace }}/api.log
       - name: Registro de la API (si falla)
         if: failure()
         run: cat ../api.log

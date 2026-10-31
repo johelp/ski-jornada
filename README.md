@@ -68,6 +68,11 @@ npm run dev                     # http://localhost:5173
 - [docs/COMPARATIVA.md](docs/COMPARATIVA.md) — comparar el resumen de instructores del sistema de reservas con las horas cargadas
 - [docs/INTEGRACIONES.md](docs/INTEGRACIONES.md) — API con keys, webhooks e importación de planning
 - [docs/RGPD.md](docs/RGPD.md) — protección de datos: registro, política, contrato de encargo, medidas, brechas
+- [docs/MANUAL-IMPLEMENTACION.md](docs/MANUAL-IMPLEMENTACION.md) — implantar la plataforma en un cliente real (ejemplo Snowmotion): fases, datos, piloto, formación, régimen mensual
+- [docs/GUIA-ADMINISTRACION.md](docs/GUIA-ADMINISTRACION.md) · [docs/GUIA-PROFESOR.md](docs/GUIA-PROFESOR.md) — guías de uso para administración y profesores
+- [docs/DIMENSIONAMIENTO.md](docs/DIMENSIONAMIENTO.md) — consumo de datos y almacenamiento (estimador `backend/scripts/dimensionar.js`)
+- [docs/AUDITORIA-SEGURIDAD.md](docs/AUDITORIA-SEGURIDAD.md) — auditoría previa al primer despliegue y correcciones
+- [docs/DATOS-DE-PRUEBA.md](docs/DATOS-DE-PRUEBA.md) — seed completo para probar todas las funciones
 - [docs/FUNCIONES.md](docs/FUNCIONES.md) — catálogo de funciones por rol y su estado
 - [docs/MULTI-DESPLIEGUE.md](docs/MULTI-DESPLIEGUE.md) — alta de un cliente nuevo (plantillas en `deploy/`)
 - [docs/PILOTO-SNOWMOTION.md](docs/PILOTO-SNOWMOTION.md) — piloto, gestión documental e integración con Drive

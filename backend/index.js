@@ -1,3 +1,5 @@
+// Zona horaria del negocio: fechas y horas de los informes de jornada (el servidor suele estar en UTC)
+process.env.TZ = process.env.TZ || 'Europe/Madrid';
 const express    = require('express');
 const cors       = require('cors');
 const dotenv     = require('dotenv');
@@ -11,6 +13,7 @@ const multer     = require('multer');
 const path       = require('path');
 const fs         = require('fs');
 const { PrismaClient } = require('@prisma/client');
+const legal = require('./legal');
 
 dotenv.config();
 
@@ -37,7 +40,11 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
   .split(',').map(o => o.trim());
 app.use(cors({ origin: allowedOrigins, credentials: true }));
+app.use('/api/firma/enviar-email', express.json({ limit: '15mb' }));
 app.use(express.json({ limit: '2mb' }));
+
+// Red de seguridad general por IP (alto: un equipo entero suele compartir la IP de la wifi)
+app.use('/api', rateLimit({ windowMs: 15 * 60 * 1000, max: 3000, standardHeaders: true, legacyHeaders: false, skip: req => req.path === '/salud', message: { error: 'Demasiadas peticiones. Esperá unos minutos.' } }));
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -56,10 +63,38 @@ const storage = multer.diskStorage({
     cb(null, path.join(UPLOAD_DIR, sub));
   },
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname) || '.pdf';
-    cb(null, `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`);
+    // Sin extensión del cliente: la definitiva se pone tras comprobar el contenido (verificarArchivo)
+    cb(null, `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.subiendo`);
   },
 });
+
+// Detecta el tipo real por los primeros bytes. Solo PDF, PNG y JPEG.
+function tipoPorContenido(ruta) {
+  const fd = fs.openSync(ruta, 'r');
+  try {
+    const b = Buffer.alloc(8);
+    fs.readSync(fd, b, 0, 8, 0);
+    if (b.slice(0, 5).toString('latin1') === '%PDF-') return 'pdf';
+    if (b.equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'png';
+    if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'jpg';
+    return null;
+  } finally { fs.closeSync(fd); }
+}
+// Middleware tras multer: valida el contenido y fija la extensión (evita servir HTML/SVG/JS subido como «PDF»)
+const verificarArchivo = permitidos => (req, res, next) => {
+  if (!req.file) return next();
+  try {
+    const tipo = tipoPorContenido(req.file.path);
+    if (!tipo || !permitidos.includes(tipo)) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: `El archivo no es válido: solo se admite ${permitidos.map(t => t.toUpperCase()).join(', ')}` });
+    }
+    const nuevo = req.file.filename.replace(/\.subiendo$/, `.${tipo}`);
+    fs.renameSync(req.file.path, path.join(path.dirname(req.file.path), nuevo));
+    req.file.filename = nuevo; req.file.path = path.join(path.dirname(req.file.path), nuevo);
+    next();
+  } catch (e) { console.error('verificarArchivo:', e.message); try { fs.unlinkSync(req.file.path); } catch {} res.status(400).json({ error: 'No se pudo procesar el archivo' }); }
+};
 
 const upload = multer({
   storage,
@@ -179,13 +214,18 @@ const invalidarUsuario = id => _cacheUsuarios.delete(id);
 const auth = async (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'No autorizado' });
+  let payload;
+  try { payload = jwt.verify(token, process.env.JWT_SECRET); }
+  catch { return res.status(401).json({ error: 'Token inválido' }); }
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
     const u = await usuarioVigente(payload.userId);
     if (!u || !u.activo) return res.status(401).json({ error: 'Cuenta desactivada o inexistente' });
     req.user = { userId: u.id, email: u.email, role: u.role, esPrincipal: u.esPrincipal };
     next();
-  } catch { res.status(401).json({ error: 'Token inválido' }); }
+  } catch {
+    // Un fallo temporal de la base NO es una sesión inválida: con 401 el móvil cerraría la sesión del profesor
+    res.status(503).json({ error: 'Servicio no disponible, reintenta en unos segundos' });
+  }
 };
 
 const adminOnly = (req, res, next) => {
@@ -209,7 +249,11 @@ app.get('/uploads/:sub/:file', auth, async (req, res) => {
     }
     const ruta = path.join(UPLOAD_DIR, sub, file);
     if (!fs.existsSync(ruta)) return res.status(404).json({ error: 'Archivo no encontrado' });
-    res.sendFile(ruta);
+    // Tipo fijado por la extensión validada al subir; cualquier otra cosa (p. ej. archivos antiguos) no se sirve
+    const TIPOS = { '.pdf': 'application/pdf', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' };
+    const tipo = TIPOS[path.extname(file).toLowerCase()];
+    if (!tipo) return res.status(415).json({ error: 'Tipo de archivo no permitido' });
+    res.sendFile(ruta, { headers: { 'Content-Type': tipo, 'Content-Disposition': 'inline', 'Content-Security-Policy': "sandbox; default-src 'none'", 'X-Content-Type-Options': 'nosniff' } });
   } catch (err) { res.status(500).json({ error: 'Error leyendo el archivo' }); }
 });
 
@@ -226,7 +270,7 @@ app.use((req, res, next) => {
 app.get('/api/salud', async (req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    res.json({ ok: true, version: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) || 'local', uptimeSeg: Math.round(process.uptime()), ahora: new Date().toISOString() });
+    res.json({ ok: true, zonaHoraria: process.env.TZ, version: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) || 'local', uptimeSeg: Math.round(process.uptime()), ahora: new Date().toISOString() });
   } catch (e) { console.error('salud:', e.message); res.status(503).json({ ok: false, error: 'Base de datos no disponible' }); }
 });
 
@@ -240,6 +284,8 @@ app.get('/api/server-time', (req, res) => {
 const MAGIC_TTL_MIN = 15;
 const SESION_DIAS = 90;
 const hashToken = t => crypto.createHash('sha256').update(t).digest('hex');
+// El código de 6 dígitos tiene poco espacio: se guarda con HMAC (clave del servidor) y ligado al usuario
+const hashCodigo = (profesorId, codigo) => crypto.createHmac('sha256', process.env.JWT_SECRET).update(`${profesorId}:${codigo}`).digest('hex');
 const firmarSesion = u => jwt.sign(
   { userId: u.id, email: u.email, role: u.role },
   process.env.JWT_SECRET,
@@ -254,13 +300,14 @@ const perfilSesion = u => ({
 // Crea el enlace y lo envía por email. `invitacion` cambia el texto para altas nuevas.
 async function enviarMagicLink(u, { invitacion = false } = {}) {
   const token = crypto.randomBytes(32).toString('base64url');
+  const codigo = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
   await prisma.magicLink.deleteMany({ where: { OR: [{ profesorId: u.id }, { expiraAt: { lt: new Date() } }] } });
   await prisma.magicLink.create({
-    data: { profesorId: u.id, tokenHash: hashToken(token), expiraAt: new Date(Date.now() + MAGIC_TTL_MIN * 60 * 1000) },
+    data: { profesorId: u.id, tokenHash: hashToken(token), codigoHash: hashCodigo(u.id, codigo), expiraAt: new Date(Date.now() + MAGIC_TTL_MIN * 60 * 1000) },
   });
   const base = (process.env.FRONTEND_URL || 'http://localhost:5173').split(',')[0].trim();
   const url = `${base}/?magic=${token}`;
-  if (!EMAIL_OK && process.env.NODE_ENV !== 'production') console.log(`🔗 [DEV] Enlace de acceso para ${u.email}: ${url}`);
+  if (!EMAIL_OK && process.env.NODE_ENV !== 'production') console.log(`🔗 [DEV] Enlace de acceso para ${u.email}: ${url} · código ${codigo}`);
   await enviarEmail(
     u.email,
     invitacion ? 'Te damos la bienvenida a Ski Jornada' : 'Tu enlace de acceso a Ski Jornada',
@@ -271,15 +318,22 @@ async function enviarMagicLink(u, { invitacion = false } = {}) {
         ? 'El administrador creó tu cuenta. Tocá el botón para entrar; no necesitás contraseña.'
         : 'Tocá el botón para entrar. No necesitás contraseña.'}</p>
       <a href="${url}" style="display:inline-block;background:#0f4c81;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Entrar a Ski Jornada →</a>
-      <p style="color:#94a3b8;font-size:12px;margin-top:24px">El enlace vale ${MAGIC_TTL_MIN} minutos y se puede usar una sola vez. Si no lo pediste, ignorá este mensaje.</p>
+      <p style="color:#475569;margin:22px 0 6px">¿Usas la app instalada en el móvil? Escribe este código en la app:</p>
+      <p style="font-size:30px;font-weight:800;letter-spacing:8px;color:#0f4c81;margin:0;font-family:monospace">${codigo}</p>
+      <p style="color:#94a3b8;font-size:12px;margin-top:24px">El enlace y el código valen ${MAGIC_TTL_MIN} minutos y se pueden usar una sola vez. Si no lo pediste, ignorá este mensaje.</p>
     </div>`,
   );
 }
 
-const magicLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  message: { error: 'Demasiados intentos. Esperá 15 minutos.' },
+// Por IP. Alto a propósito: todo un equipo suele salir por la misma IP pública (la wifi de la escuela). El límite
+// que protege a cada persona es el de «1 enlace por minuto y 5 por hora por email» (permitirEnlace).
+const enlaceLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Demasiados intentos desde esta red. Esperá unos minutos.' },
+});
+const verificarLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 120, standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Demasiados intentos desde esta red. Esperá unos minutos.' },
 });
 
 // Máximo 1 enlace por minuto y 5 por hora para cada email (evita inundar la bandeja de alguien)
@@ -294,7 +348,7 @@ function permitirEnlace(email) {
 setInterval(() => { const l = Date.now() - 3600000; for (const [k, v] of _pedidosEnlace) if (!v.some(t => t > l)) _pedidosEnlace.delete(k); }, 600000).unref();
 
 // Pide el enlace. Respuesta idéntica exista o no el email (no revela quién tiene cuenta).
-app.post('/api/auth/magic-link', magicLimiter, async (req, res) => {
+app.post('/api/auth/magic-link', enlaceLimiter, async (req, res) => {
   try {
     const email = String(req.body.email || '').toLowerCase().trim();
     if (!email) return res.status(400).json({ error: 'Ingresá tu email' });
@@ -305,7 +359,7 @@ app.post('/api/auth/magic-link', magicLimiter, async (req, res) => {
 });
 
 // Canjea el token del enlace por una sesión de larga duración.
-app.post('/api/auth/magic-link/verificar', magicLimiter, async (req, res) => {
+app.post('/api/auth/magic-link/verificar', verificarLimiter, async (req, res) => {
   try {
     const token = String(req.body.token || '');
     if (!token) return res.status(400).json({ error: 'Enlace inválido' });
@@ -316,12 +370,46 @@ app.post('/api/auth/magic-link/verificar', magicLimiter, async (req, res) => {
     // Consumo atómico: solo una petición puede borrarlo
     const borrado = await prisma.magicLink.deleteMany({ where: { id: ml.id } });
     if (borrado.count !== 1) return res.status(401).json({ error: 'El enlace venció o ya fue usado. Pedí uno nuevo.' });
-    let usuario = ml.profesor;
-    if (!usuario.adheridoAt) { // primera entrada: el invitado se adhiere
-      usuario = await prisma.profesor.update({ where: { id: usuario.id }, data: { adheridoAt: new Date() } });
-      invalidarUsuario(usuario.id);
+    res.json(await abrirSesion(ml.profesor));
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error interno del servidor' }); }
+});
+
+// Sesión nueva: en el primer acceso el invitado se adhiere
+async function abrirSesion(usuario) {
+  if (!usuario.adheridoAt) {
+    usuario = await prisma.profesor.update({ where: { id: usuario.id }, data: { adheridoAt: new Date() } });
+    invalidarUsuario(usuario.id);
+  }
+  return { token: firmarSesion(usuario), user: perfilSesion(usuario) };
+}
+
+// Entrada con el código de 6 dígitos del correo. Pensado para la app instalada (en iPhone el enlace se abre en Safari,
+// que no comparte la sesión con la app). Cada enlace admite 5 intentos y además se limita por email.
+const _intentosCodigo = new Map();
+app.post('/api/auth/codigo/verificar', verificarLimiter, async (req, res) => {
+  const invalido = () => res.status(401).json({ error: 'Código incorrecto o vencido. Pide uno nuevo.' });
+  try {
+    const email = String(req.body.email || '').toLowerCase().trim();
+    const codigo = String(req.body.codigo || '').replace(/\s/g, '');
+    if (!email || !/^\d{6}$/.test(codigo)) return res.status(400).json({ error: 'Escribe el código de 6 dígitos' });
+    const ahora = Date.now();
+    const previos = (_intentosCodigo.get(email) || []).filter(t => ahora - t < 15 * 60 * 1000);
+    if (previos.length >= 10) return res.status(429).json({ error: 'Demasiados intentos. Espera unos minutos.' });
+    _intentosCodigo.set(email, [...previos, ahora]);
+
+    const u = await prisma.profesor.findUnique({ where: { email } });
+    const ml = u && u.activo ? await prisma.magicLink.findFirst({ where: { profesorId: u.id }, orderBy: { createdAt: 'desc' } }) : null;
+    if (!ml || ml.expiraAt < new Date() || !ml.codigoHash) return invalido();
+    if (ml.intentos >= 5) { await prisma.magicLink.deleteMany({ where: { id: ml.id } }); return invalido(); }
+    const a = Buffer.from(hashCodigo(u.id, codigo)), b = Buffer.from(ml.codigoHash);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+      await prisma.magicLink.update({ where: { id: ml.id }, data: { intentos: { increment: 1 } } });
+      return invalido();
     }
-    res.json({ token: firmarSesion(usuario), user: perfilSesion(usuario) });
+    const borrado = await prisma.magicLink.deleteMany({ where: { id: ml.id } }); // un solo uso, atómico
+    if (borrado.count !== 1) return invalido();
+    _intentosCodigo.delete(email);
+    res.json(await abrirSesion(u));
   } catch (err) { console.error(err); res.status(500).json({ error: 'Error interno del servidor' }); }
 });
 
@@ -651,6 +739,66 @@ app.post('/api/admin/solicitudes/:id/responder', auth, adminOnly, async (req, re
   } catch (err) { res.status(500).json({ error: 'Error respondiendo solicitud' }); }
 });
 
+// ============ ADMIN — Resumen del dashboard ============
+// Todo lo que requiere atención de administración, en una sola llamada.
+app.get('/api/admin/resumen', auth, adminOnly, async (req, res) => {
+  try {
+    const ahora = new Date();
+    const hoy0 = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+    const mesDe = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const meses = [0, 1, 2].map(i => mesDe(new Date(ahora.getFullYear(), ahora.getMonth() - i, 1)));
+    const hace60 = new Date(hoy0.getTime() - 60 * 864e5);
+    const nombre = p => `${p.nombre} ${p.apellidos || ''}`.trim();
+    const quien = { select: { nombre: true, apellidos: true } };
+
+    const [sols, confirmaciones, revisiones, docs, equipo, ultimos, incidencias] = await Promise.all([
+      prisma.solicitudLibre.findMany({ where: { OR: [{ estado: 'PENDIENTE' }, { createdAt: { gte: hace60 } }, { fechaFin: { gte: hoy0 } }] }, include: { profesor: quien }, orderBy: { createdAt: 'desc' } }),
+      prisma.confirmacionClases.findMany({ where: { mes: { in: meses } }, include: { profesor: quien } }),
+      prisma.revisionMes.findMany({ where: { mes: { in: meses } } }),
+      prisma.documentoLegajo.findMany({ where: { estado: 'PENDIENTE' }, include: { profesor: quien }, orderBy: { createdAt: 'asc' }, take: 50 }),
+      prisma.profesor.findMany({ where: { role: 'PROFESOR', activo: true }, select: { id: true, nombre: true, apellidos: true, adheridoAt: true } }),
+      prisma.registroJornada.findMany({ where: { timestamp: { gte: new Date(hoy0.getTime() - 864e5) } }, orderBy: { timestamp: 'desc' }, select: { profesorId: true, tipo: true, timestamp: true } }),
+      prisma.registroJornada.count({ where: { esIncidencia: true, timestamp: { gte: new Date(hoy0.getTime() - 7 * 864e5) } } }),
+    ]);
+
+    const porEstado = e => sols.filter(x => x.estado === e);
+    const pend = porEstado('PENDIENTE');
+    const proximas = porEstado('APROBADO').filter(x => x.fechaFin >= hoy0).sort((a, b) => a.fechaInicio - b.fechaInicio);
+    const fila = x => ({ id: x.id, profesor: nombre(x.profesor), fechaInicio: x.fechaInicio, fechaFin: x.fechaFin, motivo: x.motivo, comentario: x.comentario, createdAt: x.createdAt });
+
+    const rev = new Map(revisiones.map(r => [`${r.profesorId}|${r.mes}`, r]));
+    const sinRevisar = confirmaciones.filter(c => { const r = rev.get(`${c.profesorId}|${c.mes}`); return !r || r.estado === 'PENDIENTE'; })
+      .map(c => ({ profesorId: c.profesorId, profesor: nombre(c.profesor), mes: c.mes, confirmadoAt: c.confirmadoAt }));
+    const conProblema = revisiones.filter(r => r.estado === 'DISCREPANCIA' || r.estado === 'CORRECCION');
+    const nombres = new Map(equipo.map(p => [p.id, nombre(p)]));
+
+    // Dentro ahora: última marca de cada profesor en las últimas 24 h es una entrada
+    const ultima = new Map();
+    for (const r of ultimos) if (!ultima.has(r.profesorId)) ultima.set(r.profesorId, r);
+    const dentro = [...ultima.values()].filter(r => r.tipo === 'ENTRADA').length;
+
+    res.json({
+      mesActual: meses[0],
+      equipo: { activos: equipo.length, invitadosSinEntrar: equipo.filter(p => !p.adheridoAt).map(p => ({ id: p.id, nombre: nombre(p) })), dentroAhora: dentro },
+      solicitudes: {
+        pendientes: pend.length,
+        aprobadas: porEstado('APROBADO').filter(x => x.createdAt >= hace60).length,
+        rechazadas: porEstado('RECHAZADO').filter(x => x.createdAt >= hace60).length,
+        listaPendientes: pend.slice(0, 5).map(fila),
+        proximas: proximas.slice(0, 5).map(fila),
+        ausentesHoy: proximas.filter(x => x.fechaInicio <= ahora).length,
+      },
+      clases: {
+        sinRevisar: sinRevisar.length, listaSinRevisar: sinRevisar.slice(0, 5),
+        conProblema: conProblema.length,
+        listaConProblema: conProblema.slice(0, 5).map(r => ({ profesorId: r.profesorId, profesor: nombres.get(r.profesorId) || '—', mes: r.mes, estado: r.estado })),
+      },
+      documentos: { pendientesFirma: docs.length, lista: docs.slice(0, 5).map(d => ({ id: d.id, profesor: nombre(d.profesor), nombre: d.nombre, mes: d.mes })) },
+      incidenciasSemana: incidencias,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error obteniendo el resumen' }); }
+});
+
 // ============ ADMIN — Informe ausencias ============
 app.get('/api/admin/informe-libres', auth, adminOnly, async (req, res) => {
   try {
@@ -920,6 +1068,7 @@ function countWorkingDays(anio, mes) {
 app.get('/api/admin/planilla/:mes/:anio', auth, adminOnly, async (req, res) => {
   try {
     const mesNum = parseInt(req.params.mes), anioNum = parseInt(req.params.anio);
+    if (!(mesNum >= 1 && mesNum <= 12 && anioNum >= 2000 && anioNum <= 2100)) return res.status(400).json({ error: 'Mes o año inválido' });
     const inicio = new Date(anioNum, mesNum - 1, 1);
     const fin    = new Date(anioNum, mesNum, 0, 23, 59, 59, 999);
     const diasLaborables = countWorkingDays(anioNum, mesNum);
@@ -995,6 +1144,7 @@ app.get('/api/admin/planilla/:mes/:anio', auth, adminOnly, async (req, res) => {
 app.get('/api/informe/:mes/:anio', auth, async (req, res) => {
   try {
     const { mes, anio } = req.params;
+    if (!(parseInt(mes) >= 1 && parseInt(mes) <= 12 && parseInt(anio) >= 2000 && parseInt(anio) <= 2100)) return res.status(400).json({ error: 'Mes o año inválido' });
     const targetId = (req.user.role === 'ADMIN' && req.query.profesorId) ? req.query.profesorId : req.user.userId;
 
     const profesor = await prisma.profesor.findUnique({ where: { id: targetId } });
@@ -1072,7 +1222,7 @@ app.post('/api/firma/enviar-email', auth, adminOnly, async (req, res) => {
       `Registro de Jornada ${mesNombre} ${anio} — Pendiente de firma`,
       `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;background:#f0f7ff;border-radius:12px">
         <h1 style="color:#0f4c81">⛷️ Ski Jornada</h1>
-        <p>Hola <strong>${profesor.nombre}</strong>,</p>
+        <p>Hola <strong>${escHtml(profesor.nombre)}</strong>,</p>
         <p>Adjunto encontrarás el registro de jornada laboral de <strong>${mesNombre} ${anio}</strong>.</p>
         <ol>
           <li>Descarga el PDF adjunto</li>
@@ -1080,7 +1230,7 @@ app.post('/api/firma/enviar-email', auth, adminOnly, async (req, res) => {
           <li>Súbelo en la app: <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}">Ski Jornada →</a></li>
         </ol>
       </div>`,
-      [{ filename: `RegistroHorario_${profesor.apellidos}_${mesNombre}_${anio}.pdf`, content: buffer, contentType: 'application/pdf' }]
+      [{ filename: `RegistroHorario_${String(profesor.apellidos || 'profesor').replace(/[^\w.-]+/g, '_')}_${mesNombre}_${String(anio).replace(/\D/g, '')}.pdf`, content: buffer, contentType: 'application/pdf' }]
     );
 
     await prisma.firmaRegistro.upsert({
@@ -1096,7 +1246,7 @@ app.post('/api/firma/enviar-email', auth, adminOnly, async (req, res) => {
   }
 });
 
-app.post('/api/firma/subir-firmado', auth, upload.single('pdf'), async (req, res) => {
+app.post('/api/firma/subir-firmado', auth, upload.single('pdf'), verificarArchivo(['pdf']), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No se recibió ningún archivo' });
     const { mes, anio } = req.body;
@@ -1140,7 +1290,7 @@ app.get('/api/admin/firmas', auth, adminOnly, async (req, res) => {
 });
 
 // ============ LEGAJO — Documentos ============
-app.post('/api/admin/documentos', auth, adminOnly, upload.single('pdf'), async (req, res) => {
+app.post('/api/admin/documentos', auth, adminOnly, upload.single('pdf'), verificarArchivo(['pdf']), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No se recibió ningún archivo' });
     const { profesorId, tipo, nombre, mes } = req.body;
@@ -1163,8 +1313,8 @@ app.post('/api/admin/documentos', auth, adminOnly, upload.single('pdf'), async (
         `Nuevo documento en tu legajo: ${nombre}`,
         `<div style="font-family:sans-serif;padding:24px;background:#f0f7ff;border-radius:12px">
           <h2 style="color:#0f4c81">⛷️ Ski Jornada</h2>
-          <p>Hola <strong>${profesor.nombre}</strong>, hay un nuevo documento en tu legajo:</p>
-          <p style="font-size:16px;font-weight:bold">${nombre}${mes ? ` — ${mes}` : ''}</p>
+          <p>Hola <strong>${escHtml(profesor.nombre)}</strong>, hay un nuevo documento en tu legajo:</p>
+          <p style="font-size:16px;font-weight:bold">${escHtml(nombre)}${mes ? ` — ${escHtml(mes)}` : ''}</p>
           <p>Consúltalo y fírmalo en: <a href="${process.env.FRONTEND_URL}">Ski Jornada →</a></p>
         </div>`
       ).catch(console.error);
@@ -1191,7 +1341,7 @@ app.get('/api/documentos/mis-documentos', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Error obteniendo documentos' }); }
 });
 
-app.post('/api/documentos/:id/firmar', auth, uploadFirma.single('pdf'), async (req, res) => {
+app.post('/api/documentos/:id/firmar', auth, uploadFirma.single('pdf'), verificarArchivo(['pdf', 'png', 'jpg']), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No se recibió ningún archivo' });
 
@@ -1356,7 +1506,7 @@ app.delete('/api/admin/notificaciones/:id', auth, adminOnly, async (req, res) =>
 
 // ============ CONFIG ESCUELA ============
 async function getConfig() {
-  return prisma.configEscuela.upsert({ where: { id: 'default' }, create: { id: 'default' }, update: {} });
+  return prisma.configEscuela.upsert({ where: { id: 'default' }, create: { id: 'default', nombre: '', cif: '', direccion: '', telefono: '' }, update: {} });
 }
 
 app.get('/api/config', async (req, res) => {
@@ -1939,7 +2089,7 @@ app.get('/api/v1/informe/:mes', apiAuth('lectura'), async (req, res) => {
 
 // ============ RGPD: exportación de datos personales ============
 async function exportarDatosProfesor(id) {
-  const [perfil, registros, libres, clases, revisiones, confirmaciones, documentos, firmas, notifs, planning] = await Promise.all([
+  const [perfil, registros, libres, clases, revisiones, confirmaciones, documentos, firmas, notifs, planning, aceptaciones] = await Promise.all([
     prisma.profesor.findUnique({ where: { id }, select: { id: true, email: true, nombre: true, apellidos: true, telefono: true, role: true, tipoJornada: true, horasContrato: true, tarifaHora: true, horaRecordatorio: true, activo: true, createdAt: true } }),
     prisma.registroJornada.findMany({ where: { profesorId: id }, orderBy: { timestamp: 'asc' }, select: { tipo: true, timestamp: true, zonaNombre: true, lat: true, lng: true, distancia: true, esIncidencia: true } }),
     prisma.solicitudLibre.findMany({ where: { profesorId: id } }),
@@ -1950,12 +2100,13 @@ async function exportarDatosProfesor(id) {
     prisma.firmaRegistro.findMany({ where: { profesorId: id }, select: { mes: true, estado: true, firmadoAt: true } }),
     prisma.notificacion.findMany({ where: { profesorId: id }, select: { titulo: true, mensaje: true, tipo: true, createdAt: true } }),
     prisma.planningClase.findMany({ where: { profesorId: id } }),
+    prisma.aceptacionLegal.findMany({ where: { profesorId: id }, select: { documento: true, version: true, aceptadoAt: true } }),
   ]);
   if (!perfil) return null;
   return {
     generadoEl: new Date().toISOString(), perfil, registrosJornada: registros, solicitudesLibres: libres,
     clases: clases.map(c => ({ fecha: c.fecha, horas: c.horas, disciplina: c.tipo.nombre, primas: c.primas.map(p => p.nombre), notas: c.notas, marca: c.marca, notaAdmin: c.notaAdmin })),
-    revisionesMensuales: revisiones, confirmacionesMensuales: confirmaciones, documentos, firmasRegistro: firmas, notificaciones: notifs, planning,
+    revisionesMensuales: revisiones, confirmacionesMensuales: confirmaciones, documentos, firmasRegistro: firmas, notificaciones: notifs, planning, aceptacionesLegales: aceptaciones,
   };
 }
 app.get('/api/auth/me/exportar', auth, async (req, res) => {
@@ -2097,6 +2248,8 @@ function rutaBaseDatos() {
 }
 const BACKUP_DIR = process.env.BACKUP_DIR || path.join(path.dirname(rutaBaseDatos()), 'backups');
 const nombreBackup = (d = new Date()) => `ski-jornada-${d.toISOString().slice(0, 10)}.db`;
+const { pipeline } = require('stream/promises');
+const zlib = require('zlib');
 
 async function crearBackup(destino) {
   fs.mkdirSync(path.dirname(destino), { recursive: true });
@@ -2104,17 +2257,23 @@ async function crearBackup(destino) {
   await prisma.$executeRawUnsafe(`VACUUM INTO '${destino.replace(/'/g, "''")}'`);
   return destino;
 }
+// Las copias programadas se comprimen (la base SQLite baja a ~20 % del tamaño): ski-jornada-AAAA-MM-DD.db.gz
+async function comprimirBackup(ruta) {
+  await pipeline(fs.createReadStream(ruta), zlib.createGzip({ level: 9 }), fs.createWriteStream(`${ruta}.gz`));
+  fs.unlinkSync(ruta);
+  return `${ruta}.gz`;
+}
 function podarBackups() {
   const conservar = parseInt(process.env.BACKUP_CONSERVAR) || 14;
-  const archivos = fs.existsSync(BACKUP_DIR) ? fs.readdirSync(BACKUP_DIR).filter(f => /^ski-jornada-\d{4}-\d{2}-\d{2}\.db$/.test(f)).sort() : [];
+  const archivos = fs.existsSync(BACKUP_DIR) ? fs.readdirSync(BACKUP_DIR).filter(f => /^ski-jornada-\d{4}-\d{2}-\d{2}\.db(\.gz)?$/.test(f)).sort() : [];
   archivos.slice(0, Math.max(0, archivos.length - conservar)).forEach(f => { try { fs.unlinkSync(path.join(BACKUP_DIR, f)); } catch {} });
 }
 async function backupDiario() {
   try {
     const hoy = path.join(BACKUP_DIR, nombreBackup());
-    if (new Date().getHours() < 3 || fs.existsSync(hoy)) return;
-    await crearBackup(hoy); podarBackups();
-    console.log(`💾 Copia de seguridad creada: ${path.basename(hoy)}`);
+    if (new Date().getHours() < 3 || fs.existsSync(`${hoy}.gz`)) return;
+    const gz = await comprimirBackup(await crearBackup(hoy)); podarBackups();
+    console.log(`💾 Copia de seguridad creada: ${path.basename(gz)} (${Math.round(fs.statSync(gz).size / 1024)} KB)`);
   } catch (e) { console.error('backup:', e.message); }
 }
 if (ES_PROD && process.env.BACKUP_DIARIO !== 'false') {
@@ -2133,8 +2292,71 @@ app.get('/api/admin/backup/descargar', auth, adminOnly, async (req, res) => {
   } catch (e) { console.error('backup descarga:', e.message); try { fs.unlinkSync(tmp); } catch {} res.status(500).json({ error: 'No se pudo crear la copia' }); }
 });
 app.get('/api/admin/backup', auth, adminOnly, (req, res) => {
-  const archivos = fs.existsSync(BACKUP_DIR) ? fs.readdirSync(BACKUP_DIR).filter(f => /^ski-jornada-.*\.db$/.test(f)).sort().reverse() : [];
+  const archivos = fs.existsSync(BACKUP_DIR) ? fs.readdirSync(BACKUP_DIR).filter(f => /^ski-jornada-.*\.db(\.gz)?$/.test(f)).sort().reverse() : [];
   res.json({ automatico: ES_PROD && process.env.BACKUP_DIARIO !== 'false', carpeta: BACKUP_DIR, copias: archivos.map(f => ({ nombre: f, bytes: fs.statSync(path.join(BACKUP_DIR, f)).size })) });
+});
+
+// ============ ACEPTACIONES LEGALES (RGPD) ============
+// Constancia (versionada) de que cada persona recibió la información de privacidad y, en la cuenta principal, de que la
+// escuela aceptó el contrato de encargo. No es un consentimiento: ver docs/RGPD.md.
+const opcionesLegal = () => ({ documentosHabilitados: DOCUMENTOS_ON });
+
+// Pública: la política de privacidad de la escuela (se enlaza desde la landing)
+app.get('/api/legal/privacidad', async (req, res) => {
+  try { res.json(legal.generar.PRIVACIDAD(await getConfig(), opcionesLegal())); }
+  catch { res.status(500).json({ error: 'Error' }); }
+});
+
+app.get('/api/legal/estado', auth, async (req, res) => {
+  try {
+    const cfg = await getConfig();
+    const requeridos = legal.requeridosPara(req.user);
+    const hechas = await prisma.aceptacionLegal.findMany({ where: { profesorId: req.user.userId, documento: { in: requeridos } } });
+    res.json(requeridos.map(doc => {
+      const v = legal.VERSION[doc];
+      const a = hechas.find(x => x.documento === doc && x.version === v);
+      return { documento: doc, version: v, titulo: legal.generar[doc](cfg, opcionesLegal()).titulo, aceptado: !!a, aceptadoAt: a?.aceptadoAt || null };
+    }));
+  } catch { res.status(500).json({ error: 'Error' }); }
+});
+
+app.get('/api/legal/documento/:tipo', auth, async (req, res) => {
+  try {
+    const tipo = String(req.params.tipo).toUpperCase();
+    if (!legal.requeridosPara(req.user).includes(tipo)) return res.status(404).json({ error: 'Documento no disponible' });
+    res.json(legal.generar[tipo](await getConfig(), opcionesLegal()));
+  } catch { res.status(500).json({ error: 'Error' }); }
+});
+
+app.post('/api/legal/aceptar', auth, async (req, res) => {
+  try {
+    const documento = String(req.body.documento || '').toUpperCase();
+    if (!legal.requeridosPara(req.user).includes(documento)) return res.status(400).json({ error: 'Documento no válido para tu cuenta' });
+    if (String(req.body.version) !== legal.VERSION[documento]) return res.status(409).json({ error: 'El texto cambió: recarga para leer la versión vigente' });
+    await prisma.aceptacionLegal.upsert({
+      where: { profesorId_documento_version: { profesorId: req.user.userId, documento, version: legal.VERSION[documento] } },
+      create: { profesorId: req.user.userId, documento, version: legal.VERSION[documento] }, update: {},
+    });
+    res.json({ success: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error guardando la aceptación' }); }
+});
+
+// Administración: quién recibió la información y quién no (evidencia para el responsable)
+app.get('/api/admin/legal/aceptaciones', auth, adminOnly, async (req, res) => {
+  try {
+    const [usuarios, filas] = await Promise.all([
+      prisma.profesor.findMany({ where: { activo: true }, select: { id: true, nombre: true, apellidos: true, email: true, role: true, esPrincipal: true }, orderBy: { apellidos: 'asc' } }),
+      prisma.aceptacionLegal.findMany(),
+    ]);
+    const lista = usuarios.map(u => {
+      const docs = legal.requeridosPara(u).map(doc => {
+        const a = filas.find(x => x.profesorId === u.id && x.documento === doc && x.version === legal.VERSION[doc]);
+        return { documento: doc, version: legal.VERSION[doc], aceptado: !!a, aceptadoAt: a?.aceptadoAt || null };
+      });
+      return { ...u, documentos: docs, completo: docs.every(d => d.aceptado) };
+    });
+    res.json({ versiones: legal.VERSION, total: lista.length, completos: lista.filter(u => u.completo).length, usuarios: lista });
+  } catch { res.status(500).json({ error: 'Error' }); }
 });
 
 // ============ WHATSAPP (Baileys) ============

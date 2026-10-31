@@ -18,10 +18,11 @@ function hexToRgb(hex) {
 function _buildPDF(informe, opciones = {}) {
   const { incluirExtras = true, config = {} } = opciones;
   const COLOR_PRIMARY = hexToRgb(config.colorPrimario || '#0f4c81');
-  const escuelaNombre = config.nombre     || 'Escuela de Esquí Sierra Nevada';
-  const escuelaDirec  = config.direccion  || 'Sierra Nevada, Granada';
-  const escuelaTel    = config.telefono   || '958 000 000';
-  const escuelaCif    = config.cif        || 'B12345678';
+  // Sin datos inventados: un registro de jornada es un documento legal y solo debe mostrar lo que la escuela ha configurado
+  const escuelaNombre = config.nombre     || 'Escuela';
+  const escuelaDirec  = config.direccion  || '';
+  const escuelaTel    = config.telefono   || '';
+  const escuelaCif    = config.cif        || '';
   const { profesor, mesNum, anio, detalle, totalHoras, totalExceso, diasTrabajados, diasConExceso, promedioDiario } = informe;
   const mesNombre = MESES[parseInt(mesNum) - 1];
 
@@ -37,13 +38,14 @@ function _buildPDF(informe, opciones = {}) {
   doc.setTextColor(...COLOR_WHITE);
   doc.setFontSize(22);
   doc.setFont('helvetica', 'bold');
-  doc.text('⛷  Ski Jornada', 14, 16);
+  doc.text('Ski Jornada', 14, 16);
 
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   doc.text(escuelaNombre, 14, 23);
-  doc.text(`${escuelaDirec} · Tel: ${escuelaTel}`, 14, 28);
-  doc.text(`CIF: ${escuelaCif}`, 14, 33);
+  const contacto = [escuelaDirec, escuelaTel && `Tel: ${escuelaTel}`].filter(Boolean).join(' · ');
+  if (contacto) doc.text(contacto, 14, 28);
+  if (escuelaCif) doc.text(`CIF: ${escuelaCif}`, 14, 33);
 
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');

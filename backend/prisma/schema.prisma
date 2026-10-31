@@ -33,6 +33,7 @@ model Profesor {
   magicLinks               MagicLink[]
   revisionesClases         RevisionMes[]
   planning                 PlanningClase[]
+  aceptaciones             AceptacionLegal[]
   notificacionesRecibidas  Notificacion[] @relation("NotifRecibidas")
   notificacionesEnviadas   Notificacion[] @relation("NotifEnviadas")
 }
@@ -188,6 +189,8 @@ model MagicLink {
   profesorId String
   profesor   Profesor @relation(fields: [profesorId], references: [id], onDelete: Cascade)
   tokenHash  String   @unique
+  codigoHash String?
+  intentos   Int      @default(0)
   expiraAt   DateTime
   createdAt  DateTime @default(now())
 }
@@ -263,4 +266,17 @@ model AuditoriaLog {
   createdAt     DateTime @default(now())
 
   @@index([createdAt])
+}
+
+// Constancia de que una persona recibió la información de privacidad (art. 13 RGPD) o, en la cuenta principal,
+// aceptó el contrato de encargo de tratamiento en nombre de la escuela. Se versiona: al cambiar el texto se vuelve a pedir.
+model AceptacionLegal {
+  id         String   @id @default(uuid())
+  profesorId String
+  profesor   Profesor @relation(fields: [profesorId], references: [id], onDelete: Cascade)
+  documento  String
+  version    String
+  aceptadoAt DateTime @default(now())
+
+  @@unique([profesorId, documento, version])
 }

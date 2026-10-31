@@ -1,4 +1,6 @@
+process.env.TZ = process.env.TZ || 'Europe/Madrid';
 const { PrismaClient } = require('@prisma/client');
+const sembrarDemoCompleta = require('./seed-completo');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
@@ -226,6 +228,8 @@ async function main() {
     });
   }
 
+  await sembrarDemoCompleta(prisma, { admin, carlos, laura, miguel, sofia, zonaEntrada, zonaOficina, zonaPista, hash });
+
   console.log('\n✅ Seed completado exitosamente');
   console.log('\n👤 Cuentas demo (contraseña: ski123):');
   console.log('   🔑 Admin:    admin@escuela.com');
@@ -233,6 +237,8 @@ async function main() {
   console.log('   👩 Profesor: laura.garcia@escuela.com  (Laura García)');
   console.log('   👨 Profesor: miguel.torres@escuela.com  (Miguel Torres, media jornada)');
   console.log('   👩 Profesor: sofia.perez@escuela.com  (Sofía Pérez)');
+  console.log('   🏢 Cuenta de empresa (admin): administracion@escuela.com');
+  console.log('   ✉️  Invitado sin entrar: pablo.invitado@escuela.com · De baja: elena.baja@escuela.com · Sin tarifa: raul.sintarifa@escuela.com');
   console.log('\n📍 Zonas: Entrada Principal (TOTP+GPS), Oficina Central (TOTP), Pista Borreguiles (GPS)');
 }
 

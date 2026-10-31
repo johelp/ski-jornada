@@ -2,6 +2,19 @@
 
 Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Fechas AAAA-MM-DD.
 
+## [Sin publicar]
+
+### Añadido
+- **Acceso desde la app instalada:** código de 6 dígitos en el correo y en la pantalla de acceso (HMAC, 5 intentos, límite por email) para entrar sin salir de la app en iPhone.
+- **Sesión persistente:** renovación al volver a primer plano, copia en IndexedDB, almacenamiento persistente, y un fallo temporal de la base ya no cierra la sesión (503 en lugar de 401).
+- **Panel de administración práctico:** `GET /api/admin/resumen` y nuevo inicio con lo pendiente (solicitudes por estado con aprobación directa, horas por revisar, discrepancias, documentos sin firmar, próximas ausencias, invitados sin entrar).
+- **RGPD:** información de privacidad y contrato de encargo aceptables en la app, con constancia versionada.
+- **Seed completo** de datos de ejemplo, **auditoría de seguridad**, estimador de **dimensionamiento**, copias diarias comprimidas y manual de implementación y guías de uso.
+
+### Corregido
+- Cabecera tapada por el reloj y la batería en la app instalada (área segura superior).
+- Seguridad: PDF falso servido como HTML, zona horaria de los informes, datos ficticios en el PDF legal, límite compartido en una misma wifi, inyección de fórmulas en CSV, HTML sin escapar en correos, mes/año inválidos (500).
+
 ## [1.0.0] — 2026-10-30 · MVP listo para el piloto
 
 ### Producto

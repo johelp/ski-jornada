@@ -9,3 +9,5 @@ backend/uploads/
 backend/prisma/backups/
 backend/whatsapp-session/
 .DS_Store
+backend/prisma/demo/
+*.log

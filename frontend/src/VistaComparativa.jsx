@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { leerResumenInstructores, mesDelNombreDeArchivo } from './comparativa';
 import Icono from './Iconos';
+import { filaCsv } from './csv';
 
 const eur = n => (n == null ? '—' : `${n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`);
 const hh = n => `${String(Math.round(n * 100) / 100).replace('.', ',')} h`;
@@ -60,7 +61,7 @@ export default function VistaComparativa({ api, h, toast$ }) {
   const exportar = () => {
     const filas = [['Instructor (reservas)', 'Profesor (plataforma)', 'Estado', 'Horas reservas', 'Horas plataforma', 'Dif. horas', 'Total € reservas', 'Total € plataforma', 'Dif. €', 'Salario reservas', 'Tarifa plataforma']];
     datos.resultado.forEach(r => filas.push([r.nombre, r.profesor?.nombre || '', ESTADOS[r.estado].label, r.externo.totalHoras, r.plataforma?.totalHoras ?? '', r.diferencia?.horas ?? '', r.externo.total, r.plataforma?.importeTotal ?? '', r.diferencia?.importe ?? '', r.externo.salario, r.plataforma?.tarifaHora ?? '']));
-    const csv = '﻿' + filas.map(f => f.map(c => `"${String(c).replace(/"/g, '""').replace('.', ',')}"`).join(';')).join('\n');
+    const csv = '﻿' + filas.map(f => filaCsv(f, ';', { decimalComa: true })).join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = `comparativa_${datos.mes}.csv`; a.click(); URL.revokeObjectURL(a.href);
   };
