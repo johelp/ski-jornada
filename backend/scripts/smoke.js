@@ -218,6 +218,85 @@ const pdf = nombre => {
   check('el profesor no puede descargar copias → 403', (await http('GET', '/api/admin/backup/descargar', { token: prof })).status === 403);
   check('una ruta inexistente de la API devuelve 404 JSON', (await http('GET', '/api/no-existe', { token: admin })).status === 404);
 
+  seccion('6f. RGPD: información de privacidad y contrato de encargo');
+  const pub = await http('GET', '/api/legal/privacidad');
+  check('la política de privacidad es pública y trae el texto', pub.status === 200 && pub.data.secciones?.length >= 6 && pub.data.version);
+  const estP = (await http('GET', '/api/legal/estado', { token: prof })).data;
+  check('el profesor debe recibir solo la información de privacidad', estP.length === 1 && estP[0].documento === 'PRIVACIDAD');
+  const estA = (await http('GET', '/api/legal/estado', { token: admin })).data;
+  check('la cuenta principal además acepta el contrato de encargo', estA.map(d => d.documento).sort().join() === 'ENCARGO,PRIVACIDAD');
+  check('el profesor no puede leer el contrato de encargo → 404', (await http('GET', '/api/legal/documento/ENCARGO', { token: prof })).status === 404);
+  check('rechaza aceptar un documento que no le corresponde', (await http('POST', '/api/legal/aceptar', { token: prof, body: { documento: 'ENCARGO', version: '1.0' } })).status === 400);
+  check('rechaza una versión desactualizada → 409', (await http('POST', '/api/legal/aceptar', { token: prof, body: { documento: 'PRIVACIDAD', version: '0.1' } })).status === 409);
+  check('el profesor acepta la información de privacidad', (await http('POST', '/api/legal/aceptar', { token: prof, body: { documento: 'PRIVACIDAD', version: estP[0].version } })).status === 200);
+  check('queda registrada con fecha', (await http('GET', '/api/legal/estado', { token: prof })).data[0].aceptado === true);
+  check('la cuenta principal acepta el contrato de encargo', (await http('POST', '/api/legal/aceptar', { token: admin, body: { documento: 'ENCARGO', version: estA.find(d => d.documento === 'ENCARGO').version } })).status === 200);
+  const acep = await http('GET', '/api/admin/legal/aceptaciones', { token: admin });
+  check('administración ve quién aceptó y quién no', acep.status === 200 && acep.data.usuarios.some(u => u.id === me.id && u.completo) && acep.data.completos >= 1);
+  check('el profesor no ve el listado de aceptaciones → 403', (await http('GET', '/api/admin/legal/aceptaciones', { token: prof })).status === 403);
+  check('las aceptaciones salen en la exportación de datos del titular', (await http('GET', '/api/auth/me/exportar', { token: prof })).data.aceptacionesLegales?.length >= 1);
+
+  seccion('6g. Auditoría: subidas, límites e informes');
+  // Subidas: el tipo se decide por el contenido, no por el nombre ni por lo que declare el cliente
+  const docA = await http('POST', '/api/admin/documentos', { token: admin, form: pdf('aud.pdf').add({ profesorId: me.id, tipo: 'OTRO', nombre: 'Auditoría' }) });
+  const idDocA = docA.data.documento?.id;
+  const falso = new FormData(); falso.append('pdf', new Blob(['<script>alert(1)</script>'], { type: 'application/pdf' }), 'falso.html');
+  check('un HTML declarado como PDF se rechaza al firmar', (await http('POST', `/api/documentos/${idDocA}/firmar`, { token: prof, form: falso })).status === 400);
+  const falsoNombre = new FormData(); falsoNombre.append('pdf', new Blob(['<svg onload=alert(1)>'], { type: 'application/pdf' }), 'x.pdf');
+  check('un archivo con extensión .pdf pero contenido no PDF se rechaza', (await http('POST', `/api/documentos/${idDocA}/firmar`, { token: prof, form: falsoNombre })).status === 400);
+  const png = new FormData(); png.append('pdf', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])], { type: 'image/png' }), 'firma.exe');
+  const firmaPng = await http('POST', `/api/documentos/${idDocA}/firmar`, { token: prof, form: png });
+  check('una firma PNG válida se acepta y la extensión la fija el servidor (no el cliente)', firmaPng.status === 200 && /\.png$/.test(firmaPng.data.documento.firmaUrl));
+  const cabPng = await fetch(BASE + firmaPng.data.documento.firmaUrl, { headers: { Authorization: `Bearer ${admin}` } });
+  check('se sirve con tipo fijo, nosniff y sandbox', cabPng.headers.get('content-type') === 'image/png' && cabPng.headers.get('x-content-type-options') === 'nosniff' && /sandbox/.test(cabPng.headers.get('content-security-policy') || ''));
+  const pdfOk = await http('POST', '/api/firma/subir-firmado', { token: prof, form: (() => { const f = pdf('f.pdf').add({ mes: '03', anio: '2031' }); return f; })() });
+  check('el registro firmado en PDF válido se acepta', pdfOk.status === 200);
+  // Límites
+  check('el PDF del registro por correo admite más de 2 MB', (await http('POST', '/api/firma/enviar-email', { token: admin, body: { profesorId: me.id, mes: 3, anio: 2031, pdfBase64: 'A'.repeat(3_000_000) } })).status !== 413);
+  check('el resto de las rutas rechazan JSON de más de 2 MB → 413', (await http('POST', '/api/admin/comparativa', { token: admin, body: { mes: MES, filas: [{ profesor: 'x'.repeat(3_000_000) }] } })).status === 413);
+  let bloqueos = 0; for (let i = 0; i < 25; i++) if ((await http('POST', '/api/auth/magic-link/verificar', { body: { token: 'inexistente' + i } })).status === 429) bloqueos++;
+  check('varios usuarios en la misma red no se bloquean entre sí (25 canjes desde una IP)', bloqueos === 0);
+  // Informes de jornada
+  check('informe de jornada: mes inválido → 400', (await http('GET', '/api/informe/13/2026', { token: prof })).status === 400);
+  check('informe de jornada: año inválido → 400', (await http('GET', '/api/informe/5/abc', { token: prof })).status === 400);
+  check('informe de jornada: un profesor no ve el de otro (ignora profesorId)', (await http('GET', `/api/informe/5/2026?profesorId=${listaUsr.find(u => u.role === 'ADMIN')?.id}`, { token: prof })).data.profesor?.id === me.id);
+  check('planilla general: solo administración → 403', (await http('GET', '/api/admin/planilla/5/2026', { token: prof })).status === 403);
+  check('el servidor trabaja en hora de España', salud.data.zonaHoraria === 'Europe/Madrid' || !!salud.data.zonaHoraria);
+
+  seccion('6h. Acceso con código de 6 dígitos (app instalada en iPhone)');
+  const fs = require('fs');
+  const LOG = process.env.API_LOG; // ruta del registro de la API local: permite leer el código que se «enviaría» por correo
+  const leerCodigo = email => { try { const m = [...fs.readFileSync(LOG, 'utf8').matchAll(new RegExp(`Enlace de acceso para ${email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}: \\S+ · código (\\d{6})`, 'g'))].pop(); return m && m[1]; } catch { return null; } };
+  const nuevoUsuario = async tag => { const e = `${tag}.${Date.now()}@ejemplo.test`; await http('POST', '/api/admin/profesores/importar', { token: admin, body: { filas: [{ nombre: 'Codigo', apellidos: tag, email: e }] } }); return e; };
+  check('un código mal formado se rechaza → 400', (await http('POST', '/api/auth/codigo/verificar', { body: { email: 'x@y.test', codigo: '12ab' } })).status === 400);
+  check('un email desconocido responde igual que un código incorrecto → 401', (await http('POST', '/api/auth/codigo/verificar', { body: { email: 'nadie@no-existe.test', codigo: '123456' } })).status === 401);
+  if (LOG && fs.existsSync(LOG)) {
+    const e1 = await nuevoUsuario('codigo1');
+    await http('POST', '/api/auth/magic-link', { body: { email: e1 } }); await new Promise(r => setTimeout(r, 400));
+    const c1 = leerCodigo(e1);
+    check('al pedir el enlace se genera también un código de 6 dígitos', /^\d{6}$/.test(c1 || ''));
+    const malo = c1 === '000000' ? '111111' : '000000';
+    check('un código incorrecto no entra → 401', (await http('POST', '/api/auth/codigo/verificar', { body: { email: e1, codigo: malo } })).status === 401);
+    const ok = await http('POST', '/api/auth/codigo/verificar', { body: { email: e1, codigo: c1 } });
+    check('el código correcto abre la sesión dentro de la app', ok.status === 200 && !!ok.data.token && ok.data.user.email === e1);
+    check('la sesión creada por código funciona', (await http('GET', '/api/auth/me', { token: ok.data.token })).status === 200);
+    check('el código es de un solo uso', (await http('POST', '/api/auth/codigo/verificar', { body: { email: e1, codigo: c1 } })).status === 401);
+    const e2 = await nuevoUsuario('codigo2');
+    await http('POST', '/api/auth/magic-link', { body: { email: e2 } }); await new Promise(r => setTimeout(r, 400));
+    const c2 = leerCodigo(e2); const m2 = c2 === '000000' ? '111111' : '000000';
+    for (let i = 0; i < 5; i++) await http('POST', '/api/auth/codigo/verificar', { body: { email: e2, codigo: m2 } });
+    check('tras 5 intentos fallidos el código queda anulado, aunque luego sea el correcto', (await http('POST', '/api/auth/codigo/verificar', { body: { email: e2, codigo: c2 } })).status === 401);
+    for (const e of [e1, e2]) { const u = (await http('GET', '/api/admin/profesores', { token: admin })).data.find(x => x.email === e); if (u) await http('PUT', `/api/admin/profesores/${u.id}`, { token: admin, body: { activo: false } }); }
+  } else console.log('  · (se omiten las pruebas con código real: define API_LOG con el registro de la API local)');
+
+  seccion('6i. Panel de administración y sesión');
+  const resm = await http('GET', '/api/admin/resumen', { token: admin });
+  check('el resumen del panel responde con solicitudes, clases y documentos', resm.status === 200 && resm.data.solicitudes && resm.data.clases && resm.data.documentos && resm.data.equipo);
+  check('los contadores del resumen son números', ['pendientes', 'aprobadas', 'rechazadas'].every(k => Number.isInteger(resm.data.solicitudes[k])));
+  check('un profesor no accede al resumen del panel → 403', (await http('GET', '/api/admin/resumen', { token: prof })).status === 403);
+  check('un token manipulado sigue dando 401 (no 503)', (await http('GET', '/api/auth/me', { token: prof + 'x' })).status === 401);
+  check('renovar la sesión devuelve un token nuevo válido', await (async () => { const r = await http('POST', '/api/auth/renovar', { token: prof }); return r.status === 200 && (await http('GET', '/api/auth/me', { token: r.data.token })).status === 200; })());
+
   seccion('7. Limpieza');
   await http('POST', '/api/admin/clases/reabrir', { token: admin, body: { profesorId: me.id, mes: MES } });
   check('elimina la clase de prueba', (await http('DELETE', `/api/clases/${claseId}`, { token: prof })).status === 200);

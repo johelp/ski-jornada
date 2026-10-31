@@ -57,6 +57,15 @@ Estado: ✅ disponible · 🟡 disponible con límites · 🗺 planificado (ver 
 
 ## 3. Administración
 
+### Panel (inicio)
+| Función | Estado | Detalle |
+|---------|--------|---------|
+| Resumen «por atender» | ✅ | Suma lo pendiente (solicitudes, horas por revisar, discrepancias, documentos sin firmar); se actualiza al abrir y cada minuto |
+| Estado de las solicitudes | ✅ | Pendientes, aprobadas y rechazadas (60 días) y ausentes hoy; toca para ir a *Solicitudes* |
+| Aprobar desde el panel | ✅ | Botón *Aprobar* en cada solicitud pendiente; para rechazar (requiere observación) se entra en *Solicitudes* |
+| Horas por revisar y discrepancias | ✅ | Meses confirmados sin revisión y correcciones/discrepancias abiertas, con acceso a *Clases* |
+| Próximas ausencias, invitados sin entrar, incidencias | ✅ | Seguimiento rápido del equipo (`GET /api/admin/resumen`) |
+
 ### Equipo
 | Función | Estado | Detalle |
 |---------|--------|---------|

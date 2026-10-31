@@ -20,7 +20,7 @@ Ver `PILOTO-SNOWMOTION.md`: carga masiva de nóminas, archivado en Drive (cuenta
 ## Próximo (prioridad alta)
 1. **Revisión UX/UI** de toda la app (mobile first): jerarquía visual, contraste de inputs, formulario de carga de clases con 1 mano, estados vacíos, accesibilidad. Probar la PWA en iOS y Android reales.
 2. **Doble verificación para administración** y cambio de email desde la interfaz; caducidad de invitaciones sin usar.
-3. **Código de 6 dígitos** además del enlace mágico, por el problema de iOS (la PWA instalada no comparte almacenamiento con Safari).
+3. ~~Código de 6 dígitos~~ ✅ hecho (enlace + código; sesión persistente con renovación).
 3. **Verificar el envío de correos en producción** (Resend + DNS) y plantilla visual de los correos.
 4. **Backups automáticos** de `prod.db` y `uploads`.
 
@@ -40,3 +40,7 @@ Ver `PILOTO-SNOWMOTION.md`: carga masiva de nóminas, archivado en Drive (cuenta
 - Tarifas por titulación/nivel y por disciplina (hoy la tarifa es una por profesor).
 - Multi-escuela; registro de auditoría inmutable; firma electrónica legalmente válida (Autofirma/ViDeSigner); notificaciones push en iOS (Safari 16.4+ con VAPID).
 - Migrar a Postgres si crece el uso o se necesita más de una réplica.
+
+## Pendiente: repasar el resto del panel de administración
+
+El inicio del panel ya muestra lo pendiente (solicitudes por estado, horas por revisar, firmas). Falta llevar el mismo criterio práctico (móvil primero, acciones en la lista, menos pasos) a las pantallas heredadas: Solicitudes (rechazar con observación sin salir del panel), Zonas, Avisos, Config, Presencia y Documentos.

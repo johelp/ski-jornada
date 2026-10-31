@@ -13,7 +13,11 @@ async function main() {
   for (const [nombre, modo] of [['Idioma', 'POR_HORA'], ['Disca', 'POR_HORA'], ['Repetida', 'POR_CLASE']]) {
     await prisma.primaClase.upsert({ where: { nombre }, update: {}, create: { nombre, modo } });
   }
-  await prisma.configEscuela.upsert({ where: { id: 'default' }, update: {}, create: { id: 'default' } });
+  // Datos de la escuela en blanco (los completa la administración): los valores de ejemplo del esquema no deben salir en informes legales
+  await prisma.configEscuela.upsert({ where: { id: 'default' }, update: {}, create: { id: 'default', nombre: '', cif: '', direccion: '', telefono: '' } });
+  for (const [campo, ejemplo] of [['nombre', 'Escuela de Esquí Sierra Nevada'], ['cif', 'B12345678'], ['direccion', 'Sierra Nevada, Granada'], ['telefono', '958 000 000']]) {
+    await prisma.configEscuela.updateMany({ where: { id: 'default', [campo]: ejemplo }, data: { [campo]: '' } });
+  }
 
   const email = (process.env.ADMIN_EMAIL || '').toLowerCase().trim();
   if (!email) {

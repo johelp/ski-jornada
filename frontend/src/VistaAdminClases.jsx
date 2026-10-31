@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { generarPDFClases } from './pdfClases';
 import { REVISION } from './VistaMisClases';
+import { filaCsv } from './csv';
 import VistaComparativa from './VistaComparativa';
 
 const eur = n => (n == null ? '—' : `${n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`);
@@ -77,7 +78,7 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
   const exportarCSV = () => {
     const filas = [['Profesor', 'Horas', 'Clases', 'Días', 'Importe', 'Estado'],
       ...resumen.map(r => [`${r.apellidos}, ${r.nombre}`, r.totalHoras, r.cantidadClases, r.diasConClases, r.importeTotal ?? '', r.confirmado ? 'Confirmado' : 'Sin confirmar'])];
-    const csv = '﻿' + filas.map(f => f.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\n');
+    const csv = '﻿' + filas.map(f => filaCsv(f, ';', { decimalComa: true })).join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     a.download = `clases_${mes}.csv`; a.click(); URL.revokeObjectURL(a.href);

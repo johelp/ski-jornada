@@ -58,4 +58,4 @@ Estados: **Invitado** (en la lista, nunca entró) → **Activo** (entró al meno
 - Doble verificación para administración (código por correo además del enlace).
 - Cambio de email desde la interfaz.
 - Caducidad automática de invitaciones sin usar y recordatorios.
-- Código de 6 dígitos para iPhone (ver `ROADMAP.md`).
+- ~~Código de 6 dígitos para iPhone~~ ✅ disponible (ver `APP-MOVIL.md`).

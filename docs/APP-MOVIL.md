@@ -21,9 +21,18 @@ La plataforma es una **web app instalable**: instalada se abre **a pantalla comp
 - **Aviso de instalación** en móvil: se muestra si la app no está instalada y se oculta 14 días al descartarlo.
 - **Navegación pensada para el pulgar**: barra inferior, botones de ≥ 44 px y formularios táctiles.
 
-## Entrar desde la app instalada
+## Entrar y mantener la sesión (app instalada)
 
-El enlace del correo se abre en el navegador del móvil. En **iPhone** la app instalada tiene su propio almacenamiento, así que la sesión iniciada en Safari no pasa a ella: hay que **pedir el enlace desde la app instalada** y abrirlo (el enlace puede abrirse en Safari igualmente). Para evitarlo está previsto el **código de 6 dígitos** (`ROADMAP.md`).
+El enlace del correo se abre en el navegador del móvil y, en **iPhone**, la app instalada tiene su propio almacenamiento: la sesión iniciada en Safari no pasa a ella. Por eso el correo trae además un **código de 6 dígitos**: se pide el acceso **dentro de la app instalada** y se escribe el código allí mismo; no hace falta salir de la app.
+
+Para que el profesor **no tenga que volver a entrar**:
+
+- **Sesión de 90 días que se amplía con el uso:** al abrir la app y cada vez que vuelve a primer plano (como mucho una vez cada 6 h) se renueva por otros 90 días. Solo se pide un acceso nuevo si pasan 90 días sin abrirla.
+- **Doble copia:** el token se guarda en `localStorage` y en IndexedDB (`src/sesion.js`). Si el sistema limpia uno, se restaura del otro al abrir. Además se pide al navegador almacenamiento persistente (`navigator.storage.persist()`).
+- **Un fallo temporal no cierra la sesión:** solo una respuesta 401 real (token caducado, cuenta de baja) cierra la sesión. Sin cobertura o con el servidor caído la sesión se conserva; si la base de datos falla puntualmente la API responde 503, no 401.
+- **Baja inmediata:** si administración da de baja a alguien, su sesión deja de valer en segundos.
+
+Si un profesor se queda sin sesión: abrir la app → *Acceso profesores* → su email → código del correo.
 
 ## Para desarrolladores
 

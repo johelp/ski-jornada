@@ -8,6 +8,8 @@ import InformeClases from './InformeClases';
 import VistaIntegraciones from './VistaIntegraciones';
 import ImportarLista from './ImportarLista';
 import InstalarBanner from './InstalarBanner';
+import { filaCsv } from './csv';
+import AceptacionLegal, { PoliticaPrivacidad } from './AceptacionLegal';
 import VistaAdminClases from './VistaAdminClases';
 import Landing from './Landing';
 import './App.css';
@@ -15,6 +17,8 @@ import './theme.css';
 import Icono, { LogoMarca } from './Iconos';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import DashboardAdmin from './DashboardAdmin';
+import { leerSesion, guardarSesion as guardarSesionAlmacen, borrarSesion, restaurarSesion } from './sesion';
 const api = axios.create({ baseURL: API_BASE });
 
 // ===== TOTP — usa offset del servidor para hora precisa =====
@@ -258,18 +262,21 @@ function VistaPresencia({ presencia, onRefresh, serverTimeOffsetRef }) {
 }
 
 function App() {
-  const [token, setToken]   = useState(localStorage.getItem('token'));
-  const [user,  setUser]    = useState(() => { try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch { return null; } });
+  const [token, setToken]   = useState(() => leerSesion().token);
+  const [user,  setUser]    = useState(() => leerSesion().user);
   const [vista, setVista]   = useState('dashboard');
   const [modoEmpleado, setModoEmpleado] = useState(false);
   const [toast, setToast]   = useState(null);
   const [cargando, setCargando] = useState(false);
   const [confirmarSalida, setConfirmarSalida] = useState(false);
   const [masAbierto, setMasAbierto] = useState(false);
+  const ultimaRenovacion = useRef(0);
   const [periodoDash, setPeriodoDash] = useState('mes');
   const [nuevoUsuarioAbierto, setNuevoUsuarioAbierto] = useState(false);
   const [busquedaUsuario, setBusquedaUsuario] = useState('');
   const [importarAbierto, setImportarAbierto] = useState(false);
+  const [legalPendiente, setLegalPendiente] = useState(false);
+  const [verPrivacidad, setVerPrivacidad] = useState(false);
   const [auditoria, setAuditoria] = useState(null);
   const [tabInformeEmp, setTabInformeEmp] = useState('jornada');
   const [clasesPeriodo, setClasesPeriodo] = useState(null);
@@ -312,6 +319,7 @@ function App() {
 
   // Datos admin
   const [adminSolicitudes, setAdminSolicitudes]     = useState([]);
+  const [resumenAdmin, setResumenAdmin]               = useState(null);
   const [profesores, setProfesores]                 = useState([]);
   const [zonasAdmin, setZonasAdmin]                 = useState([]);
   const [informeMensual, setInformeMensual]         = useState(null);
@@ -441,6 +449,10 @@ function App() {
     const r = await api.get('/api/libres/mis-solicitudes', { headers: h() });
     setSolicitudes(r.data);
   }), [token]);
+  const cargarResumenAdmin = useCallback(() => load(async () => {
+    const r = await api.get('/api/admin/resumen', { headers: h() });
+    setResumenAdmin(r.data);
+  }), [token]);
   const cargarAdminSolicitudes = useCallback(() => load(async () => {
     const r = await api.get('/api/admin/solicitudes', { headers: h() });
     setAdminSolicitudes(r.data);
@@ -497,7 +509,7 @@ function App() {
   // Canje del enlace mágico (?magic=...) y renovación de la sesión al abrir la app
   useEffect(() => {
     const guardarSesion = (t, u) => {
-      localStorage.setItem('token', t); localStorage.setItem('user', JSON.stringify(u));
+      guardarSesionAlmacen(t, u);
       setToken(t); setUser(u);
     };
     const magic = new URLSearchParams(window.location.search).get('magic');
@@ -512,19 +524,38 @@ function App() {
         .finally(() => setCargando(false));
       return;
     }
-    if (token) {
-      api.post('/api/auth/renovar', null, { headers: { Authorization: `Bearer ${token}` } })
-        .then(r => guardarSesion(r.data.token, r.data.user))
-        .catch(e => { if (e.response?.status === 401) logout(); });
-    }
+    const renovar = (t) => api.post('/api/auth/renovar', null, { headers: { Authorization: `Bearer ${t}` } })
+      .then(r => guardarSesion(r.data.token, r.data.user))
+      .catch(e => { if (e.response?.status === 401) logout(); }); // sin red u otro error: se conserva la sesión
+    if (token) renovar(token);
+    else restaurarSesion().then(r => { if (r.token) { setToken(r.token); setUser(r.user); renovar(r.token); } });
+    // Cada vez que la app vuelve a primer plano (máx. 1 vez cada 6 h) se amplía la sesión otros 90 días
+    const alVolver = () => {
+      if (document.visibilityState !== 'visible') return;
+      const { token: t } = leerSesion();
+      if (!t || Date.now() - ultimaRenovacion.current < 6 * 36e5) return;
+      ultimaRenovacion.current = Date.now();
+      renovar(t);
+    };
+    ultimaRenovacion.current = Date.now();
+    document.addEventListener('visibilitychange', alVolver);
+    return () => document.removeEventListener('visibilitychange', alVolver);
   }, []);
+
+  // El panel de administración se refresca al abrirlo y cada minuto
+  useEffect(() => {
+    if (!token || user?.role !== 'ADMIN' || vista !== 'dashboard' || modoEmpleado) return;
+    cargarResumenAdmin();
+    const t = setInterval(cargarResumenAdmin, 60000);
+    return () => clearInterval(t);
+  }, [token, vista, modoEmpleado]);
 
   useEffect(() => {
     if (token && user) {
       cargarHistorial(); cargarSolicitudes(); cargarMisDocumentos();
       cargarNotificaciones(); cargarConfig();
       if (user.role === 'ADMIN') {
-        cargarAdminSolicitudes(); cargarProfesores(); cargarZonasAdmin(); cargarDocumentosAdmin();
+        cargarAdminSolicitudes(); cargarProfesores(); cargarZonasAdmin(); cargarDocumentosAdmin(); cargarResumenAdmin();
         cargarNotifAdmin();
         api.get('/api/whatsapp/status', { headers: h() }).then(r => setWhatsappStatus(r.data)).catch(() => {});
       }
@@ -548,6 +579,13 @@ function App() {
     if (user.role === 'ADMIN' && ['fichar', 'misclases', 'solicitar'].includes(v)) setModoEmpleado(true);
     setVista(v);
     window.history.replaceState({}, '', window.location.pathname);
+  }, [token]);
+
+  // Información de privacidad / contrato de encargo pendientes de aceptar (bloquea la app hasta aceptarlos)
+  useEffect(() => {
+    if (!token) return;
+    api.get('/api/legal/estado', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => setLegalPendiente(r.data.some(d => !d.aceptado))).catch(() => {});
   }, [token]);
 
   // Poll notifications every 60s
@@ -726,7 +764,7 @@ function App() {
     try {
       await api.post(`/api/admin/solicitudes/${id}/responder`, { aprobado, observacion }, { headers: h() });
       toast$(aprobado ? 'Solicitud aprobada ✓' : 'Solicitud rechazada', aprobado ? 'success' : 'error');
-      cargarAdminSolicitudes(); cargarSolicitudes(); setObservacion(''); setSolicitudSeleccionada(null);
+      cargarAdminSolicitudes(); cargarSolicitudes(); cargarResumenAdmin(); setObservacion(''); setSolicitudSeleccionada(null);
     } catch { toast$('Error al procesar', 'error'); }
     finally { setCargando(false); }
   };
@@ -784,7 +822,7 @@ function App() {
       const r = await api.put('/api/auth/me', perfilEdit, { headers: h() });
       const newUser = { ...user, ...r.data };
       setUser(newUser);
-      localStorage.setItem('user', JSON.stringify(newUser));
+      guardarSesionAlmacen(token, newUser);
       toast$('Perfil actualizado correctamente', 'success');
       setPerfilEdit(null);
     } catch (err) { toast$(err.response?.data?.error || 'Error al actualizar perfil', 'error'); }
@@ -904,7 +942,11 @@ function App() {
     const w = window.open('', '_blank');
     try {
       const r = await api.get(url, { headers: h(), responseType: 'blob' });
-      const blobUrl = URL.createObjectURL(r.data);
+      // El tipo lo fijamos nosotros por la extensión, no el que declare el servidor: un HTML disfrazado no puede ejecutarse en esta página
+      const TIPOS = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg' };
+      const tipo = TIPOS[(url.split('.').pop() || '').toLowerCase()];
+      if (!tipo) throw new Error('tipo');
+      const blobUrl = URL.createObjectURL(new Blob([r.data], { type: tipo }));
       if (w) w.location.href = blobUrl; else window.location.href = blobUrl;
     } catch { w?.close(); toast$('No se pudo abrir el archivo', 'error'); }
   };
@@ -917,7 +959,7 @@ function App() {
     } catch { toast$('No se pudo exportar', 'error'); }
   };
 
-  const logout = () => { localStorage.removeItem('token'); localStorage.removeItem('user'); setToken(null); setUser(null); };
+  const logout = () => { borrarSesion(); setToken(null); setUser(null); };
 
   // ===== ESTADO ACTUAL =====
   const hoy = fechaLocal(horaActual);
@@ -940,7 +982,7 @@ function App() {
         { id: 'dashboard',  icon: '📊', label: 'Panel' },
         { id: 'presencia',  icon: '🟢', label: 'Presencia' },
         { id: 'gestionar',  icon: '✅', label: 'Solicitudes', badge: adminPendientes },
-        { id: 'clases',     icon: '🎿', label: 'Clases' },
+        { id: 'clases',     icon: '🎿', label: 'Clases', badge: (resumenAdmin?.clases.sinRevisar || 0) + (resumenAdmin?.clases.conProblema || 0) },
         { id: 'informes',   icon: '📄', label: 'Informes' },
         { id: 'documentos', icon: '📁', label: 'Documentos', badge: docsPendientes },
         { id: 'usuarios',   icon: '👥', label: 'Usuarios' },
@@ -993,11 +1035,20 @@ function App() {
       } catch (err) { toast$(err.response?.data?.error || 'No se pudo enviar el enlace', 'error'); }
       finally { setCargando(false); }
     };
+    const verificarCodigo = async (email, codigo) => {
+      setCargando(true);
+      try {
+        const res = await api.post('/api/auth/codigo/verificar', { email, codigo });
+        guardarSesionAlmacen(res.data.token, res.data.user);
+        setToken(res.data.token); setUser(res.data.user);
+      } catch (err) { toast$(err.response?.data?.error || 'No se pudo verificar el código', 'error', 5000); }
+      finally { setCargando(false); }
+    };
     const handleLoginPassword = async (e) => {
       e.preventDefault(); setCargando(true);
       try {
         const res = await api.post('/api/auth/login', { email: e.target.email.value, password: e.target.password.value });
-        localStorage.setItem('token', res.data.token); localStorage.setItem('user', JSON.stringify(res.data.user));
+        guardarSesionAlmacen(res.data.token, res.data.user);
         setToken(res.data.token); setUser(res.data.user);
       } catch (err) { toast$(err.response?.data?.error || 'Error al iniciar sesión', 'error'); }
       finally { setCargando(false); }
@@ -1007,7 +1058,7 @@ function App() {
         <Landing
           emailLogin={emailLogin} setEmailLogin={setEmailLogin}
           enlaceEnviado={enlaceEnviado} setEnlaceEnviado={setEnlaceEnviado}
-          pedirEnlace={pedirEnlace} cargando={cargando}
+          api={api} verificarCodigo={verificarCodigo} pedirEnlace={pedirEnlace} cargando={cargando}
           pwaInstallEvent={pwaInstallEvent} instalarPWA={instalarPWA} toast={toast}
           devForm={import.meta.env.DEV && (
             <form onSubmit={handleLoginPassword} className="login-demo">
@@ -1026,6 +1077,8 @@ function App() {
 
   return (
     <div className="app-container">
+      {legalPendiente && <AceptacionLegal api={api} h={h} toast$={toast$} onListo={() => setLegalPendiente(false)} onSalir={logout} />}
+      {verPrivacidad && <PoliticaPrivacidad api={api} onCerrar={() => setVerPrivacidad(false)} />}
       <header className="topbar">
         <div className="topbar-in">
           <div className="topbar-brand">
@@ -1142,61 +1195,8 @@ function App() {
 
         {/* ===== DASHBOARD ADMIN ===== */}
         {esAdmin && !modoEmpleado && vista === 'dashboard' && (
-          <div>
-            <div className="stats-grid">
-              <div className="stat-card stat-blue"><span className="stat-icon">👥</span><div>
-                <p className="stat-label">Empleados activos</p>
-                <p className="stat-number">{profesores.filter(p => p.activo !== false).length}</p></div></div>
-              <div className="stat-card stat-amber"><span className="stat-icon">✅</span><div>
-                <p className="stat-label">Solicitudes pendientes</p>
-                <p className="stat-number">{adminPendientes}</p></div></div>
-              <div className="stat-card stat-red"><span className="stat-icon">📁</span><div>
-                <p className="stat-label">Docs pendientes firma</p>
-                <p className="stat-number">{docsPendientes}</p></div></div>
-            </div>
-            {adminPendientes > 0 && (
-              <div className="card">
-                <div className="card-header">
-                  <h2>Solicitudes pendientes</h2>
-                  <button className="btn-sm" onClick={() => setVista('gestionar')}>Ver todas →</button>
-                </div>
-                <div className="solicitudes-list">
-                  {adminSolicitudes.filter(s => s.estado === 'PENDIENTE').slice(0, 3).map(sol => (
-                    <div key={sol.id} className="solicitud-item estado-pendiente">
-                      <div className="solicitud-header">
-                        <span className="solicitud-fechas"><strong>{sol.profesorNombre}</strong> · {new Date(sol.fechaInicio).toLocaleDateString('es-ES')} → {new Date(sol.fechaFin).toLocaleDateString('es-ES')}</span>
-                        <span className="estado-badge pendiente">{sol.motivo.replace('_', ' ')}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {docsPendientes > 0 && (
-              <div className="card">
-                <div className="card-header">
-                  <h2>Documentos pendientes de firma</h2>
-                  <button className="btn-sm" onClick={() => { setVista('documentos'); setDocFiltro('pendientes'); }}>Ver todos →</button>
-                </div>
-                <div className="solicitudes-list">
-                  {documentosAdmin.filter(d => d.estado === 'PENDIENTE').slice(0, 5).map(doc => (
-                    <div key={doc.id} className="solicitud-item estado-pendiente">
-                      <div className="solicitud-header">
-                        <span className="solicitud-fechas">
-                          {TIPO_DOC_ICON[doc.tipo] || '📄'} <strong>{doc.profesorNombre}</strong> — {doc.nombre}
-                          {doc.mes && <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}> · {doc.mes}</span>}
-                        </span>
-                        <span className="estado-badge pendiente">Pendiente</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {adminPendientes === 0 && docsPendientes === 0 && (
-              <div className="card"><div className="empty-state"><p>✅ Todo al día</p><small>No hay solicitudes ni documentos pendientes</small></div></div>
-            )}
-          </div>
+          <DashboardAdmin resumen={resumenAdmin} cargando={cargando} irA={setVista} recargar={cargarResumenAdmin}
+            aprobar={id => responderSolicitud(id, true)} />
         )}
 
         {/* ===== PRESENCIA (admin) ===== */}
@@ -1642,7 +1642,7 @@ function App() {
               p.horasEsperadas, p.horasTrabajadas, p.horasExceso, p.horasDeficit,
               p.cumplimiento, p.diasTrabajados, p.diasConExceso, p.estado,
             ]);
-            const csv = [cols, ...filas].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+            const csv = [cols, ...filas].map(r => filaCsv(r, ',')).join('\r\n');
             const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -2472,7 +2472,10 @@ function App() {
               <p style={{ color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
                 Descarga una copia de todos tus datos personales guardados en la plataforma (perfil, fichajes, clases, solicitudes y avisos).
               </p>
-              <button className="btn-primary" style={{ width: 'auto' }} onClick={exportarMisDatos}>⬇ Exportar mis datos</button>
+              <div className="action-buttons">
+                <button className="btn-primary" style={{ width: 'auto' }} onClick={exportarMisDatos}>⬇ Exportar mis datos</button>
+                <button className="btn-sm" onClick={() => setVerPrivacidad(true)}>Ver información de privacidad</button>
+              </div>
             </div>
 
             {/* Activar notificaciones si no están activas */}

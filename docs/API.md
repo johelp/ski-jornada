@@ -79,7 +79,7 @@ El informe incluye `revision` (`{estado, nota, revisadoAt}` o `null`) y, por cla
 `GET /uploads/documentos/:file` y `GET /uploads/firmas/:file` requieren `Authorization: Bearer`. Admin: todo. Profesor: solo los suyos (403 si no). Ver `ARQUITECTURA.md`.
 
 ## Días libres
-`POST /api/libres/solicitar` · `GET /api/libres/mis-solicitudes` · 🛡 `GET /api/admin/solicitudes` · 🛡 `POST /api/admin/solicitudes/:id/responder`
+`POST /api/libres/solicitar` · `GET /api/libres/mis-solicitudes` · 🛡 `GET /api/admin/resumen` (panel: solicitudes por estado, horas por revisar, documentos, equipo) · 🛡 `GET /api/admin/solicitudes` · 🛡 `POST /api/admin/solicitudes/:id/responder`
 
 ## Documentos (legajo)
 `POST /api/admin/documentos` 🛡 (multipart) · `GET /api/documentos/mis-documentos` · `POST /api/documentos/:id/firmar` · 🛡 `GET /api/admin/documentos` · 🛡 `GET /api/admin/profesores/:id/documentos`

@@ -246,3 +246,10 @@ body:has(.lp) { background: #fff; }
 .lp-center-block { text-align: center; display: grid; gap: 14px; justify-items: center; }
 .lp-center-block h2 { margin-bottom: 0 !important; }
 .lp-role .lp-hint { margin-top: -4px; }
+
+/* Código de 6 dígitos (app instalada) y zona segura superior */
+.lp-codigo { display: grid; gap: 8px; text-align: left; padding: 14px; border: 1px solid var(--lp-line); border-radius: 14px; background: #f8fafc; }
+.lp-codigo label { margin: 0 !important; font-size: 0.9rem; }
+.lp-codigo input { text-align: center; font-size: 1.8rem !important; letter-spacing: 0.4em; font-weight: 800; font-variant-numeric: tabular-nums; margin: 0 !important; padding-left: 0.4em !important; }
+.lp .lp-nav { padding-top: env(safe-area-inset-top, 0px); }
+@media (max-width: 959px) { .lp .lp-nav { padding-top: calc(env(safe-area-inset-top, 0px) + 6px); } }

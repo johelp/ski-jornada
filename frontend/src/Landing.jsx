@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import './Landing.css';
 import { Pantalla, PANTALLAS } from './Mockups';
+import { PoliticaPrivacidad } from './AceptacionLegal';
 
 // Marca por despliegue (variables de build de Cloudflare Pages; ver docs/MULTI-DESPLIEGUE.md)
 const APP_NAME = import.meta.env.VITE_APP_NAME || 'Ski Jornada';
@@ -59,8 +60,10 @@ const ACCESOS = {
 
 export default function Landing({
   emailLogin, setEmailLogin, enlaceEnviado, setEnlaceEnviado, pedirEnlace,
-  cargando, pwaInstallEvent, instalarPWA, devForm, toast,
+  cargando, pwaInstallEvent, instalarPWA, devForm, toast, api, verificarCodigo,
 }) {
+  const [codigo, setCodigo] = useState('');
+  const [verPrivacidad, setVerPrivacidad] = useState(false);
   const [acceso, setAcceso] = useState(null);
   const [rol, setRol] = useState('profesor');
   const [pant, setPant] = useState(0);
@@ -246,7 +249,7 @@ export default function Landing({
       </main>
 
       <footer className="lp-foot">
-        <div className="lp-wrap">© {new Date().getFullYear()} {APP_NAME}{LUGAR ? ` · ${LUGAR}` : ''}</div>
+        <div className="lp-wrap">© {new Date().getFullYear()} {APP_NAME}{LUGAR ? ` · ${LUGAR}` : ''} · <button className="lp-link" onClick={() => setVerPrivacidad(true)}>Política de privacidad</button></div>
       </footer>
 
       {acceso && (
@@ -257,9 +260,18 @@ export default function Landing({
             {enlaceEnviado ? (
               <div className="lp-sent" role="status">
                 <div className="lp-ico lp-ico-big">{ICONOS.correo}</div>
-                <p>Si <strong>{emailLogin}</strong> está registrado, te enviamos un enlace para entrar. Vale 15 minutos.</p>
+                <p>Si <strong>{emailLogin}</strong> está registrado, te enviamos un correo con un <strong>enlace</strong> y un <strong>código de 6 dígitos</strong>. Valen 15 minutos.</p>
+                <div className="lp-codigo">
+                  <label htmlFor="lp-codigo">¿Usas la app instalada? Escribe aquí el código</label>
+                  <input id="lp-codigo" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={6} placeholder="000000"
+                    value={codigo} onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 6); setCodigo(v); if (v.length === 6) verificarCodigo(emailLogin, v); }} />
+                  <button className="lp-btn lp-btn-primary lp-block" disabled={cargando || codigo.length !== 6} onClick={() => verificarCodigo(emailLogin, codigo)}>
+                    {cargando ? 'Entrando…' : 'Entrar con el código'}
+                  </button>
+                </div>
+                <p className="lp-hint">Si tocas el enlace del correo, se abre en el navegador del móvil y no en la app instalada: en el iPhone usa el código.</p>
                 <p className="lp-hint">Revisa también la carpeta de spam.</p>
-                <button className="lp-btn lp-btn-ghost" onClick={() => setEnlaceEnviado(false)}>Usar otro email</button>
+                <button className="lp-btn lp-btn-ghost" onClick={() => { setEnlaceEnviado(false); setCodigo(''); }}>Usar otro email</button>
               </div>
             ) : (
               <form onSubmit={pedirEnlace}>
@@ -278,6 +290,7 @@ export default function Landing({
         </div>
       )}
 
+      {verPrivacidad && api && <PoliticaPrivacidad api={api} onCerrar={() => setVerPrivacidad(false)} />}
       {toast && <div className={`toast toast-${toast.tipo}`} role="alert">{toast.msg}</div>}
     </div>
   );
