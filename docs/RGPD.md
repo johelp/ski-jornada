@@ -91,6 +91,8 @@ Medidas organizativas recomendadas: pocos administradores, cuentas nominales, fo
 
 ## 5. Contrato de encargo del tratamiento (modelo, art. 28)
 
+> Plantillas completas para revisar con el asesor: `legal/CONTRATO-ENCARGO-TRATAMIENTO.md`, `legal/INFORMACION-PRIVACIDAD-PERSONAL.md` y `legal/POLITICA-INTERNA-FICHAJE.md`. Registro de jornada: `CUMPLIMIENTO-REGISTRO-JORNADA.md`.
+
 Entre **`[Escuela]`** (responsable) y **`[Proveedor]`** (encargado). Cláusulas mínimas:
 1. **Objeto y duración:** prestación de la plataforma Ski Jornada durante la vigencia del servicio.
 2. **Naturaleza y finalidad:** tratamiento de los datos descritos en el apartado 2 para control horario y gestión de horas.

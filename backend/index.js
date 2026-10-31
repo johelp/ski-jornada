@@ -595,7 +595,7 @@ app.post('/api/fichaje/fichar', auth, async (req, res) => {
     const finDia    = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 23, 59, 59, 999);
 
     const registrosHoy = await prisma.registroJornada.findMany({
-      where: { profesorId: req.user.userId, timestamp: { gte: inicioDia, lte: finDia } },
+      where: { anulado: false, profesorId: req.user.userId, timestamp: { gte: inicioDia, lte: finDia } },
       orderBy: { timestamp: 'asc' },
     });
 
@@ -630,7 +630,7 @@ app.post('/api/fichaje/salida', auth, async (req, res) => {
     const inicioDia = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
     const finDia    = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 23, 59, 59, 999);
     const registrosHoy = await prisma.registroJornada.findMany({
-      where: { profesorId: req.user.userId, timestamp: { gte: inicioDia, lte: finDia } },
+      where: { anulado: false, profesorId: req.user.userId, timestamp: { gte: inicioDia, lte: finDia } },
       orderBy: { timestamp: 'asc' },
     });
     const ultimo = registrosHoy[registrosHoy.length - 1];
@@ -657,7 +657,7 @@ app.post('/api/fichaje/salida', auth, async (req, res) => {
 app.get('/api/fichaje/historial', auth, async (req, res) => {
   try {
     const registros = await prisma.registroJornada.findMany({
-      where: { profesorId: req.user.userId },
+      where: { anulado: false, profesorId: req.user.userId },
       orderBy: { timestamp: 'asc' },
     });
 
@@ -769,7 +769,7 @@ app.get('/api/admin/resumen', auth, adminOnly, async (req, res) => {
       prisma.revisionMes.findMany({ where: { mes: { in: meses } } }),
       prisma.documentoLegajo.findMany({ where: { estado: 'PENDIENTE' }, include: { profesor: quien }, orderBy: { createdAt: 'asc' }, take: 50 }),
       prisma.profesor.findMany({ where: { role: 'PROFESOR', activo: true }, select: { id: true, nombre: true, apellidos: true, adheridoAt: true } }),
-      prisma.registroJornada.findMany({ where: { timestamp: { gte: new Date(hoy0.getTime() - 864e5) } }, orderBy: { timestamp: 'desc' }, select: { profesorId: true, tipo: true, timestamp: true } }),
+      prisma.registroJornada.findMany({ where: { anulado: false, timestamp: { gte: new Date(hoy0.getTime() - 864e5) } }, orderBy: { timestamp: 'desc' }, select: { profesorId: true, tipo: true, timestamp: true } }),
       prisma.registroJornada.count({ where: { esIncidencia: true, timestamp: { gte: new Date(hoy0.getTime() - 7 * 864e5) } } }),
     ]);
 
@@ -1087,7 +1087,7 @@ app.get('/api/admin/planilla/:mes/:anio', auth, adminOnly, async (req, res) => {
 
     const [profesores, todosRegistros] = await Promise.all([
       prisma.profesor.findMany({ where: { activo: true }, orderBy: { apellidos: 'asc' } }),
-      prisma.registroJornada.findMany({ where: { timestamp: { gte: inicio, lte: fin } }, orderBy: { timestamp: 'asc' } }),
+      prisma.registroJornada.findMany({ where: { anulado: false, timestamp: { gte: inicio, lte: fin } }, orderBy: { timestamp: 'asc' } }),
     ]);
 
     const porProfesor = {};
@@ -1167,7 +1167,7 @@ app.get('/api/informe/:mes/:anio', auth, async (req, res) => {
     const fin    = new Date(anioNum, mesNum, 0, 23, 59, 59, 999);
 
     const regs = await prisma.registroJornada.findMany({
-      where: { profesorId: targetId, timestamp: { gte: inicio, lte: fin } },
+      where: { anulado: false, profesorId: targetId, timestamp: { gte: inicio, lte: fin } },
       orderBy: { timestamp: 'asc' },
     });
 
@@ -1404,6 +1404,91 @@ app.get('/api/admin/profesores/:id/documentos', auth, adminOnly, async (req, res
 });
 
 // ============ ADMIN — Presencia en tiempo real ============
+// ---- Corrección de fichajes (trazable: nunca se borra, se conserva el valor original, quién, cuándo y por qué) ----
+const instante = v => { const d = new Date(v); return isNaN(d) ? null : d; };
+// El trabajador siempre es informado de cualquier cambio en su registro
+const avisarCorreccion = (req, profesorId, titulo, motivo) => prisma.notificacion.create({ data: {
+  titulo, mensaje: `Motivo indicado por administración: ${String(motivo).trim()}. Si no estás de acuerdo, díselo a administración.`,
+  tipo: 'AVISO', profesorId, enviadaPorId: req.user.userId,
+} }).catch(e => console.error('aviso corrección:', e.message));
+const foto = r => JSON.stringify({ tipo: r.tipo, timestamp: r.timestamp.toISOString() });
+
+// Fichajes de un profesor en un mes (incluye anulados y su historial de cambios)
+app.get('/api/admin/fichajes', auth, adminOnly, async (req, res) => {
+  try {
+    const { profesorId, mes } = req.query; // mes = AAAA-MM
+    if (!profesorId || !/^\d{4}-(0[1-9]|1[0-2])$/.test(mes || '')) return res.status(400).json({ error: 'Indica profesorId y mes (AAAA-MM)' });
+    const [a, m] = mes.split('-').map(Number);
+    const regs = await prisma.registroJornada.findMany({
+      where: { profesorId, timestamp: { gte: new Date(a, m - 1, 1), lte: new Date(a, m, 0, 23, 59, 59, 999) } },
+      orderBy: { timestamp: 'asc' }, include: { correcciones: { orderBy: { createdAt: 'asc' } } },
+    });
+    res.json(regs);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error obteniendo fichajes' }); }
+});
+
+app.post('/api/admin/fichajes', auth, adminOnly, async (req, res) => {
+  try {
+    const { profesorId, tipo, timestamp, motivo } = req.body;
+    const ts = instante(timestamp);
+    if (!['ENTRADA', 'SALIDA'].includes(tipo) || !ts) return res.status(400).json({ error: 'Tipo (ENTRADA/SALIDA) y fecha-hora válidos' });
+    if (!motivo || String(motivo).trim().length < 5) return res.status(400).json({ error: 'Indica el motivo de la corrección (mín. 5 caracteres)' });
+    if (ts > new Date()) return res.status(400).json({ error: 'No se puede registrar un fichaje futuro' });
+    const prof = await prisma.profesor.findUnique({ where: { id: profesorId } });
+    if (!prof) return res.status(404).json({ error: 'Profesor no encontrado' });
+    const zona = await prisma.zonaFichaje.findFirst({ orderBy: { createdAt: 'asc' } });
+    if (!zona) return res.status(400).json({ error: 'Crea primero una zona de fichaje' });
+    const reg = await prisma.registroJornada.create({ data: {
+      profesorId, zonaId: zona.id, zonaNombre: 'Corrección de administración', tipo, timestamp: ts, origen: 'ADMIN',
+    } });
+    await prisma.correccionFichaje.create({ data: {
+      registroId: reg.id, profesorId, accion: 'CREAR', nuevo: foto(reg), motivo: String(motivo).trim().slice(0, 500),
+      actorId: req.user.userId, actorEmail: req.user.email,
+    } });
+    await auditar(req, 'fichaje.crear', prof, { tipo, timestamp: ts.toISOString() });
+    await avisarCorreccion(req, profesorId, `Se añadió una ${tipo.toLowerCase()} a tu registro de jornada (${ts.toLocaleString('es-ES')})`, motivo);
+    res.json(reg);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error creando fichaje' }); }
+});
+
+app.put('/api/admin/fichajes/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const { tipo, timestamp, motivo } = req.body;
+    const reg = await prisma.registroJornada.findUnique({ where: { id: req.params.id } });
+    if (!reg || reg.anulado) return res.status(404).json({ error: 'Fichaje no encontrado' });
+    if (!motivo || String(motivo).trim().length < 5) return res.status(400).json({ error: 'Indica el motivo de la corrección (mín. 5 caracteres)' });
+    const data = {};
+    if (tipo !== undefined) { if (!['ENTRADA', 'SALIDA'].includes(tipo)) return res.status(400).json({ error: 'Tipo no válido' }); data.tipo = tipo; }
+    if (timestamp !== undefined) { const ts = instante(timestamp); if (!ts || ts > new Date()) return res.status(400).json({ error: 'Fecha-hora no válida' }); data.timestamp = ts; }
+    if (!Object.keys(data).length) return res.status(400).json({ error: 'Nada que modificar' });
+    const nuevo = await prisma.registroJornada.update({ where: { id: reg.id }, data });
+    await prisma.correccionFichaje.create({ data: {
+      registroId: reg.id, profesorId: reg.profesorId, accion: 'MODIFICAR', anterior: foto(reg), nuevo: foto(nuevo),
+      motivo: String(motivo).trim().slice(0, 500), actorId: req.user.userId, actorEmail: req.user.email,
+    } });
+    await auditar(req, 'fichaje.modificar', { id: reg.profesorId }, { registro: reg.id });
+    await avisarCorreccion(req, reg.profesorId, `Se modificó un fichaje de tu registro de jornada (ahora ${nuevo.tipo.toLowerCase()} del ${nuevo.timestamp.toLocaleString('es-ES')})`, motivo);
+    res.json(nuevo);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error modificando fichaje' }); }
+});
+
+app.delete('/api/admin/fichajes/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const motivo = req.body?.motivo || req.query.motivo;
+    const reg = await prisma.registroJornada.findUnique({ where: { id: req.params.id } });
+    if (!reg || reg.anulado) return res.status(404).json({ error: 'Fichaje no encontrado' });
+    if (!motivo || String(motivo).trim().length < 5) return res.status(400).json({ error: 'Indica el motivo de la anulación (mín. 5 caracteres)' });
+    await prisma.registroJornada.update({ where: { id: reg.id }, data: { anulado: true } });
+    await prisma.correccionFichaje.create({ data: {
+      registroId: reg.id, profesorId: reg.profesorId, accion: 'ANULAR', anterior: foto(reg),
+      motivo: String(motivo).trim().slice(0, 500), actorId: req.user.userId, actorEmail: req.user.email,
+    } });
+    await auditar(req, 'fichaje.anular', { id: reg.profesorId }, { registro: reg.id });
+    await avisarCorreccion(req, reg.profesorId, `Se anuló un fichaje de tu registro de jornada (${reg.tipo.toLowerCase()} del ${reg.timestamp.toLocaleString('es-ES')})`, motivo);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error anulando fichaje' }); }
+});
+
 app.get('/api/admin/fichajes-activos', auth, adminOnly, async (req, res) => {
   try {
     const ahora = new Date();
@@ -1414,7 +1499,7 @@ app.get('/api/admin/fichajes-activos', auth, adminOnly, async (req, res) => {
 
     // Todos los registros de hoy, ordenados cronológicamente
     const registros = await prisma.registroJornada.findMany({
-      where: { timestamp: { gte: inicioHoy, lte: finHoy } },
+      where: { anulado: false, timestamp: { gte: inicioHoy, lte: finHoy } },
       include: {
         profesor: {
           select: { id: true, nombre: true, apellidos: true, tipoJornada: true, horasContrato: true, email: true },
@@ -2125,7 +2210,7 @@ app.get('/api/v1/informe/:mes', apiAuth('lectura'), async (req, res) => {
 async function exportarDatosProfesor(id) {
   const [perfil, registros, libres, clases, revisiones, confirmaciones, documentos, firmas, notifs, planning, aceptaciones] = await Promise.all([
     prisma.profesor.findUnique({ where: { id }, select: { id: true, email: true, nombre: true, apellidos: true, telefono: true, role: true, tipoJornada: true, horasContrato: true, tarifaHora: true, horaRecordatorio: true, activo: true, createdAt: true } }),
-    prisma.registroJornada.findMany({ where: { profesorId: id }, orderBy: { timestamp: 'asc' }, select: { tipo: true, timestamp: true, zonaNombre: true, lat: true, lng: true, distancia: true, esIncidencia: true } }),
+    prisma.registroJornada.findMany({ where: { profesorId: id }, orderBy: { timestamp: 'asc' }, select: { tipo: true, timestamp: true, zonaNombre: true, lat: true, lng: true, distancia: true, esIncidencia: true, origen: true, anulado: true, correcciones: { select: { accion: true, anterior: true, nuevo: true, motivo: true, actorEmail: true, createdAt: true } } } }),
     prisma.solicitudLibre.findMany({ where: { profesorId: id } }),
     prisma.claseDada.findMany({ where: { profesorId: id }, include: { tipo: true, primas: true }, orderBy: { fecha: 'asc' } }),
     prisma.revisionMes.findMany({ where: { profesorId: id } }),
@@ -2463,7 +2548,7 @@ setInterval(async () => {
     for (const p of profesores) {
       const [rh, rm] = (p.horaRecordatorio || '17:00').split(':').map(Number);
       if (hh !== rh || mm !== rm) continue;
-      const ultReg = await prisma.registroJornada.findFirst({ where: { profesorId: p.id, timestamp: { gte: inicioDia } }, orderBy: { timestamp: 'desc' } });
+      const ultReg = await prisma.registroJornada.findFirst({ where: { anulado: false, profesorId: p.id, timestamp: { gte: inicioDia } }, orderBy: { timestamp: 'desc' } });
       if (ultReg?.tipo === 'ENTRADA') avisarWhatsapp([p.id], `son las ${p.horaRecordatorio} y sigues fichado. Recuerda fichar la salida.`);
     }
 

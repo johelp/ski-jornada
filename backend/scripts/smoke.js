@@ -313,6 +313,28 @@ const pdf = nombre => {
   check('con teléfono válido se activan los avisos', optin.status === 200 && optin.data.avisosWhatsapp === true);
   await http('PUT', '/api/auth/me', { token: prof, body: { avisosWhatsapp: false } });
 
+  seccion('6k. Corrección trazable de fichajes');
+  const F0 = '2026-01-15T09:00:00.000Z', F1 = '2026-01-15T13:00:00.000Z';
+  check('un profesor no corrige fichajes → 403', (await http('POST', '/api/admin/fichajes', { token: prof, body: { profesorId: me.id, tipo: 'ENTRADA', timestamp: F0, motivo: 'olvido' } })).status === 403);
+  check('sin motivo no se corrige → 400', (await http('POST', '/api/admin/fichajes', { token: admin, body: { profesorId: me.id, tipo: 'ENTRADA', timestamp: F0 } })).status === 400);
+  check('un fichaje futuro se rechaza → 400', (await http('POST', '/api/admin/fichajes', { token: admin, body: { profesorId: me.id, tipo: 'ENTRADA', timestamp: '2099-01-01T09:00:00Z', motivo: 'prueba futura' } })).status === 400);
+  const fe = await http('POST', '/api/admin/fichajes', { token: admin, body: { profesorId: me.id, tipo: 'ENTRADA', timestamp: F0, motivo: 'Olvidó fichar la entrada' } });
+  const fs_ = await http('POST', '/api/admin/fichajes', { token: admin, body: { profesorId: me.id, tipo: 'SALIDA', timestamp: F1, motivo: 'Olvidó fichar la salida' } });
+  check('alta manual de entrada y salida', fe.status === 200 && fs_.status === 200 && fe.data.origen === 'ADMIN');
+  const infJ = async () => (await http('GET', `/api/informe/1/2026`, { token: prof }));
+  const h1 = await infJ();
+  check('el informe incluye las 4 horas', h1.status === 200 && h1.data.totalHoras === 4, JSON.stringify(h1.data?.totalHoras));
+  const mod = await http('PUT', `/api/admin/fichajes/${fs_.data.id}`, { token: admin, body: { timestamp: '2026-01-15T14:00:00.000Z', motivo: 'Salió a las 14:00' } });
+  check('la modificación cambia las horas', mod.status === 200 && (await infJ()).data.totalHoras === 5);
+  check('anular exige motivo → 400', (await http('DELETE', `/api/admin/fichajes/${fe.data.id}`, { token: admin, body: {} })).status === 400);
+  check('anular un fichaje', (await http('DELETE', `/api/admin/fichajes/${fe.data.id}`, { token: admin, body: { motivo: 'Duplicado por error' } })).status === 200);
+  const listaF = await http('GET', `/api/admin/fichajes?profesorId=${me.id}&mes=2026-01`, { token: admin });
+  const sal = (listaF.data || []).find(r => r.id === fs_.data.id), ent = (listaF.data || []).find(r => r.id === fe.data.id);
+  check('el valor original de la salida se conserva en el historial', !!sal && sal.correcciones.some(c => c.accion === 'MODIFICAR' && JSON.parse(c.anterior).timestamp === F1 && c.actorEmail && c.motivo));
+  check('el fichaje anulado sigue existiendo, marcado, con su huella', !!ent && ent.anulado === true && ent.correcciones.some(c => c.accion === 'ANULAR'));
+  check('el fichaje anulado ya no cuenta en el informe', (await infJ()).data.totalHoras === 0);
+  check('el profesor fue avisado de los cambios', ((await http('GET', '/api/notificaciones', { token: prof })).data || []).some(n => /registro de jornada/.test(n.titulo || '')));
+
   seccion('7. Limpieza');
   await http('POST', '/api/admin/clases/reabrir', { token: admin, body: { profesorId: me.id, mes: MES } });
   check('elimina la clase de prueba', (await http('DELETE', `/api/clases/${claseId}`, { token: prof })).status === 200);

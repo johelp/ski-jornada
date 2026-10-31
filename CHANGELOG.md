@@ -5,6 +5,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Fechas AAA
 ## [Sin publicar]
 
 ### Añadido
+- **Registro de jornada con correcciones trazables:** administración añade, modifica o anula fichajes con motivo obligatorio; se conserva el valor original, quién y cuándo (`CorreccionFichaje`); el fichaje anulado no se borra ni cuenta en los informes; el trabajador recibe un aviso; entra en el registro de actividad y en la exportación RGPD.
+- **Documentación legal:** `docs/CUMPLIMIENTO-REGISTRO-JORNADA.md` y plantillas en `docs/legal/` (contrato de encargo, información al personal, política interna de fichaje).
 - **WhatsApp activable desde la administración:** botón «Generar QR» (Integraciones → WhatsApp) que arranca el servidor Baileys, estado en vivo, desactivar y desvincular; avisos solo a quien los activa en su perfil; cola con pausas y tope diario; la sesión persiste en el volumen.
 - **Integraciones:** pestaña *Ideas* con casos de uso, ejemplo de uso de la clave, eventos `solicitud.creada` y `solicitud.respondida`, protección SSRF en webhooks, validación de fechas en solicitudes y textos en español de España.
 - **Acceso desde la app instalada:** código de 6 dígitos en el correo y en la pantalla de acceso (HMAC, 5 intentos, límite por email) para entrar sin salir de la app en iPhone.
