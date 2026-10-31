@@ -93,6 +93,7 @@ Estado: ✅ disponible · 🟡 disponible con límites · 🗺 planificado (ver 
 | Función | Estado | Detalle |
 |---------|--------|---------|
 | Registro de jornada por profesor (PDF) | ✅ | Cumple RD 8/2019 y art. 34.9 ET |
+| Corrección trazable de fichajes | ✅ | Añadir, editar o anular con motivo; conserva original, autor y fecha; avisa a la persona |
 | Planilla general del mes | ✅ | Ordenable |
 | Informe de ausencias | ✅ | |
 | Aprobación de días libres | ✅ | Aprueba o rechaza con observación |

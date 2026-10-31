@@ -25,6 +25,10 @@ Los errores devuelven `{ "error": "mensaje" }` con el código HTTP correspondien
 | POST | `/api/fichaje/salida` | Cierra la jornada |
 | GET | `/api/fichaje/historial` | Registros propios agrupados por día |
 | GET 🛡 | `/api/admin/fichajes-activos` | Quién está dentro ahora |
+| GET 🛡 | `/api/admin/fichajes?profesorId=&mes=AAAA-MM` | Fichajes del mes con anulados e historial de correcciones |
+| POST 🛡 | `/api/admin/fichajes` | Alta manual `{profesorId, tipo, timestamp, motivo}` (motivo obligatorio, no futuro) |
+| PUT 🛡 | `/api/admin/fichajes/:id` | Modifica tipo u hora `{tipo?, timestamp?, motivo}`; conserva el valor original |
+| DELETE 🛡 | `/api/admin/fichajes/:id` | Anula (no borra) `{motivo}`; deja de contar en los informes |
 
 ## Clases y primas
 | Método | Ruta | Descripción |

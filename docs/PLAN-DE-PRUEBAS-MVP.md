@@ -17,7 +17,7 @@ Estado: ☐ pendiente · ✅ hecho. Quién: **Auto** (ya lo ejecuta el CI), **De
 
 | Estado | Qué | Cómo |
 |--------|-----|------|
-| ✅ Auto | 137 comprobaciones: permisos, clases e importes, confirmación y revisión, comparativa, integraciones, acceso por invitación y código, límites, subidas, panel, WhatsApp (sin conexión) | `node backend/scripts/smoke.js` (con `API_LOG` para las del código) |
+| ✅ Auto | 149 comprobaciones: correcciones trazables de fichajes, permisos, clases e importes, confirmación y revisión, comparativa, integraciones, acceso por invitación y código, límites, subidas, panel, WhatsApp (sin conexión) | `node backend/scripts/smoke.js` (con `API_LOG` para las del código) |
 | ✅ Auto | Compilación del frontend y `npm audit` | CI |
 | ☐ Dev | Ejecutar el smoke contra el entorno de pruebas desplegado, no solo en local | `BASE_URL=… ADMIN_TOKEN=… PROF_TOKEN=… PROF2_TOKEN=…` |
 
@@ -37,6 +37,7 @@ Estado: ☐ pendiente · ✅ hecho. Quién: **Auto** (ya lo ejecuta el CI), **De
 - ☐ Usuarios: importar CSV, invitar, reenviar, dar de baja (acceso cortado en segundos), roles (solo la cuenta principal).
 - ☐ Revisión: aprobar, discrepancia, corrección (reabre el mes), notas por clase; planificado frente a cargado.
 - ☐ Comparar con reservas con un CSV real del cliente; vincular nombres; revisar «NO ASIGNADO».
+- ☐ Corregir un fichaje (añadir, modificar, anular, siempre con motivo): queda el historial y la persona recibe el aviso; el informe cambia.
 - ☐ Informes de jornada (PDF oficial), planilla y ausencias; los datos legales de la escuela salen bien.
 - ☐ Zonas, QR imprimible, avisos, configuración.
 - ☐ Registro de actividad y aceptaciones legales.
@@ -69,7 +70,7 @@ Estado: ☐ pendiente · ✅ hecho. Quién: **Auto** (ya lo ejecuta el CI), **De
 - ☐ `AUDITORIA-SEGURIDAD.md` con todos los hallazgos cerrados; pasada rápida sobre lo nuevo (integraciones y WhatsApp).
 - ☐ Sin `PASSWORD_LOGIN` ni seed en producción; el arranque no muestra advertencias.
 - ☐ Contrato de encargo y política de privacidad revisados por el asesor del cliente; aceptación registrada.
-- ☐ Registro de jornada: consulta a la representación de los trabajadores y política de fichaje comunicada (documento de cumplimiento pendiente de redactar).
+- ☐ Registro de jornada: consulta a la representación de los trabajadores y política de fichaje comunicada (ver `CUMPLIMIENTO-REGISTRO-JORNADA.md` y `legal/POLITICA-INTERNA-FICHAJE.md`).
 
 ## 7. Operación
 
@@ -88,4 +89,5 @@ El MVP está listo para el piloto cuando las secciones 1 a 4, 6 y 7 están compl
 | De quién | Qué |
 |----------|-----|
 | Cliente | Lista de profesores (nombre, apellidos, email, teléfono, jornada, tarifa) · disciplinas, primas y tarifas · zonas · muestra del CSV de reservas del mes · convenio aplicable y si hay representación legal · decisión sobre WhatsApp y número dedicado |
-| Dev | Entorno de pruebas, dominio y correo, dispositivos, documento de cumplimiento del registro de jornada y plantillas legales |
+| Dev | Entorno de pruebas, dominio y correo, dispositivos |
+| Asesor del cliente | Revisar `legal/` (contrato de encargo, información al personal, política de fichaje) y las decisiones 4–6 de `CUMPLIMIENTO-REGISTRO-JORNADA.md` |
