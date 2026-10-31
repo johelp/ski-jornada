@@ -54,6 +54,12 @@ Importante: `VITE_API_URL` se incrusta en el build; si cambia, hay que re-desple
 
 Sin dominio verificado, Resend solo envía al correo de la cuenta propietaria.
 
+## Endurecimiento incluido (ver `OPERACION.md`)
+- La API **no arranca** con `JWT_SECRET` < 32 caracteres, `FRONTEND_URL` sin https o `PASSWORD_LOGIN=true`.
+- Healthcheck de Railway: `/api/salud` (comprueba la base de datos).
+- Copia diaria automática en `/data/backups` (`BACKUP_DIARIO`, `BACKUP_CONSERVAR`).
+- Frontend: `frontend/public/_headers` añade cabeceras de seguridad y una CSP en modo solo-informe; el build exige `VITE_API_URL`.
+
 ## 4. Verificación post-deploy
 
 ```bash

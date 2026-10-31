@@ -80,7 +80,7 @@ Cada cliente tiene su **propio despliegue y base de datos** (ver `MULTI-DESPLIEG
 | Baja lógica de cuentas y purga por plazo de conservación | ✅ `backend/scripts/purgar.js` (simulación por defecto; `--aplicar` borra) |
 | Interruptor del módulo de documentos | ✅ `DOCUMENTOS_HABILITADOS=false` |
 | Región de alojamiento en la UE | ⚠ **Pendiente de configurar**: el servicio actual de pruebas está en `us-west2`. Para clientes con datos reales crear el servicio y el volumen en `europe-west4` |
-| Copias de seguridad cifradas y probadas | ⚠ **Pendiente** (ver `PILOTO-SNOWMOTION.md`, opción E) |
+| Copias de seguridad | 🟡 Automáticas (diarias, 14 días) y descarga manual por la cuenta principal (`OPERACION.md`). Falta guardar copias cifradas fuera del servidor y probar la restauración |
 | Registro de actividad de administración (altas, bajas, roles, importaciones, invitaciones, revisiones) | ✅ `GET /api/admin/auditoria` (quién, qué, cuándo). No registra accesos de lectura |
 | Baja con revocación inmediata de la sesión | ✅ |
 | Solo entra quien está en la lista de la escuela; sin registro público | ✅ (`ACCESO-Y-ALTAS.md`) |

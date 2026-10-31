@@ -17,12 +17,13 @@ if (splash) {
   setTimeout(() => { splash.classList.add('fuera'); setTimeout(() => splash.remove(), 500); }, espera);
 }
 
-// Registro del Service Worker (PWA)
+// Service Worker (PWA): solo en producción. En desarrollo se desinstala el que hubiera para no servir contenido viejo.
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').then(
-      reg => console.log('SW registrado:', reg.scope),
-      err => console.warn('SW error:', err)
-    );
-  });
+  if (import.meta.env.PROD) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(err => console.warn('SW error:', err));
+    });
+  } else {
+    navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));
+  }
 }

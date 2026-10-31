@@ -1,5 +1,7 @@
 # Alcance del MVP — estado al 29/10/2026
 
+> **Actualización 30/10/2026:** la API y la web están en producción con dominio propio y correo operativo; acceso por invitación, cuenta de empresa, app a pantalla completa, landing nueva y endurecimiento de producción (CI, copias, salud, cabeceras) ya están hechos. Lo que falta para abrir a usuarios reales está en `CHECKLIST-PRODUCCION.md`.
+
 Documento para evaluar cómo seguimos. Resume qué está entregado, qué está verificado, qué falta, los riesgos y las decisiones que hacen falta.
 
 **Resumen en una línea:** el núcleo funcional (control horario, carga de clases con primas e importes, revisión de administración, informes, acceso por enlace mágico, PWA) está construido y probado en local; el backend está desplegado en Railway. **Aún no hay frontend público ni correo operativo**, y la interfaz necesita un rediseño mobile-first antes de abrir el piloto a los profesores.

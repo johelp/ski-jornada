@@ -14,10 +14,19 @@ const { PrismaClient } = require('@prisma/client');
 
 dotenv.config();
 
-if (!process.env.JWT_SECRET) {
-  console.error('❌ Falta JWT_SECRET en las variables de entorno. Abortando.');
-  process.exit(1);
-}
+// ---- Validación del entorno: en producción se aborta ante configuraciones inseguras ----
+const ES_PROD = process.env.NODE_ENV === 'production';
+(function validarEntorno() {
+  const fallos = [], avisos = [];
+  if (!process.env.JWT_SECRET) fallos.push('Falta JWT_SECRET.');
+  else if (ES_PROD && process.env.JWT_SECRET.length < 32) fallos.push('JWT_SECRET debe tener al menos 32 caracteres (usa `openssl rand -hex 32`).');
+  if (ES_PROD && process.env.PASSWORD_LOGIN === 'true') fallos.push('PASSWORD_LOGIN=true no está permitido en producción.');
+  if (ES_PROD && !/^https:\/\//.test((process.env.FRONTEND_URL || '').split(',')[0].trim())) fallos.push('FRONTEND_URL debe ser una URL https en producción.');
+  if (ES_PROD && !process.env.DATABASE_URL) fallos.push('Falta DATABASE_URL.');
+  if (ES_PROD && !process.env.RESEND_API_KEY && !(process.env.SMTP_USER && process.env.SMTP_PASS)) avisos.push('Sin proveedor de correo (RESEND_API_KEY o SMTP): no se podrán enviar enlaces de acceso.');
+  avisos.forEach(a => console.warn('⚠️ ', a));
+  if (fallos.length) { fallos.forEach(f => console.error('❌', f)); console.error('Abortando: revisa las variables de entorno.'); process.exit(1); }
+})();
 const prisma = new PrismaClient();
 const app = express();
 app.set('trust proxy', 1); // detrás del proxy de Railway (IP real para el rate limit)
@@ -28,7 +37,7 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
   .split(',').map(o => o.trim());
 app.use(cors({ origin: allowedOrigins, credentials: true }));
-app.use(express.json({ limit: '20mb' }));
+app.use(express.json({ limit: '2mb' }));
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -109,28 +118,6 @@ async function enviarEmail(to, subject, html, attachments = []) {
   }
   await emailTransporter.sendMail({ from, to, subject, html, attachments });
   console.log(`📧 Enviado → ${to}`);
-}
-
-async function enviarEmailBienvenida(profesor) {
-  return enviarEmail(
-    profesor.email,
-    'Bienvenido/a a Ski Jornada — Tus datos de acceso',
-    `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;background:#f0f7ff;border-radius:12px">
-      <h1 style="color:#0f4c81;margin-bottom:8px">⛷️ Ski Jornada</h1>
-      <h2 style="color:#1e293b;font-weight:600">Bienvenido/a, ${profesor.nombre} ${profesor.apellidos}</h2>
-      <p style="color:#475569">Tu cuenta ha sido creada en el sistema de control de jornada laboral.</p>
-      <div style="background:white;border-radius:8px;padding:20px;margin:20px 0;border-left:4px solid #0f4c81">
-        <p style="margin:0 0 8px"><strong>Email:</strong> ${profesor.email}</p>
-        <p style="margin:0 0 8px"><strong>Contraseña inicial:</strong> <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px">ski123</code></p>
-        <p style="margin:0"><strong>Jornada:</strong> ${profesor.tipoJornada === 'COMPLETA' ? 'Completa' : 'Media jornada'} (${profesor.horasContrato}h/semana)</p>
-      </div>
-      <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}"
-         style="display:inline-block;background:#0f4c81;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">
-        Acceder al sistema →
-      </a>
-      <p style="color:#94a3b8;font-size:12px;margin-top:24px">Por seguridad, cambia tu contraseña en el primer acceso.</p>
-    </div>`
-  );
 }
 
 // ============ TOTP ============
@@ -235,6 +222,14 @@ app.use((req, res, next) => {
 });
 
 // ============ SERVER TIME ============
+// Salud del servicio: comprueba la base de datos (lo usan Railway y los monitores de disponibilidad)
+app.get('/api/salud', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ ok: true, version: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) || 'local', uptimeSeg: Math.round(process.uptime()), ahora: new Date().toISOString() });
+  } catch (e) { console.error('salud:', e.message); res.status(503).json({ ok: false, error: 'Base de datos no disponible' }); }
+});
+
 app.get('/api/server-time', (req, res) => {
   res.json({ timestamp: Date.now(), iso: new Date().toISOString() });
 });
@@ -400,19 +395,6 @@ app.put('/api/auth/me', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Error actualizando perfil' }); }
 });
 
-app.put('/api/auth/cambiar-password', auth, async (req, res) => {
-  try {
-    const { passwordActual, passwordNueva } = req.body;
-    if (!passwordActual || !passwordNueva) return res.status(400).json({ error: 'Contraseñas requeridas' });
-    if (passwordNueva.length < 6) return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
-    const u = await prisma.profesor.findUnique({ where: { id: req.user.userId } });
-    const valid = await bcrypt.compare(passwordActual, u.password);
-    if (!valid) return res.status(400).json({ error: 'La contraseña actual no es correcta' });
-    const hash = await bcrypt.hash(passwordNueva, 10);
-    await prisma.profesor.update({ where: { id: req.user.userId }, data: { password: hash } });
-    res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: 'Error cambiando contraseña' }); }
-});
 
 // ============ ZONAS ============
 app.get('/api/zonas', auth, async (req, res) => {
@@ -2107,6 +2089,54 @@ app.post('/api/admin/comparativa/alias', auth, adminOnly, async (req, res) => {
   } catch { res.status(500).json({ error: 'Error guardando el vínculo' }); }
 });
 
+// ============ COPIAS DE SEGURIDAD (SQLite) ============
+// Copia consistente con VACUUM INTO. En producción: una al día (a partir de las 03:00) y se conservan BACKUP_CONSERVAR (14).
+function rutaBaseDatos() {
+  const raw = String(process.env.DATABASE_URL || 'file:./prisma/dev.db').replace(/^file:/, '').split('?')[0];
+  return path.isAbsolute(raw) ? raw : path.resolve(__dirname, 'prisma', raw);
+}
+const BACKUP_DIR = process.env.BACKUP_DIR || path.join(path.dirname(rutaBaseDatos()), 'backups');
+const nombreBackup = (d = new Date()) => `ski-jornada-${d.toISOString().slice(0, 10)}.db`;
+
+async function crearBackup(destino) {
+  fs.mkdirSync(path.dirname(destino), { recursive: true });
+  if (fs.existsSync(destino)) fs.unlinkSync(destino);
+  await prisma.$executeRawUnsafe(`VACUUM INTO '${destino.replace(/'/g, "''")}'`);
+  return destino;
+}
+function podarBackups() {
+  const conservar = parseInt(process.env.BACKUP_CONSERVAR) || 14;
+  const archivos = fs.existsSync(BACKUP_DIR) ? fs.readdirSync(BACKUP_DIR).filter(f => /^ski-jornada-\d{4}-\d{2}-\d{2}\.db$/.test(f)).sort() : [];
+  archivos.slice(0, Math.max(0, archivos.length - conservar)).forEach(f => { try { fs.unlinkSync(path.join(BACKUP_DIR, f)); } catch {} });
+}
+async function backupDiario() {
+  try {
+    const hoy = path.join(BACKUP_DIR, nombreBackup());
+    if (new Date().getHours() < 3 || fs.existsSync(hoy)) return;
+    await crearBackup(hoy); podarBackups();
+    console.log(`💾 Copia de seguridad creada: ${path.basename(hoy)}`);
+  } catch (e) { console.error('backup:', e.message); }
+}
+if (ES_PROD && process.env.BACKUP_DIARIO !== 'false') {
+  setTimeout(backupDiario, 60 * 1000).unref();
+  setInterval(backupDiario, 60 * 60 * 1000).unref();
+}
+
+// Solo la cuenta principal: crear una copia ahora y descargarla (para guardarla fuera del servidor)
+app.get('/api/admin/backup/descargar', auth, adminOnly, async (req, res) => {
+  if (!req.user.esPrincipal) return res.status(403).json({ error: 'Solo la cuenta principal puede descargar copias' });
+  const tmp = path.join(BACKUP_DIR, `descarga-${Date.now()}.db`);
+  try {
+    await crearBackup(tmp);
+    await auditar(req, 'sistema.backup_descargado', null);
+    res.download(tmp, nombreBackup(), () => { try { fs.unlinkSync(tmp); } catch {} });
+  } catch (e) { console.error('backup descarga:', e.message); try { fs.unlinkSync(tmp); } catch {} res.status(500).json({ error: 'No se pudo crear la copia' }); }
+});
+app.get('/api/admin/backup', auth, adminOnly, (req, res) => {
+  const archivos = fs.existsSync(BACKUP_DIR) ? fs.readdirSync(BACKUP_DIR).filter(f => /^ski-jornada-.*\.db$/.test(f)).sort().reverse() : [];
+  res.json({ automatico: ES_PROD && process.env.BACKUP_DIARIO !== 'false', carpeta: BACKUP_DIR, copias: archivos.map(f => ({ nombre: f, bytes: fs.statSync(path.join(BACKUP_DIR, f)).size })) });
+});
+
 // ============ WHATSAPP (Baileys) ============
 // Carga condicional — requiere WHATSAPP_ENABLED=true en .env y ejecutar: npm install @whiskeysockets/baileys
 let whatsapp = null;
@@ -2172,9 +2202,21 @@ setInterval(async () => {
   } catch {}
 }, 60 * 1000);
 
+// ============ ERRORES Y CIERRE ============
+app.use('/api', (req, res) => res.status(404).json({ error: 'Ruta no encontrada' }));
+app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
+  if (err?.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: 'El archivo supera el tamaño máximo (20 MB)' });
+  if (err?.type === 'entity.too.large') return res.status(413).json({ error: 'La petición es demasiado grande' });
+  if (err?.message?.startsWith('Solo se permiten') || err?.message === 'Formato no permitido') return res.status(400).json({ error: err.message });
+  console.error('Error no controlado:', err);
+  res.status(500).json({ error: 'Error interno del servidor' });
+});
+process.on('unhandledRejection', e => console.error('unhandledRejection:', e));
+process.on('uncaughtException', e => console.error('uncaughtException:', e));
+
 // ============ START ============
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+const servidor = app.listen(PORT, () => {
   console.log('========================================');
   console.log(`  Ski Jornada API — http://localhost:${PORT}`);
   if (process.env.PASSWORD_LOGIN === 'true') console.log('  Demo (PASSWORD_LOGIN): admin@escuela.com / profesor@escuela.com · ski123');
@@ -2182,3 +2224,12 @@ app.listen(PORT, () => {
   console.log(`  📱 WhatsApp: ${process.env.WHATSAPP_ENABLED === 'true' ? 'habilitado' : 'deshabilitado'}`);
   console.log('========================================');
 });
+
+// Cierre ordenado (Railway envía SIGTERM al desplegar una versión nueva)
+for (const señal of ['SIGTERM', 'SIGINT']) {
+  process.on(señal, () => {
+    console.log(`${señal}: cerrando…`);
+    servidor.close(async () => { await prisma.$disconnect().catch(() => {}); process.exit(0); });
+    setTimeout(() => process.exit(0), 8000).unref();
+  });
+}

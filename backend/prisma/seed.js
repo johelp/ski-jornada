@@ -19,6 +19,11 @@ async function sembrarCatalogo() {
   for (const [nombre, modo] of primas) await prisma.primaClase.upsert({ where: { nombre }, update: {}, create: { nombre, modo } });
 }
 
+if (process.env.NODE_ENV === 'production' && process.env.FORCE_SEED !== 'true') {
+  console.error('❌ El seed de demostración crea cuentas con clave conocida: no se ejecuta en producción (usa prisma/bootstrap.js).');
+  process.exit(1);
+}
+
 async function main() {
   await sembrarCatalogo();
   console.log('🌱 Iniciando seed de datos demo...');
