@@ -24,7 +24,7 @@ Proyecto `ski-jornada`, servicio `api`, Root Directory `/backend`. La configurac
 | `ADMIN_EMAIL` / `ADMIN_NOMBRE` / `ADMIN_APELLIDOS` | primer administrador (lo crea `bootstrap.js` si no existe) |
 | `RESEND_API_KEY` | API key de Resend |
 | `EMAIL_FROM` | `Ski Jornada <no-reply@skijornada.johelpastorino.com>` |
-| `WHATSAPP_ENABLED` | opcional |
+| `WHATSAPP_ENABLED` | opcional; `false` oculta el módulo (por defecto disponible y apagado hasta «Generar QR») |
 
 `PORT` lo inyecta Railway. **No** definir `PASSWORD_LOGIN` en producción.
 

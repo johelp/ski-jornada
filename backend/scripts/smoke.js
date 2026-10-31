@@ -297,6 +297,22 @@ const pdf = nombre => {
   check('un token manipulado sigue dando 401 (no 503)', (await http('GET', '/api/auth/me', { token: prof + 'x' })).status === 401);
   check('renovar la sesión devuelve un token nuevo válido', await (async () => { const r = await http('POST', '/api/auth/renovar', { token: prof }); return r.status === 200 && (await http('GET', '/api/auth/me', { token: r.data.token })).status === 200; })());
 
+  seccion('6j. Integraciones y WhatsApp');
+  check('un webhook no puede apuntar a la red interna (SSRF) → 400', (await http('POST', '/api/admin/integraciones/webhooks', { token: admin, body: { url: 'https://169.254.169.254/latest', eventos: [] } })).status === 400);
+  check('un webhook con http plano se rechaza → 400', (await http('POST', '/api/admin/integraciones/webhooks', { token: admin, body: { url: 'http://ejemplo.com/x' } })).status === 400);
+  const evs = (await http('GET', '/api/admin/integraciones/webhooks', { token: admin })).data.eventos || [];
+  check('los eventos incluyen las solicitudes de días libres', evs.includes('solicitud.creada') && evs.includes('solicitud.respondida'));
+  check('una solicitud con la fecha final anterior a la inicial se rechaza → 400', (await http('POST', '/api/libres/solicitar', { token: prof, body: { fechaInicio: '2026-12-10', fechaFin: '2026-12-01', motivo: 'VACACIONES' } })).status === 400);
+  check('una solicitud con fechas inválidas se rechaza → 400', (await http('POST', '/api/libres/solicitar', { token: prof, body: { fechaInicio: 'x', fechaFin: 'y', motivo: 'VACACIONES' } })).status === 400);
+  const wa = await http('GET', '/api/admin/whatsapp', { token: admin });
+  check('el estado de WhatsApp responde (desactivado por defecto)', wa.status === 200 && wa.data.permitido === true && ['detenido', 'no_instalado', 'conectado'].includes(wa.data.estado));
+  check('un profesor no gestiona WhatsApp → 403', (await http('GET', '/api/admin/whatsapp', { token: prof })).status === 403);
+  check('no se puede enviar una prueba sin conexión → 400', (await http('POST', '/api/admin/whatsapp/probar', { token: admin, body: { telefono: '+34600000000' } })).status === 400);
+  check('activar avisos de WhatsApp sin teléfono válido se rechaza → 400', (await http('PUT', '/api/auth/me', { token: prof, body: { telefono: '123', avisosWhatsapp: true } })).status === 400);
+  const optin = await http('PUT', '/api/auth/me', { token: prof, body: { telefono: '+34611222333', avisosWhatsapp: true } });
+  check('con teléfono válido se activan los avisos', optin.status === 200 && optin.data.avisosWhatsapp === true);
+  await http('PUT', '/api/auth/me', { token: prof, body: { avisosWhatsapp: false } });
+
   seccion('7. Limpieza');
   await http('POST', '/api/admin/clases/reabrir', { token: admin, body: { profesorId: me.id, mes: MES } });
   check('elimina la clase de prueba', (await http('DELETE', `/api/clases/${claseId}`, { token: prof })).status === 200);

@@ -31,5 +31,9 @@
   "engines": {
     "node": ">=20"
   },
-  "private": true
+  "private": true,
+  "optionalDependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
+    "qrcode": "^1.5.4"
+  }
 }

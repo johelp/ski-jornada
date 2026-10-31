@@ -34,7 +34,7 @@ Sin correo configurado, el enlace de acceso se imprime en la consola del backend
 - **Planning** del mes pasado con diferencias a propósito (una hora de más, una clase no cargada, un día que falta).
 - **Fichajes** de las últimas 4 semanas con días de exceso, una **incidencia** y una persona **dentro ahora**.
 - **Documentos PDF reales** (pendientes y firmados), registros de jornada enviados/firmados, **días libres** en los cuatro estados, **avisos**, **aceptaciones legales**, **vínculo de nombre** (alias), **registro de actividad**.
-- **API key de demostración:** `sj_demo_clave_de_ejemplo_solo_pruebas_0001` (lectura, económico y planning) y un webhook de ejemplo desactivado.
+- **API key de demostración:** `sj_demo_clave_de_ejemplo_solo_pruebas_0001` (lectura, económico y planning) una segunda clave de **gestoría** (`sj_demo_gestoria_solo_lectura_pruebas_0002`, solo lectura y económico) y dos webhooks de ejemplo desactivados. Carlos y Laura tienen teléfono y **avisos de WhatsApp activados** (solo se envían si conectas un número en *Integraciones → WhatsApp*).
 - **CSV de reservas de ejemplo** en `backend/prisma/demo/instructors_summary_*.csv` (no se versiona), con el mismo formato que exporta el sistema de reservas.
 
 ## Guion de pruebas por función

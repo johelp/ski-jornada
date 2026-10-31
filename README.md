@@ -72,6 +72,8 @@ npm run dev                     # http://localhost:5173
 - [docs/GUIA-ADMINISTRACION.md](docs/GUIA-ADMINISTRACION.md) · [docs/GUIA-PROFESOR.md](docs/GUIA-PROFESOR.md) — guías de uso para administración y profesores
 - [docs/DIMENSIONAMIENTO.md](docs/DIMENSIONAMIENTO.md) — consumo de datos y almacenamiento (estimador `backend/scripts/dimensionar.js`)
 - [docs/AUDITORIA-SEGURIDAD.md](docs/AUDITORIA-SEGURIDAD.md) — auditoría previa al primer despliegue y correcciones
+- [docs/PLAN-DE-PRUEBAS-MVP.md](docs/PLAN-DE-PRUEBAS-MVP.md) — lista de pruebas para dar el MVP por listo (automáticas, dispositivos, integraciones, WhatsApp, seguridad, operación)
+- [docs/PLAN-DE-PRUEBAS-MVP.md](docs/PLAN-DE-PRUEBAS-MVP.md) — lista de pruebas para dar el MVP por listo (automáticas, dispositivos, integraciones, WhatsApp, seguridad, operación)
 - [docs/DATOS-DE-PRUEBA.md](docs/DATOS-DE-PRUEBA.md) — seed completo para probar todas las funciones
 - [docs/FUNCIONES.md](docs/FUNCIONES.md) — catálogo de funciones por rol y su estado
 - [docs/MULTI-DESPLIEGUE.md](docs/MULTI-DESPLIEGUE.md) — alta de un cliente nuevo (plantillas en `deploy/`)

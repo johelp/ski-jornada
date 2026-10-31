@@ -219,6 +219,13 @@ module.exports = async function sembrarDemoCompleta(prisma, { admin, carlos, lau
   const claveDemo = 'sj_demo_clave_de_ejemplo_solo_pruebas_0001';
   await prisma.apiKey.create({ data: { nombre: 'Demo · Sistema de reservas', prefijo: claveDemo.slice(0, 10), keyHash: crypto.createHash('sha256').update(claveDemo).digest('hex'), scopes: 'lectura,economico,planning', creadaPorId: admin.id } });
   await prisma.webhook.create({ data: { url: 'https://demo.ejemplo.test/webhook', secret: 'whsec_demo_solo_pruebas', eventos: '*', activo: false } });
+  // Casos de uso de ejemplo: gestoría (solo lectura económica) y aviso de confirmaciones/solicitudes a un canal
+  const claveGestoria = 'sj_demo_gestoria_solo_lectura_pruebas_0002';
+  await prisma.apiKey.create({ data: { nombre: 'Demo · Gestoría (solo lectura)', prefijo: claveGestoria.slice(0, 10), keyHash: crypto.createHash('sha256').update(claveGestoria).digest('hex'), scopes: 'lectura,economico', creadaPorId: admin.id } });
+  await prisma.webhook.create({ data: { url: 'https://demo.ejemplo.test/avisos-administracion', secret: 'whsec_demo_avisos_pruebas', eventos: 'clases.mes_confirmado,solicitud.creada', activo: false } });
+  // WhatsApp: dos profesores con teléfono y avisos activados (solo se envía si administración conecta un número)
+  await prisma.profesor.updateMany({ where: { id: { in: [laura.id, carlos.id] } }, data: { telefono: '+34600000001', avisosWhatsapp: true } });
+  await prisma.profesor.update({ where: { id: miguel.id }, data: { telefono: '+34600000002', avisosWhatsapp: false } });
   const aud = (accion, obj, detalle, dias) => ({ actorId: admin.id, actorEmail: admin.email, accion, objetivoId: obj?.id, objetivoEmail: obj?.email, detalle: detalle ? JSON.stringify(detalle) : null, createdAt: hace(dias) });
   await prisma.auditoriaLog.createMany({ data: [
     aud('usuario.importacion', null, { creados: 7, actualizados: 0, errores: 0, invitados: 7 }, 60), aud('usuario.crear_admin', empresa, null, 55),

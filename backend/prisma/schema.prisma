@@ -19,6 +19,7 @@ model Profesor {
   activo           Boolean  @default(true)
   telefono         String?
   horaRecordatorio String   @default("17:00")
+  avisosWhatsapp   Boolean  @default(false)
   tarifaHora       Float?
   adheridoAt       DateTime?
   esPrincipal      Boolean  @default(false)

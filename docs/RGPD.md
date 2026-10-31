@@ -140,6 +140,7 @@ El uso de GPS para fichar es el punto más sensible del tratamiento (guías de l
 | Railway | API y base de datos | Todos | Elegir `europe-west4` | Acuerdo de tratamiento de Railway |
 | Cloudflare | Frontend, DNS | Tráfico y metadatos | Global (red de distribución) | DPA de Cloudflare |
 | Resend | Correo transaccional | Email, nombre y texto de los avisos | Verificar región | DPA de Resend |
+| Meta / WhatsApp (opcional) | Avisos por WhatsApp, solo a quien los activó | Nombre, teléfono y texto del aviso | Global | Condiciones de WhatsApp; el uso con Baileys no es oficial: usar número dedicado |
 | Google (opcional) | Drive | Documentos/informes archivados | Workspace del cliente | Contrato Workspace del cliente |
 
 ## 10. Lista de verificación antes del primer día real
