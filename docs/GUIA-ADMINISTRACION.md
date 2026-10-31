@@ -43,6 +43,8 @@ Para la persona o el equipo que administra la plataforma en la escuela. Una guí
 
 *Informes*: **registro de jornada** por profesor (PDF oficial RD 8/2019), **planilla** mensual (exportable), **ausencias**. Conservar 4 años. Requiere los datos de la escuela completos en *Config*.
 
+**Corregir un fichaje** (olvido o error): *Informes → Registro individual →* elige la persona y el mes → **Corregir fichajes de este mes**. Puedes **añadir**, **editar** o **anular** un fichaje, siempre con el **motivo**. Nada se borra: queda el valor original, quién lo cambió y cuándo, y la persona recibe un aviso. Úsalo como excepción, no como norma. Marco legal y decisiones pendientes: `CUMPLIMIENTO-REGISTRO-JORNADA.md`.
+
 ## 6. Días libres, avisos y documentos
 
 - **Solicitudes:** aprueba o rechaza con observación.

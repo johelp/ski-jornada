@@ -67,6 +67,27 @@ model RegistroJornada {
   lng          Float?
   distancia    Int?
   esIncidencia Boolean     @default(false)
+  origen       String      @default("APP")   // APP · ADMIN (alta manual de administración)
+  anulado      Boolean     @default(false)   // nunca se borra: se anula y queda la huella
+  correcciones CorreccionFichaje[]
+}
+
+// Cada cambio de administración sobre un fichaje (alta manual, modificación, anulación) conserva el valor original,
+// quién lo hizo, cuándo y por qué. Se conserva con el registro (4 años).
+model CorreccionFichaje {
+  id            String          @id @default(uuid())
+  registroId    String
+  registro      RegistroJornada @relation(fields: [registroId], references: [id])
+  profesorId    String
+  accion        String          // CREAR · MODIFICAR · ANULAR
+  anterior      String?         // JSON {tipo, timestamp} antes del cambio
+  nuevo         String?         // JSON {tipo, timestamp} después del cambio
+  motivo        String
+  actorId       String?
+  actorEmail    String?
+  createdAt     DateTime        @default(now())
+
+  @@index([profesorId, createdAt])
 }
 
 model SolicitudLibre {

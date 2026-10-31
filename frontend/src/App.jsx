@@ -18,6 +18,7 @@ import Icono, { LogoMarca } from './Iconos';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 import DashboardAdmin from './DashboardAdmin';
+import CorregirFichajes from './CorregirFichajes';
 import { leerSesion, guardarSesion as guardarSesionAlmacen, borrarSesion, restaurarSesion } from './sesion';
 const api = axios.create({ baseURL: API_BASE });
 
@@ -1690,6 +1691,9 @@ function App() {
                       </div>
                     </div>
                   </div>
+                  {informeMensual && profesorInforme && (
+                    <CorregirFichajes api={api} headers={h} profesorId={profesorInforme} mes={mesInforme} onCambio={() => cargarInforme()} />
+                  )}
                   {informeMensual && (
                     <div className="card">
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
