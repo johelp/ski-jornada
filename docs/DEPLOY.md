@@ -69,6 +69,10 @@ curl https://api.skijornada.johelpastorino.com/api/server-time   # debe devolver
 - Admin: Usuarios → crear un profesor → recibe invitación.
 - Admin: Clases → Disciplinas y primas → cargar importes; en Usuarios → Editar → tarifa por hora.
 
+## 4b. Instancia de pruebas con datos de ejemplo
+
+Solo para una instancia de pruebas (nunca la de un cliente con datos reales): `SEED_DEMO=true` + `SEED_EMAILS=…` siembra el escenario de demostración una vez al arrancar. Variables y alcance en `DATOS-DE-PRUEBA.md` (sección «Instancia de pruebas desplegada»).
+
 ## 5. Operación
 
 - **Logs:** Railway > `api` > Deployments. Errores de arranque típicos: falta `JWT_SECRET` (el proceso aborta a propósito), volumen sin montar (`unable to open database file`).

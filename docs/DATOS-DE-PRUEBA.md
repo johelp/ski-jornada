@@ -70,6 +70,27 @@ Sin correo configurado, el enlace de acceso se imprime en la consola del backend
 | **Copia de seguridad** | Cuenta principal: `GET /api/admin/backup/descargar` | Archivo SQLite |
 | **App instalable** | Móvil: instalar desde el aviso o «Añadir a pantalla de inicio» | Pantalla completa, atajos Fichar / Clase |
 
+## Instancia de pruebas desplegada (para que el equipo la pruebe)
+
+Para tener los datos de ejemplo en una instancia **desplegada de pruebas** (Railway) hay que tener en cuenta que en producción: no hay login por contraseña, el enlace de acceso llega por correo y las cuentas demo usan correos ficticios (`@escuela.com`) que no reciben nada. Por eso se asignan **correos reales** a las cuentas demo y se siembra **una sola vez** al arrancar.
+
+**Variables en el servicio de Railway** (son solo para una instancia de pruebas):
+
+| Variable | Valor |
+|----------|-------|
+| `SEED_DEMO` | `true` (siembra una vez; deja la marca `/data/.demo-sembrado`) |
+| `SEED_EMAILS` | JSON con los correos reales: `{"admin@escuela.com":"ana@…","laura.garcia@escuela.com":"laura@…","profesor@escuela.com":"…","miguel.torres@escuela.com":"…","sofia.perez@escuela.com":"…","administracion@escuela.com":"…","sierranorte@escuela.com":"…"}`. **`admin@escuela.com` es obligatorio** y debe ser el administrador actual (`ADMIN_EMAIL`) |
+| `SEED_RESPETAR_CONFIG` | `true` para no sobrescribir el nombre, CIF y dirección de la escuela |
+| `SEED_DEMO_FORZAR` | `true` solo para **volver a sembrar** (renueva las fechas, pero borra lo que se haya cargado en las cuentas demo) |
+
+Las cuentas sin correo en `SEED_EMAILS` conservan su correo ficticio: existen y tienen datos, pero nadie entra con ellas. Con una sola cuenta mapeada basta: el administrador tiene **Modo empleado** para ver las pantallas del profesor.
+
+**Qué hace distinto en producción:** las cuentas demo no llevan la clave conocida «ski123», **no se crean claves de API ni webhooks de ejemplo** (la clave demo está en el repositorio) y la configuración de la escuela se respeta si `SEED_RESPETAR_CONFIG=true`.
+
+**Qué borra el seed** (no usarlo en la instancia de un cliente con datos reales): los datos de las cuentas demo, el **registro de actividad completo**, los vínculos de nombres y **todos los colaboradores**.
+
+Tras sembrar, quita `SEED_DEMO` (la marca evita repetirlo, pero así queda claro).
+
 ## Reiniciar el entorno de pruebas
 
 ```bash

@@ -1,5 +1,6 @@
 process.env.TZ = process.env.TZ || 'Europe/Madrid';
 const { PrismaClient } = require('@prisma/client');
+const { em } = require('./demo-emails');
 const sembrarDemoCompleta = require('./seed-completo');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
@@ -29,51 +30,52 @@ if (process.env.NODE_ENV === 'production' && process.env.FORCE_SEED !== 'true') 
 async function main() {
   await sembrarCatalogo();
   console.log('🌱 Iniciando seed de datos demo...');
-  const hash = await bcrypt.hash('ski123', 10);
+  // En una instancia desplegada (producción) las cuentas demo no llevan la clave conocida «ski123»: se entra por enlace
+  const hash = await bcrypt.hash(process.env.NODE_ENV === 'production' ? crypto.randomBytes(24).toString('hex') : 'ski123', 10);
 
   // ── Usuarios ─────────────────────────────────────────────
   const admin = await prisma.profesor.upsert({
-    where: { email: 'admin@escuela.com' },
+    where: { email: em('admin@escuela.com') },
     update: { password: hash, esPrincipal: true },
     create: {
       esPrincipal: true,
-      email: 'admin@escuela.com', nombre: 'Ana', apellidos: 'Rodríguez',
+      email: em('admin@escuela.com'), nombre: 'Ana', apellidos: 'Rodríguez',
       password: hash, tipoJornada: 'COMPLETA', horasContrato: 35, role: 'ADMIN',
     },
   });
 
   const carlos = await prisma.profesor.upsert({
-    where: { email: 'profesor@escuela.com' },
+    where: { email: em('profesor@escuela.com') },
     update: { password: hash },
     create: {
-      email: 'profesor@escuela.com', nombre: 'Carlos', apellidos: 'Martínez',
+      email: em('profesor@escuela.com'), nombre: 'Carlos', apellidos: 'Martínez',
       password: hash, tipoJornada: 'COMPLETA', horasContrato: 35, role: 'PROFESOR',
     },
   });
 
   const laura = await prisma.profesor.upsert({
-    where: { email: 'laura.garcia@escuela.com' },
+    where: { email: em('laura.garcia@escuela.com') },
     update: { password: hash },
     create: {
-      email: 'laura.garcia@escuela.com', nombre: 'Laura', apellidos: 'García',
+      email: em('laura.garcia@escuela.com'), nombre: 'Laura', apellidos: 'García',
       password: hash, tipoJornada: 'COMPLETA', horasContrato: 35, role: 'PROFESOR',
     },
   });
 
   const miguel = await prisma.profesor.upsert({
-    where: { email: 'miguel.torres@escuela.com' },
+    where: { email: em('miguel.torres@escuela.com') },
     update: { password: hash },
     create: {
-      email: 'miguel.torres@escuela.com', nombre: 'Miguel', apellidos: 'Torres',
+      email: em('miguel.torres@escuela.com'), nombre: 'Miguel', apellidos: 'Torres',
       password: hash, tipoJornada: 'MEDIA', horasContrato: 20, role: 'PROFESOR',
     },
   });
 
   const sofia = await prisma.profesor.upsert({
-    where: { email: 'sofia.perez@escuela.com' },
+    where: { email: em('sofia.perez@escuela.com') },
     update: { password: hash },
     create: {
-      email: 'sofia.perez@escuela.com', nombre: 'Sofía', apellidos: 'Pérez',
+      email: em('sofia.perez@escuela.com'), nombre: 'Sofía', apellidos: 'Pérez',
       password: hash, tipoJornada: 'COMPLETA', horasContrato: 35, role: 'PROFESOR',
     },
   });
