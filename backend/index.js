@@ -707,26 +707,58 @@ app.get('/api/fichaje/historial', auth, async (req, res) => {
 });
 
 // ============ DÍAS LIBRES ============
+// Validación común de una solicitud (crear y editar). `base` aporta los valores que no se envían al editar.
+function validarSolicitud(b, base = {}) {
+  const fi = b.fechaInicio ?? base.fechaInicio, ff = b.fechaFin ?? base.fechaFin;
+  const ini = new Date(fi), fin = new Date(ff);
+  if (isNaN(ini) || isNaN(fin)) return { error: 'Indica fechas válidas' };
+  if (fin < ini) return { error: 'La fecha final no puede ser anterior a la inicial' };
+  const motivo = String(b.motivo ?? base.motivo ?? '').trim();
+  if (!motivo) return { error: 'Indica el motivo' };
+  return { d: { fechaInicio: ini, fechaFin: fin, motivo, comentario: String(b.comentario ?? base.comentario ?? '').slice(0, 500) } };
+}
+const rangoTxt = s => `${s.fechaInicio.toLocaleDateString('es-ES')} → ${s.fechaFin.toLocaleDateString('es-ES')}`;
+const avisarAdmins = async (titulo, mensaje, enviadaPorId) => {
+  const admins = await prisma.profesor.findMany({ where: { role: 'ADMIN', activo: true }, select: { id: true } });
+  if (admins.length) await prisma.notificacion.createMany({ data: admins.map(a => ({ titulo, mensaje, tipo: 'INFO', profesorId: a.id, enviadaPorId })) }).catch(() => {});
+};
+
 app.post('/api/libres/solicitar', auth, async (req, res) => {
   try {
-    const { fechaInicio, fechaFin, motivo, comentario } = req.body;
-    const ini = new Date(fechaInicio), fin = new Date(fechaFin);
-    if (isNaN(ini) || isNaN(fin)) return res.status(400).json({ error: 'Indica fechas válidas' });
-    if (fin < ini) return res.status(400).json({ error: 'La fecha final no puede ser anterior a la inicial' });
-    if (!String(motivo || '').trim()) return res.status(400).json({ error: 'Indica el motivo' });
-    const sol = await prisma.solicitudLibre.create({
-      data: {
-        profesorId: req.user.userId,
-        fechaInicio: new Date(fechaInicio), fechaFin: new Date(fechaFin),
-        motivo, comentario: comentario || '', estado: 'PENDIENTE',
-      },
-    });
+    const v = validarSolicitud(req.body); if (v.error) return res.status(400).json({ error: v.error });
+    const sol = await prisma.solicitudLibre.create({ data: { ...v.d, profesorId: req.user.userId, estado: 'PENDIENTE' } });
     emitirEvento('solicitud.creada', { id: sol.id, profesorId: sol.profesorId, fechaInicio: sol.fechaInicio, fechaFin: sol.fechaFin, motivo: sol.motivo });
     res.json({ success: true, solicitud: sol });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error creando solicitud' });
   }
+});
+
+// El empleado puede corregir o retirar su solicitud mientras siga pendiente (después, la modifica administración)
+app.put('/api/libres/:id', auth, async (req, res) => {
+  try {
+    const sol = await prisma.solicitudLibre.findFirst({ where: { id: req.params.id, profesorId: req.user.userId }, include: { profesor: { select: { nombre: true, apellidos: true } } } });
+    if (!sol) return res.status(404).json({ error: 'Solicitud no encontrada' });
+    if (sol.estado !== 'PENDIENTE') return res.status(409).json({ error: 'Ya está respondida: pide a administración que la modifique' });
+    const v = validarSolicitud(req.body, sol); if (v.error) return res.status(400).json({ error: v.error });
+    const n = await prisma.solicitudLibre.update({ where: { id: sol.id }, data: v.d });
+    emitirEvento('solicitud.modificada', { id: n.id, profesorId: n.profesorId, fechaInicio: n.fechaInicio, fechaFin: n.fechaFin, motivo: n.motivo });
+    await avisarAdmins('Solicitud modificada', `${sol.profesor.nombre} ${sol.profesor.apellidos} cambió su solicitud: ahora ${rangoTxt(n)} (${n.motivo.replace('_', ' ').toLowerCase()}).`, req.user.userId);
+    res.json({ success: true, solicitud: n });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error modificando la solicitud' }); }
+});
+
+app.delete('/api/libres/:id', auth, async (req, res) => {
+  try {
+    const sol = await prisma.solicitudLibre.findFirst({ where: { id: req.params.id, profesorId: req.user.userId }, include: { profesor: { select: { nombre: true, apellidos: true } } } });
+    if (!sol) return res.status(404).json({ error: 'Solicitud no encontrada' });
+    if (sol.estado !== 'PENDIENTE') return res.status(409).json({ error: 'Ya está respondida: pide a administración que la anule' });
+    await prisma.solicitudLibre.delete({ where: { id: sol.id } });
+    emitirEvento('solicitud.cancelada', { id: sol.id, profesorId: sol.profesorId });
+    await avisarAdmins('Solicitud retirada', `${sol.profesor.nombre} ${sol.profesor.apellidos} retiró su solicitud del ${rangoTxt(sol)}.`, req.user.userId);
+    res.json({ success: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error retirando la solicitud' }); }
 });
 
 app.get('/api/libres/mis-solicitudes', auth, async (req, res) => {
@@ -754,6 +786,24 @@ app.get('/api/admin/solicitudes', auth, adminOnly, async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Error obteniendo solicitudes' }); }
 });
 
+// Administración puede corregir cualquier solicitud (fechas, motivo, comentario) aunque ya esté respondida, o reabrirla.
+app.put('/api/admin/solicitudes/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const sol = await prisma.solicitudLibre.findUnique({ where: { id: req.params.id }, include: { profesor: { select: { id: true, email: true, nombre: true } } } });
+    if (!sol) return res.status(404).json({ error: 'Solicitud no encontrada' });
+    const v = validarSolicitud(req.body, sol); if (v.error) return res.status(400).json({ error: v.error });
+    const data = { ...v.d };
+    if (req.body.reabrir === true) Object.assign(data, { estado: 'PENDIENTE', observacion: null, aprobadoPor: null, fechaRespuesta: null });
+    const n = await prisma.solicitudLibre.update({ where: { id: sol.id }, data });
+    const cambio = req.body.reabrir === true ? 'Se reabrió tu solicitud y volverá a revisarse' : `Administración modificó tu solicitud (${sol.estado.toLowerCase()}): ahora ${rangoTxt(n)}`;
+    await prisma.notificacion.create({ data: { titulo: 'Tu solicitud de días libres cambió', mensaje: `${cambio}.`, tipo: 'AVISO', profesorId: sol.profesorId, enviadaPorId: req.user.userId } });
+    avisarWhatsapp([sol.profesorId], `${cambio.toLowerCase()}.`);
+    emitirEvento('solicitud.modificada', { id: n.id, profesorId: n.profesorId, fechaInicio: n.fechaInicio, fechaFin: n.fechaFin, motivo: n.motivo, estado: n.estado });
+    await auditar(req, req.body.reabrir === true ? 'solicitud.reabrir' : 'solicitud.editar', sol.profesor, { id: sol.id, antes: `${rangoTxt(sol)} ${sol.motivo}`, despues: `${rangoTxt(n)} ${n.motivo}` });
+    res.json({ success: true, solicitud: n });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error modificando la solicitud' }); }
+});
+
 app.post('/api/admin/solicitudes/:id/responder', auth, adminOnly, async (req, res) => {
   try {
     const sol = await prisma.solicitudLibre.update({
@@ -774,8 +824,9 @@ app.post('/api/admin/solicitudes/:id/responder', auth, adminOnly, async (req, re
 // ============ ADMIN — Resumen del dashboard ============
 // Todo lo que requiere atención de administración, en una sola llamada.
 async function resumenColaboradores() {
-  const cols = await prisma.colaborador.findMany({ where: { activo: true }, include: { movimientos: true, liquidaciones: true } });
-  const filas = cols.map(c => ({ id: c.id, nombre: c.nombre, ...saldoDe(c.movimientos, c.liquidaciones) }));
+  const cols = await prisma.colaborador.findMany({ where: { activo: true }, include: { movimientos: true, liquidaciones: true, usuarios: { select: { activo: true } } } });
+  // «Pendiente» solo es una espera real si el colaborador puede responder (tiene acceso al portal); si no, es solo «cargada»
+  const filas = cols.map(c => { const s = saldoDe(c.movimientos, c.liquidaciones); return { id: c.id, nombre: c.nombre, ...s, pendientes: c.usuarios.some(u => u.activo) ? s.pendientes : 0 }; });
   return {
     total: cols.length,
     pendientes: filas.reduce((a, c) => a + c.pendientes, 0), enRevision: filas.reduce((a, c) => a + c.enRevision, 0),
@@ -1497,7 +1548,7 @@ app.get('/api/admin/colaboradores/estadisticas', auth, adminOnly, async (req, re
   try {
     const nMeses = Math.min(24, Math.max(1, parseInt(req.query.meses) || 12));
     const [cols, movs, liqs] = await Promise.all([
-      prisma.colaborador.findMany({ orderBy: { nombre: 'asc' } }), prisma.movimientoHoras.findMany(), prisma.liquidacion.findMany(),
+      prisma.colaborador.findMany({ orderBy: { nombre: 'asc' }, include: { usuarios: { select: { activo: true } } } }), prisma.movimientoHoras.findMany(), prisma.liquidacion.findMany(),
     ]);
     const ahora = new Date();
     const meses = Array.from({ length: nMeses }, (_, i) => { const d = new Date(ahora.getFullYear(), ahora.getMonth() - (nMeses - 1 - i), 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; });
@@ -1509,7 +1560,7 @@ app.get('/api/admin/colaboradores/estadisticas', auth, adminOnly, async (req, re
     });
     const porColaborador = cols.map(c => {
       const s = saldoDe(movs.filter(x => x.colaboradorId === c.id), liqs.filter(x => x.colaboradorId === c.id));
-      return { id: c.id, nombre: c.nombre, tipo: c.tipo, activo: c.activo, ...s };
+      return { id: c.id, nombre: c.nombre, tipo: c.tipo, activo: c.activo, ...s, pendientes: c.usuarios.some(u => u.activo) ? s.pendientes : 0 };
     });
     res.json({
       meses: porMes, colaboradores: porColaborador,
@@ -2343,7 +2394,7 @@ function apiAuth(scope) {
 app.use('/api/v1', rateLimit({ windowMs: 60 * 1000, max: 120, message: { error: 'Demasiadas peticiones' }, standardHeaders: true, legacyHeaders: false }));
 
 // Webhooks salientes firmados con HMAC-SHA256 (cabecera X-SkiJornada-Signature: sha256=<hex>)
-const EVENTOS_WEBHOOK = ['clases.mes_confirmado', 'clases.revision', 'clases.mes_reabierto', 'solicitud.creada', 'solicitud.respondida', 'documento.firmado', 'planning.importado'];
+const EVENTOS_WEBHOOK = ['clases.mes_confirmado', 'clases.revision', 'clases.mes_reabierto', 'solicitud.creada', 'solicitud.modificada', 'solicitud.cancelada', 'solicitud.respondida', 'documento.firmado', 'planning.importado'];
 
 // Un webhook nunca debe poder llamar a la red interna (SSRF): se resuelve el host y se rechazan IP privadas
 const dns = require('dns').promises;

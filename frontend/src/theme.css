@@ -686,3 +686,8 @@ header.topbar { padding-left: max(12px, env(safe-area-inset-left)); padding-righ
 .btn-accion:hover:not(:disabled) { background: #eef4fb; border-color: var(--primary-light); }
 .btn-accion:disabled { opacity: .5; cursor: not-allowed; }
 .clase-fila-acciones .btn-accion { min-height: 44px; }
+
+.tabla-clases tr.fila-sel td { background: #eef4fb; }
+.detalle-prof { scroll-margin-top: 72px; }
+.solicitud-acciones { display: flex; gap: 8px; margin-top: 8px; }
+.admin-card .btn-accion { margin-top: 8px; margin-right: 8px; }

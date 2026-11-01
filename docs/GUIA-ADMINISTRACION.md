@@ -47,7 +47,7 @@ Para la persona o el equipo que administra la plataforma en la escuela. Una guí
 
 ## 6. Días libres, avisos y documentos
 
-- **Solicitudes:** aprueba o rechaza con observación.
+- **Solicitudes:** aprueba o rechaza con observación. Con **Editar** corriges las fechas, el motivo o el comentario de cualquier solicitud, **aunque ya esté respondida** (p. ej. un cambio de fechas ya aprobado) y, si hace falta, **Guardar y volver a pendiente**. El empleado recibe un aviso y queda en el registro de actividad. Si el empleado cambia o retira una solicitud pendiente, recibes un aviso.
 - **Avisos:** a una persona o a todo el equipo (campana + correo).
 - **Documentos** (si el módulo está activo): sube nóminas, contratos y certificados por profesor; ve quién firmó. Solo tú y la persona dueña los veis.
 

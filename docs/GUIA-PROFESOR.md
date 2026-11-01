@@ -43,7 +43,7 @@ Carga cada clase **el mismo día**: es más rápido y evita olvidos.
 
 ## 5. Otras cosas
 
-- **Días libres:** *Más → Días libres* → solicitud con fechas y motivo; verás la respuesta.
+- **Días libres:** *Más → Días libres* → solicitud con fechas y motivo; verás la respuesta. Mientras esté **pendiente** puedes **Editar** (cambiar fechas, motivo o comentario) o **Retirar** la solicitud; administración recibe un aviso. Si ya está respondida, pídele a administración que la modifique.
 - **Documentos:** *Más → Documentos* (si tu escuela lo usa).
 - **Avisos:** campana arriba a la derecha.
 - **Tus datos:** *Más → Mi perfil* → **Exportar mis datos** y **Ver información de privacidad**.

@@ -390,6 +390,8 @@ const pdf = nombre => {
   }
   const est = await http('GET', '/api/admin/colaboradores/estadisticas?meses=12', { token: admin });
   check('estadísticas: horas por mes, saldo por colaborador y totales', est.status === 200 && est.data.meses.length === 12 && est.data.totales && est.data.colaboradores.some(c => c.id === CID));
+  const listaCol = (await http('GET', '/api/admin/colaboradores', { token: admin })).data || [];
+  check('las horas pendientes solo cuentan si el colaborador puede responder (tiene acceso al portal)', est.data.totales.pendientes === listaCol.filter(c => c.acceso?.activo).reduce((a, c) => a + c.saldo.pendientes, 0), JSON.stringify(est.data.totales));
   const lAll = await http('POST', `/api/admin/colaboradores/${CID}/liquidar`, { token: admin, body: { tipo: 'COMPENSACION', nota: 'Cerrado' } });
   check('saldar todo deja el saldo a cero', lAll.status === 200 && (await http('GET', `/api/admin/colaboradores/${CID}`, { token: admin })).data.saldo.horas === 0);
   check('sin saldo no hay nada que saldar → 400', (await http('POST', `/api/admin/colaboradores/${CID}/liquidar`, { token: admin, body: { tipo: 'PAGO' } })).status === 400);
@@ -411,6 +413,29 @@ const pdf = nombre => {
   // los colaboradores no se borran: se dejan inactivos para no ensuciar la lista
   for (const c of (await http('GET', '/api/admin/colaboradores', { token: admin })).data || [])
     if (/\(prueba\)|^Otra escuela$|^Sin correo$/.test(c.nombre) && c.activo) await http('PUT', `/api/admin/colaboradores/${c.id}`, { token: admin, body: { activo: false } });
+  }
+
+  { // bloque propio
+  seccion('6n. Editar solicitudes de días libres');
+  const sNueva = await http('POST', '/api/libres/solicitar', { token: prof, body: { fechaInicio: '2027-01-10', fechaFin: '2027-01-12', motivo: 'VACACIONES', comentario: 'Primera versión' } });
+  const SID = sNueva.data.solicitud?.id;
+  check('el empleado crea una solicitud', sNueva.status === 200 && !!SID);
+  check('el empleado la edita mientras está pendiente', (await http('PUT', `/api/libres/${SID}`, { token: prof, body: { fechaFin: '2027-01-14', comentario: 'Amplío un par de días' } })).data.solicitud?.fechaFin?.startsWith('2027-01-14'));
+  check('editar con la fecha final anterior se rechaza → 400', (await http('PUT', `/api/libres/${SID}`, { token: prof, body: { fechaFin: '2027-01-01' } })).status === 400);
+  check('otro empleado no puede editar la solicitud → 404', (await http('PUT', `/api/libres/${SID}`, { token: prof2, body: { motivo: 'ASUNTO_PROPIO' } })).status === 404);
+  check('otro empleado no puede retirarla → 404', (await http('DELETE', `/api/libres/${SID}`, { token: prof2 })).status === 404);
+  check('administración recibe el aviso del cambio', ((await http('GET', '/api/notificaciones', { token: admin })).data || []).some(n => n.titulo === 'Solicitud modificada'));
+  await http('POST', `/api/admin/solicitudes/${SID}/responder`, { token: admin, body: { aprobado: true, observacion: 'Vale' } });
+  check('respondida: el empleado ya no la edita → 409', (await http('PUT', `/api/libres/${SID}`, { token: prof, body: { motivo: 'ASUNTO_PROPIO' } })).status === 409);
+  check('respondida: el empleado ya no la retira → 409', (await http('DELETE', `/api/libres/${SID}`, { token: prof })).status === 409);
+  check('un profesor no usa la edición de administración → 403', (await http('PUT', `/api/admin/solicitudes/${SID}`, { token: prof, body: { motivo: 'ENFERMEDAD' } })).status === 403);
+  const aEd = await http('PUT', `/api/admin/solicitudes/${SID}`, { token: admin, body: { fechaInicio: '2027-01-11', fechaFin: '2027-01-13' } });
+  check('administración corrige una solicitud ya aprobada (sigue aprobada)', aEd.status === 200 && aEd.data.solicitud.estado === 'APROBADO' && aEd.data.solicitud.fechaInicio.startsWith('2027-01-11'));
+  check('el empleado fue avisado del cambio', ((await http('GET', '/api/notificaciones', { token: prof })).data || []).some(n => n.titulo === 'Tu solicitud de días libres cambió'));
+  const reab = await http('PUT', `/api/admin/solicitudes/${SID}`, { token: admin, body: { reabrir: true } });
+  check('administración puede reabrirla: vuelve a pendiente', reab.data.solicitud?.estado === 'PENDIENTE' && reab.data.solicitud.observacion == null);
+  check('reabierta, el empleado la retira', (await http('DELETE', `/api/libres/${SID}`, { token: prof })).status === 200 && !((await http('GET', '/api/libres/mis-solicitudes', { token: prof })).data || []).some(x => x.id === SID));
+  check('el registro de actividad guarda las ediciones de administración', ((await http('GET', '/api/admin/auditoria?limit=100', { token: admin })).data || []).some(x => x.accion === 'solicitud.editar' && x.detalle?.id === SID) && ((await http('GET', '/api/admin/auditoria?limit=100', { token: admin })).data || []).some(x => x.accion === 'solicitud.reabrir'));
   }
 
   seccion('7. Limpieza');

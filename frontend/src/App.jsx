@@ -350,6 +350,8 @@ function App() {
   const [comentario, setComentario]           = useState('');
   const [observacion, setObservacion]         = useState('');
   const [solicitudSeleccionada, setSolicitudSeleccionada] = useState(null);
+  const [editSolId, setEditSolId]             = useState(null);   // solicitud propia que se está editando
+  const [editAdminSol, setEditAdminSol]       = useState(null);   // solicitud (de cualquiera) que administración está editando
   const [mesInforme, setMesInforme] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; });
   const [nuevoUsuario, setNuevoUsuario] = useState({ nombre: '', apellidos: '', email: '', tipoJornada: 'COMPLETA', horasContrato: 35, role: 'PROFESOR', telefono: '' });
   const [nuevaZona, setNuevaZona]       = useState({ nombre: '', descripcion: '', lat: '', lng: '', radio: 100, validationMode: 'TOTP_GPS' });
@@ -544,6 +546,19 @@ function App() {
     document.addEventListener('visibilitychange', alVolver);
     return () => document.removeEventListener('visibilitychange', alVolver);
   }, []);
+
+  // La lista de empleados se vuelve a pedir al entrar en las pantallas que la usan y al volver a la app (antes solo al iniciar sesión,
+  // y las altas hechas después —importaciones, otra sesión de administración— no aparecían hasta recargar)
+  useEffect(() => {
+    if (!token || user?.role !== 'ADMIN') return;
+    if (['usuarios', 'informes', 'avisos', 'clases', 'documentos'].includes(vista)) cargarProfesores();
+  }, [token, vista]);
+  useEffect(() => {
+    if (!token || user?.role !== 'ADMIN') return;
+    const alVolver = () => { if (document.visibilityState === 'visible') { cargarProfesores(); cargarResumenAdmin(); } };
+    document.addEventListener('visibilitychange', alVolver);
+    return () => document.removeEventListener('visibilitychange', alVolver);
+  }, [token]);
 
   // El panel de administración se refresca al abrirlo y cada minuto
   useEffect(() => {
@@ -751,13 +766,36 @@ function App() {
 
   const solicitarLibre = async () => {
     if (!fechaInicio || !fechaFin) { toast$('Selecciona las fechas', 'warning'); return; }
-    if (new Date(fechaInicio) > new Date(fechaFin)) { toast$('La fecha inicio debe ser anterior', 'warning'); return; }
+    if (new Date(fechaInicio) > new Date(fechaFin)) { toast$('La fecha final no puede ser anterior a la inicial', 'warning'); return; }
     setCargando(true);
     try {
-      await api.post('/api/libres/solicitar', { fechaInicio, fechaFin, motivo, comentario }, { headers: h() });
-      toast$('Solicitud enviada correctamente', 'success');
-      cargarSolicitudes(); setFechaInicio(''); setFechaFin(''); setComentario('');
-    } catch { toast$('Error al enviar la solicitud', 'error'); }
+      if (editSolId) await api.put(`/api/libres/${editSolId}`, { fechaInicio, fechaFin, motivo, comentario }, { headers: h() });
+      else await api.post('/api/libres/solicitar', { fechaInicio, fechaFin, motivo, comentario }, { headers: h() });
+      toast$(editSolId ? 'Solicitud modificada ✓' : 'Solicitud enviada correctamente', 'success');
+      cargarSolicitudes(); setFechaInicio(''); setFechaFin(''); setComentario(''); setMotivo('VACACIONES'); setEditSolId(null);
+    } catch (e) { toast$(e.response?.data?.error || 'Error al enviar la solicitud', 'error', 5000); }
+    finally { setCargando(false); }
+  };
+  const dia10 = d => String(d).slice(0, 10);
+  const editarMiSolicitud = sol => {
+    setEditSolId(sol.id); setFechaInicio(dia10(sol.fechaInicio)); setFechaFin(dia10(sol.fechaFin)); setMotivo(sol.motivo); setComentario(sol.comentario || '');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const cancelarEdicionSolicitud = () => { setEditSolId(null); setFechaInicio(''); setFechaFin(''); setComentario(''); setMotivo('VACACIONES'); };
+  const retirarMiSolicitud = async sol => {
+    if (!window.confirm('¿Retirar esta solicitud? Administración recibirá un aviso.')) return;
+    try { await api.delete(`/api/libres/${sol.id}`, { headers: h() }); toast$('Solicitud retirada', 'success'); if (editSolId === sol.id) cancelarEdicionSolicitud(); cargarSolicitudes(); }
+    catch (e) { toast$(e.response?.data?.error || 'No se pudo retirar', 'error', 5000); }
+  };
+  const guardarSolicitudAdmin = async (reabrir = false) => {
+    const e = editAdminSol; if (!e) return;
+    if (!e.fechaInicio || !e.fechaFin || e.fechaFin < e.fechaInicio) { toast$('Revisa las fechas', 'warning'); return; }
+    setCargando(true);
+    try {
+      await api.put(`/api/admin/solicitudes/${e.id}`, { fechaInicio: e.fechaInicio, fechaFin: e.fechaFin, motivo: e.motivo, comentario: e.comentario, ...(reabrir ? { reabrir: true } : {}) }, { headers: h() });
+      toast$(reabrir ? 'Solicitud reabierta' : 'Solicitud modificada; se avisó al empleado ✓', 'success');
+      setEditAdminSol(null); cargarAdminSolicitudes(); cargarResumenAdmin();
+    } catch (err) { toast$(err.response?.data?.error || 'No se pudo guardar', 'error', 5000); }
     finally { setCargando(false); }
   };
 
@@ -1458,7 +1496,7 @@ function App() {
         {vista === 'solicitar' && (
           <div className="view-solicitar">
             <div className="card">
-              <h2>Nueva solicitud</h2>
+              <h2>{editSolId ? 'Modificar solicitud' : 'Nueva solicitud'}</h2>
               <div className="form-row">
                 <div className="form-group"><label>Fecha inicio</label>
                   <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} /></div>
@@ -1474,7 +1512,10 @@ function App() {
               </div>
               <div className="form-group"><label>Comentario (opcional)</label>
                 <textarea value={comentario} onChange={e => setComentario(e.target.value)} rows="3" placeholder="Añade un comentario..." /></div>
-              <button onClick={solicitarLibre} disabled={cargando} className="btn-primary">Enviar solicitud</button>
+              <div className="action-buttons">
+                <button onClick={solicitarLibre} disabled={cargando} className="btn-primary">{editSolId ? 'Guardar cambios' : 'Enviar solicitud'}</button>
+                {editSolId && <button type="button" className="btn-ghost" onClick={cancelarEdicionSolicitud}>Cancelar</button>}
+              </div>
             </div>
             <div className="card">
               <h2>Mis solicitudes</h2>
@@ -1488,6 +1529,12 @@ function App() {
                       </div>
                       <div className="solicitud-motivo">{sol.motivo.replace('_', ' ')}</div>
                       {sol.observacion && <div className="solicitud-observacion">💬 {sol.observacion}</div>}
+                      {sol.estado === 'PENDIENTE' && (
+                        <div className="solicitud-acciones">
+                          <button type="button" className="btn-accion" onClick={() => editarMiSolicitud(sol)}>Editar</button>
+                          <button type="button" className="btn-accion" onClick={() => retirarMiSolicitud(sol)}>Retirar</button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1640,6 +1687,28 @@ function App() {
                     <span className={`estado-badge ${sol.estado.toLowerCase()}`}>{sol.estado}</span>
                   </div>
                   {sol.comentario && <p className="admin-comentario">"{sol.comentario}"</p>}
+                  {editAdminSol?.id === sol.id && (
+                    <div className="observacion-box">
+                      <div className="form-row">
+                        <div className="form-group"><label>Desde</label><input type="date" value={editAdminSol.fechaInicio} onChange={ev => setEditAdminSol({ ...editAdminSol, fechaInicio: ev.target.value })} /></div>
+                        <div className="form-group"><label>Hasta</label><input type="date" value={editAdminSol.fechaFin} onChange={ev => setEditAdminSol({ ...editAdminSol, fechaFin: ev.target.value })} /></div>
+                      </div>
+                      <div className="form-group"><label>Motivo</label>
+                        <select value={editAdminSol.motivo} onChange={ev => setEditAdminSol({ ...editAdminSol, motivo: ev.target.value })}>
+                          <option value="VACACIONES">Vacaciones</option><option value="ASUNTO_PROPIO">Asunto propio</option><option value="ENFERMEDAD">Enfermedad</option>
+                        </select></div>
+                      <div className="form-group"><label>Comentario</label><input value={editAdminSol.comentario} onChange={ev => setEditAdminSol({ ...editAdminSol, comentario: ev.target.value })} /></div>
+                      <p className="form-hint">El empleado recibirá un aviso con el cambio.</p>
+                      <div className="action-buttons">
+                        <button className="btn-primary" disabled={cargando} onClick={() => guardarSolicitudAdmin(false)}>Guardar cambios</button>
+                        {sol.estado !== 'PENDIENTE' && <button className="btn-sm" disabled={cargando} onClick={() => guardarSolicitudAdmin(true)}>Guardar y volver a pendiente</button>}
+                        <button className="btn-ghost" onClick={() => setEditAdminSol(null)}>Cancelar</button>
+                      </div>
+                    </div>
+                  )}
+                  {editAdminSol?.id !== sol.id && (
+                    <button className="btn-accion" onClick={() => setEditAdminSol({ id: sol.id, fechaInicio: String(sol.fechaInicio).slice(0, 10), fechaFin: String(sol.fechaFin).slice(0, 10), motivo: sol.motivo, comentario: sol.comentario || '' })}>Editar</button>
+                  )}
                   {sol.estado === 'PENDIENTE' && solicitudSeleccionada === sol.id && (
                     <div className="observacion-box">
                       <textarea placeholder="Observación (obligatoria para rechazar)" value={observacion} onChange={e => setObservacion(e.target.value)} rows="2" />

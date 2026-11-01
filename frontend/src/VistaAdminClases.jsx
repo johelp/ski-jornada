@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { generarPDFClases } from './pdfClases';
 import { REVISION } from './VistaMisClases';
 import { filaCsv } from './csv';
@@ -19,6 +19,7 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
   const [primas, setPrimas] = useState([]);
   const [nuevoTipo, setNuevoTipo] = useState('');
   const [notaRev, setNotaRev] = useState('');
+  const refDetalle = useRef(null);
   const [nuevaPrima, setNuevaPrima] = useState({ nombre: '', importe: '', modo: 'POR_HORA' });
 
   const err = e => toast$(e.response?.data?.error || 'Error', 'error');
@@ -35,6 +36,9 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
 
   useEffect(() => { setDetalle(null); cargarResumen(); }, [cargarResumen]);
   useEffect(() => { cargarCatalogo(); }, [cargarCatalogo]);
+  // Al abrir un profesor, llevar la vista hasta su detalle (se abre debajo de la tabla y, con lista larga o en el móvil, quedaba fuera de pantalla)
+  const profesorAbierto = detalle?.profesor?.id;
+  useEffect(() => { if (profesorAbierto) refDetalle.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, [profesorAbierto]);
 
   const verDetalle = async id => {
     try { setDetalle((await api.get(`/api/clases/informe/${mes}?profesorId=${id}`, { headers: h() })).data); setNotaRev(''); } catch (e) { err(e); }
@@ -106,13 +110,13 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
               <thead><tr><th>Profesor</th><th>Horas</th><th>Clases</th><th>Importe</th><th>Estado</th><th>Revisión</th><th /></tr></thead>
               <tbody>
                 {resumen.map(r => (
-                  <tr key={r.id}>
+                  <tr key={r.id} className={detalle?.profesor?.id === r.id ? 'fila-sel' : undefined}>
                     <td>{r.apellidos}, {r.nombre}</td>
                     <td data-label="Horas">{r.totalHoras}</td><td data-label="Clases">{r.cantidadClases}</td>
                     <td data-label="Importe">{eur(r.importeTotal)}</td>
                     <td data-label="Estado"><span className={`estado-badge ${r.confirmado ? 'aprobado' : 'pendiente'}`}>{r.confirmado ? 'Confirmado' : 'Sin confirmar'}</span></td>
                     <td data-label="Revisión">{r.revisionEstado ? <span className={`estado-badge ${REVISION[r.revisionEstado]?.clase}`}>{REVISION[r.revisionEstado]?.label}</span> : (r.confirmado ? <span className="estado-badge pendiente">Por revisar</span> : '—')}</td>
-                    <td><button className="btn-sm" onClick={() => verDetalle(r.id)}>Ver</button></td>
+                    <td><button className="btn-sm" onClick={() => verDetalle(r.id)} aria-expanded={detalle?.profesor?.id === r.id}>{detalle?.profesor?.id === r.id ? 'Abierto ↓' : 'Ver'}</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -120,7 +124,7 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
           </div>
 
           {detalle && (
-            <div className="detalle-prof">
+            <div className="detalle-prof" ref={refDetalle}>
               <div className="card-header">
                 <h3>{detalle.profesor.nombre} {detalle.profesor.apellidos} — {detalle.totalHoras} h {detalle.importeTotal != null && `· ${eur(detalle.importeTotal)}`}</h3>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
