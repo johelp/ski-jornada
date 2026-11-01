@@ -650,3 +650,39 @@ header.topbar { padding-left: max(12px, env(safe-area-inset-left)); padding-righ
 .cr-enviar { width: 100%; min-height: 54px; margin-top: 16px; font-size: 1.05rem; }
 .cr-neto { margin: 10px 0 0; font-size: .85rem; color: var(--text-muted); }
 .cr-chips .cr-horas { width: 88px; flex: 0 0 88px; }
+
+/* ---- Carga de clases del profesor (móvil primero) ---- */
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; background: #eaf0f7; border-radius: 14px; }
+.seg button { min-height: 44px; border: 0; border-radius: 10px; background: transparent; font: inherit; font-weight: 600; color: var(--ink); cursor: pointer; transition: background .15s, color .15s; }
+.seg button.on { background: var(--primary); color: #fff; box-shadow: 0 1px 3px rgba(15, 23, 42, .2); }
+.seg + input[type=date] { margin-top: 8px; }
+.horas-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.horas-grid .chip-btn { min-height: 48px; padding: 0; justify-content: center; font-size: 1rem; }
+.horas-grid + input, .horas-grid + .enlace-sutil { margin-top: 8px; }
+.enlace-sutil { display: inline-block; min-height: 44px; padding: 0 4px; border: 0; background: none; color: var(--primary); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.ultima-carga { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; margin-bottom: 10px; border-radius: 10px; background: var(--success-bg); color: var(--success-text); font-weight: 600; font-size: .9rem; }
+.ultima-carga span { display: inline-flex; align-items: center; gap: 6px; }
+.ultima-carga svg { flex: none; }
+.banner-mes { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; margin-bottom: 12px; border-radius: 12px; background: var(--warning-bg); color: var(--warning-text); border: 1px solid #f1d28a; }
+.banner-mes strong { display: block; } .banner-mes small { opacity: .85; }
+.mes-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.mes-nav strong { font-size: 1.05rem; }
+.mes-nav .btn-ghost { min-width: 44px; min-height: 44px; font-size: 1.4rem; line-height: 1; }
+.estado-linea { margin: -4px 0 12px; }
+.dias-lista { display: flex; flex-direction: column; gap: 14px; }
+.dia-cab { display: flex; justify-content: space-between; align-items: baseline; padding: 0 2px 4px; border-bottom: 2px solid var(--border); color: var(--primary); font-size: .95rem; }
+.dia-cab span { font-weight: 700; font-variant-numeric: tabular-nums; }
+.clase-fila { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 10px 2px; border-bottom: 1px solid var(--border); }
+.clase-fila-info { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; min-width: 0; }
+.clase-fila-info small { color: var(--text-muted); }
+.nowrap { white-space: nowrap; }
+.clase-fila-acciones { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
+.btn-accion { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 14px; }
+.confirmar-panel { margin-top: 1rem; padding: 14px; border-radius: 12px; background: #eef4fb; border: 1px solid #c5d6ea; }
+.confirmar-panel p { margin: 6px 0 12px; color: var(--text-muted); font-size: .9rem; }
+.btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { .seg button { transition: none; } }
+.btn-accion { background: #fff; border: 1.5px solid var(--border); border-radius: 10px; color: var(--primary-dark, var(--primary)); font: inherit; font-weight: 600; font-size: .9rem; cursor: pointer; }
+.btn-accion:hover:not(:disabled) { background: #eef4fb; border-color: var(--primary-light); }
+.btn-accion:disabled { opacity: .5; cursor: not-allowed; }
+.clase-fila-acciones .btn-accion { min-height: 44px; }

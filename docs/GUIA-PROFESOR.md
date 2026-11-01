@@ -26,7 +26,7 @@ La sesión **se mantiene abierta** en tu móvil (90 días).
 |-------------------|------|
 | **Fichar entrada** | *Inicio* → **Fichar entrada** → escanea el QR de la zona (o NFC) |
 | **Fichar salida** | *Inicio* → **Fichar salida** (o *Fichar → Salida rápida*) |
-| **Cargar una clase** | Pestaña **Clases** → horas (0,5 · 1 · 1,5 · 2 · 3 · 4) → disciplina → **primas** que correspondan → **+ Cargar clase** |
+| **Cargar una clase** | Pestaña **Clases** → **Hoy** / **Ayer** / *Otro día* → horas (0,5 · 1 · 1,5 · 2 · 3 · 4, o *Otra cantidad*) → disciplina (se recuerda la última) → **primas** si corresponden → **Cargar clase**. Si te equivocas, **Deshacer** (aparece unos segundos) |
 | **Corregir una clase** | *Clases* → lápiz **Editar** (solo si el mes no está confirmado) |
 | **Ver cuánto llevas** | *Inicio*: **Este mes** o **Temporada** (horas, días e importe estimado) |
 
@@ -34,8 +34,8 @@ Carga cada clase **el mismo día**: es más rápido y evita olvidos.
 
 ## 4. A fin de mes
 
-1. Revisa tus clases en **Clases**.
-2. Pulsa **Confirmar horas del mes** (después ya no se pueden editar).
+1. Revisa tus clases en **Clases** (agrupadas por día; con ‹ › cambias de mes). A principios de mes la app te avisa si te falta confirmar el mes anterior.
+2. Pulsa **Confirmar horas del mes** y confirma en el aviso (después ya no se pueden editar).
 3. Administración **revisa** y verás el resultado en el mismo mes:
    - **Aprobado** ✔
    - **Discrepancia** o **Corrección solicitada**: lee la nota, corrige y vuelve a confirmar.
