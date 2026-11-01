@@ -16,10 +16,12 @@ function Tarjeta({ titulo, cuenta, tono, vacio, onVer, verTexto = 'Ver todo →'
   );
 }
 
-export default function DashboardAdmin({ resumen, cargando, irA, aprobar, recargar }) {
+export default function DashboardAdmin({ resumen, cargando, irA, aprobar, recargar, modulos }) {
   if (!resumen) return <div className="card"><div className="empty-state"><p>Cargando panel…</p></div></div>;
   const { solicitudes: sol, clases, documentos, equipo, incidenciasSemana } = resumen;
-  const urgentes = sol.pendientes + clases.sinRevisar + clases.conProblema + documentos.pendientesFirma;
+  const on = k => modulos?.[k] !== false; // módulos apagados por administración no aparecen
+  const col = on('colaboradores') ? resumen.colaboradores : null;
+  const urgentes = (on('libres') ? sol.pendientes : 0) + (on('clases') ? clases.sinRevisar + clases.conProblema : 0) + (on('documentos') ? documentos.pendientesFirma : 0) + (col ? col.enRevision : 0);
 
   return (
     <div className="dash-admin">
@@ -31,6 +33,7 @@ export default function DashboardAdmin({ resumen, cargando, irA, aprobar, recarg
         <button className="btn-sm" onClick={recargar} aria-label="Actualizar">↻ Actualizar</button>
       </div>
 
+      {on('libres') && <>
       <div className="dash-estados" role="group" aria-label="Estado de las solicitudes de días libres">
         <button className="dash-estado dash-estado-pend" onClick={() => irA('gestionar')}><b>{sol.pendientes}</b><span>Pendientes</span></button>
         <button className="dash-estado dash-estado-ok" onClick={() => irA('gestionar')}><b>{sol.aprobadas}</b><span>Aprobadas</span></button>
@@ -38,8 +41,9 @@ export default function DashboardAdmin({ resumen, cargando, irA, aprobar, recarg
         <button className="dash-estado" onClick={() => irA('gestionar')}><b>{sol.ausentesHoy}</b><span>Ausentes hoy</span></button>
       </div>
       <p className="dash-nota">Solicitudes de los últimos 60 días.</p>
+      </>}
 
-      <Tarjeta titulo="Solicitudes por responder" cuenta={sol.pendientes} tono="amber" vacio="No hay solicitudes pendientes" onVer={() => irA('gestionar')}>
+      {on('libres') && <Tarjeta titulo="Solicitudes por responder" cuenta={sol.pendientes} tono="amber" vacio="No hay solicitudes pendientes" onVer={() => irA('gestionar')}>
         <ul className="dash-lista">
           {sol.listaPendientes.map(s => (
             <li key={s.id}>
@@ -49,18 +53,18 @@ export default function DashboardAdmin({ resumen, cargando, irA, aprobar, recarg
           ))}
         </ul>
         {sol.pendientes > sol.listaPendientes.length && <p className="dash-nota">y {sol.pendientes - sol.listaPendientes.length} más…</p>}
-      </Tarjeta>
+      </Tarjeta>}
 
-      <Tarjeta titulo="Horas por revisar" cuenta={clases.sinRevisar} tono="blue" vacio="No hay meses confirmados sin revisar" onVer={() => irA('clases')}>
+      {on('clases') && <Tarjeta titulo="Horas por revisar" cuenta={clases.sinRevisar} tono="blue" vacio="No hay meses confirmados sin revisar" onVer={() => irA('clases')}>
         <ul className="dash-lista">
           {clases.listaSinRevisar.map(c => (
             <li key={`${c.profesorId}${c.mes}`}><div><strong>{c.profesor}</strong><small>{mesLargo(c.mes)} · confirmó el {fecha(c.confirmadoAt)}</small></div>
               <button className="btn-sm" onClick={() => irA('clases')}>Revisar</button></li>
           ))}
         </ul>
-      </Tarjeta>
+      </Tarjeta>}
 
-      {clases.conProblema > 0 && (
+      {on('clases') && clases.conProblema > 0 && (
         <Tarjeta titulo="Discrepancias y correcciones abiertas" cuenta={clases.conProblema} tono="red" vacio="" onVer={() => irA('clases')}>
           <ul className="dash-lista">
             {clases.listaConProblema.map(c => (
@@ -71,7 +75,7 @@ export default function DashboardAdmin({ resumen, cargando, irA, aprobar, recarg
         </Tarjeta>
       )}
 
-      {documentos.pendientesFirma > 0 && (
+      {on('documentos') && documentos.pendientesFirma > 0 && (
         <Tarjeta titulo="Documentos sin firmar" cuenta={documentos.pendientesFirma} tono="red" vacio="" onVer={() => irA('documentos')}>
           <ul className="dash-lista">
             {documentos.lista.map(d => (
@@ -81,11 +85,22 @@ export default function DashboardAdmin({ resumen, cargando, irA, aprobar, recarg
         </Tarjeta>
       )}
 
-      <Tarjeta titulo="Próximas ausencias" cuenta={sol.proximas.length} tono="green" vacio="Sin ausencias aprobadas próximas" onVer={() => irA('gestionar')}>
+      {col && col.total > 0 && (
+        <Tarjeta titulo="Colaboradores: horas por aclarar" cuenta={col.enRevision + col.pendientes} tono={col.enRevision ? 'red' : 'amber'} vacio="Nada en revisión" onVer={() => irA('colaboradores')}>
+          <ul className="dash-lista">
+            {col.listaRevision.map(c => <li key={c.id}><div><strong>{c.nombre}</strong><small>{c.enRevision} movimiento{c.enRevision > 1 ? 's' : ''} en revisión</small></div></li>)}
+            <li><div><strong>{col.pendientes} horas pendientes de aceptar</strong>
+              <small>Nos deben {col.aFavorEuros.toLocaleString('es-ES')} € · les debemos {col.enContraEuros.toLocaleString('es-ES')} €</small></div>
+              <button className="btn-sm" onClick={() => irA('colaboradores')}>Ver cuentas</button></li>
+          </ul>
+        </Tarjeta>
+      )}
+
+      {on('libres') && <Tarjeta titulo="Próximas ausencias" cuenta={sol.proximas.length} tono="green" vacio="Sin ausencias aprobadas próximas" onVer={() => irA('gestionar')}>
         <ul className="dash-lista">
           {sol.proximas.map(s => <li key={s.id}><div><strong>{s.profesor}</strong><small>{rango(s)} · {motivo(s.motivo)}</small></div></li>)}
         </ul>
-      </Tarjeta>
+      </Tarjeta>}
 
       {(equipo.invitadosSinEntrar.length > 0 || incidenciasSemana > 0) && (
         <div className="card dash-card">

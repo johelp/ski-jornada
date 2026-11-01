@@ -23,6 +23,8 @@ model Profesor {
   tarifaHora       Float?
   adheridoAt       DateTime?
   esPrincipal      Boolean  @default(false)
+  colaboradorId    String?  // solo cuentas con role COLABORADOR: la entidad a la que representan
+  colaborador      Colaborador? @relation(fields: [colaboradorId], references: [id])
   createdAt        DateTime @default(now())
 
   registros                RegistroJornada[]
@@ -155,6 +157,7 @@ model ConfigEscuela {
   telefono      String   @default("958 000 000")
   email         String   @default("")
   colorPrimario String   @default("#0f4c81")
+  modulosOff    String   @default("")   // módulos apagados por administración, separados por comas
   updatedAt     DateTime @updatedAt
 }
 
@@ -301,4 +304,58 @@ model AceptacionLegal {
   aceptadoAt DateTime @default(now())
 
   @@unique([profesorId, documento, version])
+}
+
+// ---- Colaboradores y subcontratas (escuelas y autónomos que cubren o piden horas) ----
+model Colaborador {
+  id         String   @id @default(uuid())
+  nombre     String
+  tipo       String   @default("ESCUELA")   // ESCUELA · AUTONOMO
+  cif        String?
+  email      String?                         // opcional: con correo se le puede dar acceso al portal
+  telefono   String?
+  contacto   String?
+  tarifaHora Float    @default(0)            // valor hora del trato
+  notas      String?
+  activo     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  usuarios      Profesor[]
+  movimientos   MovimientoHoras[]
+  liquidaciones Liquidacion[]
+}
+
+// Horas dadas (les cubrimos nosotros: nos deben) o recibidas (nos cubren ellos: les debemos)
+model MovimientoHoras {
+  id               String      @id @default(uuid())
+  colaboradorId    String
+  colaborador      Colaborador @relation(fields: [colaboradorId], references: [id])
+  fecha            String      // AAAA-MM-DD
+  sentido          String      // DADAS · RECIBIDAS
+  horas            Float
+  tarifaHora       Float       // valor hora al cargarlas (no cambia si luego cambia el trato)
+  nota             String?
+  estado           String      @default("PENDIENTE")   // PENDIENTE · ACEPTADA · EN_REVISION
+  notaColaborador  String?
+  respondidoAt     DateTime?
+  creadoPorId      String?
+  createdAt        DateTime    @default(now())
+
+  @@index([colaboradorId, fecha])
+}
+
+// Saldado de horas: pago en dinero o compensación (horas contra horas). Positivo = a favor de la escuela.
+model Liquidacion {
+  id            String      @id @default(uuid())
+  colaboradorId String
+  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id])
+  fecha         String
+  tipo          String      // PAGO · COMPENSACION
+  horas         Float       // con signo: + saldamos horas que nos debían, − horas que debíamos
+  importe       Float       // valor en euros de esas horas, con el mismo signo
+  nota          String?
+  creadoPorId   String?
+  createdAt     DateTime    @default(now())
+
+  @@index([colaboradorId, fecha])
 }

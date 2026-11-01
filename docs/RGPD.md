@@ -46,6 +46,14 @@ Cada cliente tiene su **propio despliegue y base de datos** (ver `MULTI-DESPLIEG
 - Base jurídica: contrato (6.1.b). Si el motivo es *enfermedad*, puede revelar datos de salud: **no pedir diagnóstico**, solo el motivo genérico, y aplicar el art. 9.2.b RGPD (obligaciones laborales).
 - Conservación: durante la relación y `[plazo]`.
 
+**Tratamiento 6 (si se usa el módulo) — Colaboradores y subcontratas**
+- Finalidad: llevar la cuenta de horas intercambiadas con escuelas y autónomos colaboradores y liquidarla.
+- Interesados: **autónomos** (personas físicas) y personas de contacto de las escuelas colaboradoras.
+- Datos: nombre, NIF, teléfono, correo, valor hora, horas dadas y recibidas, liquidaciones y, si tienen acceso, su actividad en el portal.
+- Base jurídica: ejecución del contrato o de medidas precontractuales (6.1.b); obligaciones contables y fiscales (6.1.c).
+- Conservación: durante la colaboración y los plazos contables y fiscales (`[plazo]`). Los colaboradores no se borran desde la app, se dejan inactivos.
+- Información: entregar a cada autónomo y a las personas con acceso al portal la información del art. 13.
+
 **Tratamiento 5 (opcional) — Documentos laborales** *(solo si se activa el módulo)*: nóminas, contratos y certificados. Base: contrato/obligación legal. Conservación: `[plazo]`.
 
 ## 3. Información al interesado (art. 13) — texto para profesores

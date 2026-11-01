@@ -116,9 +116,22 @@ Estado: ✅ disponible · 🟡 disponible con límites · 🗺 planificado (ver 
 | Exportar mis datos / datos de un profesor (RGPD) | ✅ | Botón en Perfil; admin por API |
 | Purga por plazo de conservación | ✅ | `backend/scripts/purgar.js` |
 
+### Colaboradores y subcontratas
+| Función | Estado | Detalle |
+|---------|--------|---------|
+| Alta de colaboradores (escuelas y autónomos) con valor hora del trato | ✅ | Correo opcional |
+| Horas dadas y recibidas por día | ✅ | Valor hora fijado en cada movimiento; editar, borrar, marcar aceptada |
+| Saldo en horas y en euros | ✅ | + a favor de la escuela, − en contra; lo «en revisión» queda aparte |
+| Saldar por pago o compensación, total o parcial | ✅ | Anulable |
+| Extracto en PDF (todo el historial o un periodo) | ✅ | Por día, con liquidaciones y saldo anterior/final |
+| Dashboard de colaboradores y aviso en el panel de inicio | ✅ | Horas por mes, saldo por colaborador, pendientes y en revisión |
+| Portal del colaborador (opcional) | ✅ | Ve su cuenta, acepta o pide revisión, descarga su extracto; no accede a nada más |
+| Colaborador propone sus propias horas | ⬜ | Hoy solo acepta o revisa lo que carga administración |
+
 ### Configuración
 | Función | Estado | Detalle |
 |---------|--------|---------|
+| Módulos apagables por administración | ✅ | *Config → Módulos*: clases, días libres, documentos, comparativa, integraciones, avisos, colaboradores. Se oculta del menú y la API responde 404; los datos se conservan |
 | Datos de la escuela y email de avisos | ✅ | Nombre, CIF, dirección, color |
 | Marca de la landing por despliegue | ✅ | Variables `VITE_*` (ver `MULTI-DESPLIEGUE.md`) |
 | WhatsApp (avisos y recordatorios) | ✅ | Opcional: «Generar QR» en Integraciones activa un número emisor; solo a quien lo pide en su perfil. No es la API oficial (ver `INTEGRACIONES.md`) |

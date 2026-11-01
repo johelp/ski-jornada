@@ -35,6 +35,7 @@ Sin correo configurado, el enlace de acceso se imprime en la consola del backend
 - **Fichajes** de las últimas 4 semanas con días de exceso, una **incidencia** y una persona **dentro ahora**.
 - **Documentos PDF reales** (pendientes y firmados), registros de jornada enviados/firmados, **días libres** en los cuatro estados, **avisos**, **aceptaciones legales**, **vínculo de nombre** (alias), **registro de actividad**.
 - **API key de demostración:** `sj_demo_clave_de_ejemplo_solo_pruebas_0001` (lectura, económico y planning) una segunda clave de **gestoría** (`sj_demo_gestoria_solo_lectura_pruebas_0002`, solo lectura y económico) y dos webhooks de ejemplo desactivados. Carlos y Laura tienen teléfono y **avisos de WhatsApp activados** (solo se envían si conectas un número en *Integraciones → WhatsApp*).
+- **Colaboradores y subcontratas:** *Escuela Sierra Norte* (saldo a favor: 5 h dadas − 2 recibidas = **3 h = 90 €**, con acceso al portal: `sierranorte@escuela.com`), *Marcos Ruiz (autónomo)* (en contra, con horas **en revisión** y un pago parcial) y *Escuela Valle Sur* (saldada).
 - **CSV de reservas de ejemplo** en `backend/prisma/demo/instructors_summary_*.csv` (no se versiona), con el mismo formato que exporta el sistema de reservas.
 
 ## Guion de pruebas por función
@@ -62,6 +63,8 @@ Sin correo configurado, el enlace de acceso se imprime en la consola del backend
 | **Documentos** | Laura → *Documentos* → abrir y subir el firmado; Admin → *Documentos* | Descarga protegida; los PDF son válidos |
 | **Avisos y notificaciones** | Admin → *Avisos*; campana del profesor | Aviso individual o masivo con lectura |
 | **Integraciones** | Admin → *Integraciones*; `curl -H "X-API-Key: sj_demo_…" …/api/v1/informe/AAAA-MM` | Claves, webhooks y planning por CSV; la API devuelve los informes |
+| **Colaboradores** | Admin → *Colaboradores*; entrar como `sierranorte@escuela.com` (portal) | Saldo 3 h / 90 €; el colaborador acepta o pide revisión y el panel muestra lo pendiente; extracto PDF |
+| **Módulos** | Admin → *Config → Módulos* → apagar *Días libres* | Desaparece *Solicitudes* y su tarjeta del panel; los datos siguen al reactivarlo |
 | **Exportar mis datos** | Profesor → *Perfil → Exportar mis datos* | JSON con todos sus datos |
 | **Registro de actividad** | Admin → *Usuarios → Actividad de administración* | Altas, bajas, roles, importaciones, revisiones |
 | **Copia de seguridad** | Cuenta principal: `GET /api/admin/backup/descargar` | Archivo SQLite |

@@ -5,6 +5,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Fechas AAA
 ## [Sin publicar]
 
 ### Añadido
+- **Colaboradores y subcontratas:** cuenta de horas con escuelas y autónomos (dadas y recibidas por día, valor hora del trato, saldo en horas y euros, pagos y compensaciones, extracto PDF, estadísticas y aviso en el panel). Portal opcional para el colaborador, que acepta o pide revisar sus horas, sin acceso a nada más. Ver `docs/COLABORADORES.md`.
+- **Módulos apagables por administración** (*Config → Módulos*): clases, días libres, documentos, comparativa, integraciones, avisos y colaboradores; se ocultan del menú y del panel, la API responde 404 y los datos se conservan.
 - **Registro de jornada con correcciones trazables:** administración añade, modifica o anula fichajes con motivo obligatorio; se conserva el valor original, quién y cuándo (`CorreccionFichaje`); el fichaje anulado no se borra ni cuenta en los informes; el trabajador recibe un aviso; entra en el registro de actividad y en la exportación RGPD.
 - **Documentación legal:** `docs/CUMPLIMIENTO-REGISTRO-JORNADA.md` y plantillas en `docs/legal/` (contrato de encargo, información al personal, política interna de fichaje).
 - **WhatsApp activable desde la administración:** botón «Generar QR» (Integraciones → WhatsApp) que arranca el servidor Baileys, estado en vivo, desactivar y desvincular; avisos solo a quien los activa en su perfil; cola con pausas y tope diario; la sesión persiste en el volumen.
@@ -16,6 +18,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Fechas AAA
 - **Seed completo** de datos de ejemplo, **auditoría de seguridad**, estimador de **dimensionamiento**, copias diarias comprimidas y manual de implementación y guías de uso.
 
 ### Corregido
+- El seed de demostración fallaba si existían correcciones de fichajes (restricción de clave foránea).
 - Cabecera tapada por el reloj y la batería en la app instalada (área segura superior).
 - Seguridad: PDF falso servido como HTML, zona horaria de los informes, datos ficticios en el PDF legal, límite compartido en una misma wifi, inyección de fórmulas en CSV, HTML sin escapar en correos, mes/año inválidos (500).
 

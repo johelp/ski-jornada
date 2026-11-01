@@ -2,7 +2,7 @@
 
 ## Prueba de humo automática (API)
 
-`backend/scripts/smoke.js` recorre el proceso completo con una cuenta de administración y dos de profesor: permisos, carga de clases, importes, confirmación y bloqueo, revisión (discrepancia, corrección, aprobación), anotaciones por clase, notificaciones, documentos (subida, firma y acceso protegido) y limpieza. **149 verificaciones** (incluye correcciones trazables de fichajes, API keys, planning, exportación de datos, comparativa con reservas, control de acceso, salud y copia de seguridad, subidas y límites, código de 6 dígitos con `API_LOG`, y panel de administración). Sin `API_LOG` (registro de la API local) se omiten las pruebas con código real. Se ejecuta en cada PR con GitHub Actions (`.github/workflows/ci.yml`).
+`backend/scripts/smoke.js` recorre el proceso completo con una cuenta de administración y dos de profesor: permisos, carga de clases, importes, confirmación y bloqueo, revisión (discrepancia, corrección, aprobación), anotaciones por clase, notificaciones, documentos (subida, firma y acceso protegido) y limpieza. **187 verificaciones** (incluye colaboradores y subcontratas, módulos apagables, correcciones trazables de fichajes, API keys, planning, exportación de datos, comparativa con reservas, control de acceso, salud y copia de seguridad, subidas y límites, código de 6 dígitos con `API_LOG`, y panel de administración). Sin `API_LOG` (registro de la API local) se omiten las pruebas con código real. Se ejecuta en cada PR con GitHub Actions (`.github/workflows/ci.yml`).
 
 ```bash
 # Backend local con datos demo
