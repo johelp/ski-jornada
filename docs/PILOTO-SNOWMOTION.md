@@ -42,7 +42,7 @@ Se descarta D de inicio: más fricción de permisos para poca ganancia.
 
 ## 3. Firma de las nóminas: qué valor tiene
 
-- La **firma dibujada** de la plataforma es un “conforme” práctico, **sin validez legal de firma electrónica**.
+- La plataforma **ya no incluye firma dibujada** (no se insertaba en el documento ni tenía validez): el profesor descarga el original, lo firma fuera (certificado digital o a mano y escaneado) y sube el **PDF firmado**. Las nóminas del piloto se firman en la plataforma externa.
 - Para el recibí de nómina suele bastar un justificante de recepción, pero conviene que el asesor laboral de Snowmotion confirme qué necesita (firma manuscrita escaneada, firma digital, o solo constancia de entrega y lectura).
 - Si hace falta firma con validez: **Autofirma (FNMT)** o un servicio tipo **ViDeSigner** (ver `ROADMAP.md`). Mientras tanto la subida del PDF firmado por el profesor cubre el flujo.
 

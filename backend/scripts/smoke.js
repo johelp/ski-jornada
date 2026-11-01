@@ -244,11 +244,10 @@ const pdf = nombre => {
   check('un HTML declarado como PDF se rechaza al firmar', (await http('POST', `/api/documentos/${idDocA}/firmar`, { token: prof, form: falso })).status === 400);
   const falsoNombre = new FormData(); falsoNombre.append('pdf', new Blob(['<svg onload=alert(1)>'], { type: 'application/pdf' }), 'x.pdf');
   check('un archivo con extensión .pdf pero contenido no PDF se rechaza', (await http('POST', `/api/documentos/${idDocA}/firmar`, { token: prof, form: falsoNombre })).status === 400);
-  const png = new FormData(); png.append('pdf', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])], { type: 'image/png' }), 'firma.exe');
-  const firmaPng = await http('POST', `/api/documentos/${idDocA}/firmar`, { token: prof, form: png });
-  check('una firma PNG válida se acepta y la extensión la fija el servidor (no el cliente)', firmaPng.status === 200 && /\.png$/.test(firmaPng.data.documento.firmaUrl));
-  const cabPng = await fetch(BASE + firmaPng.data.documento.firmaUrl, { headers: { Authorization: `Bearer ${admin}` } });
-  check('se sirve con tipo fijo, nosniff y sandbox', cabPng.headers.get('content-type') === 'image/png' && cabPng.headers.get('x-content-type-options') === 'nosniff' && /sandbox/.test(cabPng.headers.get('content-security-policy') || ''));
+  const png = new FormData(); png.append('pdf', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])], { type: 'image/png' }), 'firma.png');
+  check('una imagen (firma dibujada) ya no sirve como firma del documento → 400', (await http('POST', `/api/documentos/${idDocA}/firmar`, { token: prof, form: png })).status === 400);
+  const cabPdf = await fetch(BASE + firmado.data.documento.firmaUrl, { headers: { Authorization: `Bearer ${admin}` } });
+  check('el PDF firmado se sirve con tipo fijo, nosniff y sandbox', cabPdf.headers.get('content-type') === 'application/pdf' && cabPdf.headers.get('x-content-type-options') === 'nosniff' && /sandbox/.test(cabPdf.headers.get('content-security-policy') || ''));
   const pdfOk = await http('POST', '/api/firma/subir-firmado', { token: prof, form: (() => { const f = pdf('f.pdf').add({ mes: '03', anio: '2031' }); return f; })() });
   check('el registro firmado en PDF válido se acepta', pdfOk.status === 200);
   // Límites

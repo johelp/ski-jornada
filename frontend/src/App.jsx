@@ -83,85 +83,6 @@ const eurFmt = n => (n == null ? null : `${n.toLocaleString('es-ES', { minimumFr
 const TIPO_DOC_LABEL = { NOMINA: 'Nómina', CONTRATO: 'Contrato', CERTIFICADO: 'Certificado', OTRO: 'Otro' };
 const TIPO_DOC_ICON  = { NOMINA: '💰', CONTRATO: '📋', CERTIFICADO: '🏅', OTRO: '📄' };
 
-// ===== FIRMA CANVAS (simple, no tiene validez legal — paso previo a plataforma externa) =====
-function FirmaCanvas({ onFirma, onCancelar }) {
-  const canvasRef = useRef(null);
-  const dibujando = useRef(false);
-
-  const limpiar = () => {
-    const ctx = canvasRef.current?.getContext('2d');
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-    ctx.strokeStyle = '#94a3b8';
-    ctx.setLineDash([4, 4]);
-    ctx.strokeRect(2, 2, canvasRef.current.width - 4, canvasRef.current.height - 4);
-    ctx.setLineDash([]);
-  };
-
-  useEffect(() => {
-    limpiar();
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    ctx.strokeStyle = '#0f4c81';
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    const getPos = (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const src = e.touches?.[0] || e;
-      return { x: src.clientX - rect.left, y: src.clientY - rect.top };
-    };
-
-    const start = (e) => { e.preventDefault(); dibujando.current = true; ctx.beginPath(); const p = getPos(e); ctx.moveTo(p.x, p.y); };
-    const move  = (e) => { e.preventDefault(); if (!dibujando.current) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); };
-    const end   = ()  => { dibujando.current = false; };
-
-    canvas.addEventListener('mousedown', start);
-    canvas.addEventListener('mousemove', move);
-    canvas.addEventListener('mouseup', end);
-    canvas.addEventListener('touchstart', start, { passive: false });
-    canvas.addEventListener('touchmove', move,  { passive: false });
-    canvas.addEventListener('touchend', end);
-    return () => {
-      canvas.removeEventListener('mousedown', start);
-      canvas.removeEventListener('mousemove', move);
-      canvas.removeEventListener('mouseup', end);
-      canvas.removeEventListener('touchstart', start);
-      canvas.removeEventListener('touchmove', move);
-      canvas.removeEventListener('touchend', end);
-    };
-  }, []);
-
-  const confirmar = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    // Verificar que hay algo dibujado
-    const ctx = canvas.getContext('2d');
-    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-    // Background is #f8fafc (R=248); stroke is #0f4c81 (R=15). Any dark pixel = firma present.
-    let hasFirma = false;
-    for (let i = 0; i < data.length; i += 4) { if (data[i] < 100) { hasFirma = true; break; } }
-    if (!hasFirma) { alert('Por favor, dibuja tu firma antes de continuar.'); return; }
-    onFirma(canvas.toDataURL('image/png'));
-  };
-
-  return (
-    <div className="firma-canvas-container">
-      <p className="firma-aviso">Firma con el ratón o con el dedo. <em>Nota: esta firma no tiene validez legal — es un paso intermedio hasta integrar firma electrónica certificada.</em></p>
-      <canvas ref={canvasRef} width={400} height={150} className="firma-canvas" />
-      <div className="action-buttons" style={{ marginTop: '0.5rem' }}>
-        <button className="btn-approve" onClick={confirmar}>✓ Confirmar firma</button>
-        <button className="btn-ghost" onClick={limpiar}>Limpiar</button>
-        <button className="btn-ghost" onClick={onCancelar}>Cancelar</button>
-      </div>
-    </div>
-  );
-}
-
 // ===== VISTA PRESENCIA — profesores fichados ahora mismo =====
 function VistaPresencia({ presencia, onRefresh, serverTimeOffsetRef }) {
   const [ahora, setAhora] = useState(new Date());
@@ -319,7 +240,6 @@ function App() {
   const [resumenDiario, setResumenDiario] = useState({});
   const [solicitudes, setSolicitudes]     = useState([]);
   const [misDocumentos, setMisDocumentos] = useState([]);
-  const [firmaCanvasDocId, setFirmaCanvasDocId] = useState(null);
 
   // Datos admin
   const [adminSolicitudes, setAdminSolicitudes]     = useState([]);
@@ -960,21 +880,6 @@ function App() {
       cargarMisDocumentos();
       if (firmaFileRefs.current[docId]) firmaFileRefs.current[docId].value = '';
     } catch (err) { toast$(err.response?.data?.error || 'Error al subir firma', 'error'); }
-    finally { setCargando(false); }
-  };
-
-  // Firma canvas → convierte a blob PNG y sube
-  const subirFirmaCanvas = async (docId, dataUrl) => {
-    setCargando(true);
-    try {
-      const blob = await (await fetch(dataUrl)).blob();
-      const file = new File([blob], 'firma-canvas.png', { type: 'image/png' });
-      const fd = new FormData(); fd.append('pdf', file);
-      await api.post(`/api/documentos/${docId}/firmar`, fd, { headers: { Authorization: `Bearer ${token}` } });
-      toast$('Firma enviada correctamente ✓', 'success');
-      setFirmaCanvasDocId(null);
-      cargarMisDocumentos();
-    } catch (err) { toast$(err.response?.data?.error || 'Error al enviar firma', 'error'); }
     finally { setCargando(false); }
   };
 
@@ -1639,27 +1544,16 @@ function App() {
                     </div>
                     {doc.estado !== 'FIRMADO' && (
                       <div style={{ marginTop: '0.75rem' }}>
-                        {firmaCanvasDocId === doc.id ? (
-                          <FirmaCanvas
-                            onFirma={(dataUrl) => subirFirmaCanvas(doc.id, dataUrl)}
-                            onCancelar={() => setFirmaCanvasDocId(null)}
-                          />
-                        ) : (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                            <button className="btn-primary" style={{ width: 'auto', padding: '0.4rem 1rem', marginTop: 0 }}
-                              onClick={() => setFirmaCanvasDocId(doc.id)}>
-                              ✍ Firmar ahora (canvas)
-                            </button>
-                            <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>o</span>
-                            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)' }}>Subir PDF firmado:</label>
-                            <input type="file" accept="application/pdf" style={{ fontSize: '0.8rem' }}
-                              ref={el => { firmaFileRefs.current[doc.id] = el; }} />
-                            <button className="btn-sm" style={{ background: 'var(--primary)', color: 'white', border: 'none' }}
-                              onClick={() => subirFirmaProfesor(doc.id)} disabled={cargando}>
-                              📤 Enviar PDF firmado
-                            </button>
-                          </div>
-                        )}
+                        <p className="firma-ayuda">Para firmarlo: descarga el original con «Ver original», fírmalo con tu certificado digital (p. ej. Autofirma o Adobe) o a mano y escaneado, y súbelo aquí en PDF.</p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                          <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)' }}>PDF firmado:</label>
+                          <input type="file" accept="application/pdf" style={{ fontSize: '0.8rem' }}
+                            ref={el => { firmaFileRefs.current[doc.id] = el; }} />
+                          <button className="btn-sm" style={{ background: 'var(--primary)', color: 'white', border: 'none' }}
+                            onClick={() => subirFirmaProfesor(doc.id)} disabled={cargando}>
+                            📤 Enviar PDF firmado
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>

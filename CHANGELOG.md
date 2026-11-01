@@ -22,6 +22,9 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Fechas AAA
 - **RGPD:** información de privacidad y contrato de encargo aceptables en la app, con constancia versionada.
 - **Seed completo** de datos de ejemplo, **auditoría de seguridad**, estimador de **dimensionamiento**, copias diarias comprimidas y manual de implementación y guías de uso.
 
+### Eliminado
+- **Firma dibujada (canvas) en Documentos:** subía una imagen que el servidor daba por «documento firmado» sin insertarla en el PDF y sin validez. Se quita la opción; el profesor sube el **PDF firmado** (y el servidor solo acepta PDF para firmar). Los documentos ya firmados con imagen se siguen viendo.
+
 ### Corregido
 - **Botón «Ver» de Clases (administración):** el detalle se abría debajo de la tabla, fuera de pantalla, y parecía no responder. Ahora lleva hasta él y marca la fila.
 - **Lista de empleados desactualizada:** se cargaba solo al iniciar sesión, así que las altas posteriores no aparecían en Usuarios hasta recargar (el panel de inicio sí se refrescaba). Ahora se actualiza al entrar en la pantalla y al volver a la app.
