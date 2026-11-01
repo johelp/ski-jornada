@@ -1579,27 +1579,8 @@ main {
 }
 .btn-nfc-write:hover { opacity: 0.88; }
 
-/* ===== CANVAS SIGNATURE ===== */
-.firma-canvas-container { padding: 0.75rem 0; }
-
-.firma-aviso {
-  font-size: 0.8rem;
-  color: #92400e;
-  margin-bottom: 0.75rem;
-  padding: 0.5rem 0.75rem;
-  background: #fffbeb;
-  border-left: 3px solid var(--warning);
-  border-radius: var(--radius-sm);
-  line-height: 1.5;
-}
-
-.firma-canvas {
-  display: block;
-  border-radius: var(--radius-sm);
-  cursor: crosshair;
-  max-width: 100%;
-  touch-action: none;
-}
+/* ===== FIRMA DE DOCUMENTOS ===== */
+.firma-ayuda { font-size: 0.8rem; color: var(--text-muted); margin: 0 0 0.5rem; line-height: 1.5; }
 
 /* ===== SALIDA DIRECTA ===== */
 .salida-directa-card { border-left: 4px solid var(--danger); }

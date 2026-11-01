@@ -1436,7 +1436,7 @@ app.get('/api/documentos/mis-documentos', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Error obteniendo documentos' }); }
 });
 
-app.post('/api/documentos/:id/firmar', auth, uploadFirma.single('pdf'), verificarArchivo(['pdf', 'png', 'jpg']), async (req, res) => {
+app.post('/api/documentos/:id/firmar', auth, uploadFirma.single('pdf'), verificarArchivo(['pdf']), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No se recibió ningún archivo' });
 

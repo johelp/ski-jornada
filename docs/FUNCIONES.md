@@ -50,7 +50,7 @@ Estado: ✅ disponible · 🟡 disponible con límites · 🗺 planificado (ver 
 |---------|--------|---------|
 | Solicitar días libres | ✅ | Vacaciones, asuntos propios, enfermedad; ve la respuesta y la observación |
 | Documentos (nóminas, contratos, certificados) | ✅ (se puede apagar por despliegue con `DOCUMENTOS_HABILITADOS=false`) | Ve los que le sube administración, los abre y sube la versión firmada |
-| Firma | 🟡 | Firma dibujada (no tiene validez legal) o subida del PDF firmado a mano/digital |
+| Firma | 🟡 | Solo **subida del PDF firmado fuera** (certificado digital, Autofirma/Adobe o a mano y escaneado). La firma dibujada en pantalla se **retiró** (no se insertaba en el documento ni tenía validez). La firma electrónica integrada sigue en el roadmap |
 | Notificaciones | ✅ | Campana in-app + correo |
 | Perfil, teléfono, hora de recordatorio | ✅ | |
 | App instalable (PWA) | ✅ | Android (Chrome) e iPhone (Safari → Añadir a inicio) |
