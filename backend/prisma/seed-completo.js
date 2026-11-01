@@ -76,6 +76,16 @@ module.exports = async function sembrarDemoCompleta(prisma, { admin, carlos, lau
   const ids = demo.map(u => u.id);
 
   // ── Limpieza de lo generado por ejecuciones anteriores (y restos de pruebas automáticas) ──
+  // Colaboradores (y sus cuentas de portal) de ejecuciones anteriores y de las pruebas automáticas
+  const cuentasColab = (await prisma.profesor.findMany({ where: { OR: [{ role: 'COLABORADOR' }, { email: { endsWith: '@ejemplo.test' } }] }, select: { id: true } })).map(u => u.id);
+  await prisma.correccionFichaje.deleteMany({ where: { profesorId: { in: cuentasColab } } });
+  await prisma.registroJornada.deleteMany({ where: { profesorId: { in: cuentasColab } } });
+  await prisma.notificacion.deleteMany({ where: { OR: [{ profesorId: { in: cuentasColab } }, { enviadaPorId: { in: cuentasColab } }] } });
+  await prisma.magicLink.deleteMany({ where: { profesorId: { in: cuentasColab } } });
+  await prisma.aceptacionLegal.deleteMany({ where: { profesorId: { in: cuentasColab } } });
+  await prisma.movimientoHoras.deleteMany({}); await prisma.liquidacion.deleteMany({});
+  await prisma.profesor.deleteMany({ where: { role: 'COLABORADOR' } });
+  await prisma.colaborador.deleteMany({});
   await prisma.profesor.deleteMany({ where: { email: { endsWith: '@ejemplo.test' } } });
   const docsViejos = await prisma.documentoLegajo.findMany({ where: { profesorId: { in: ids }, archivoPath: { startsWith: 'demo-' } } });
   docsViejos.forEach(d => ['documentos', 'firmas'].forEach(sub => [d.archivoPath, d.firmaPath].filter(Boolean).forEach(f => { try { fs.unlinkSync(path.join(UPLOAD_DIR, sub, f)); } catch {} })));
@@ -92,6 +102,7 @@ module.exports = async function sembrarDemoCompleta(prisma, { admin, carlos, lau
     prisma.auditoriaLog.deleteMany({}),
     prisma.apiKey.deleteMany({ where: { nombre: { startsWith: 'Demo' } } }),
     prisma.webhook.deleteMany({ where: { url: { startsWith: 'https://demo.' } } }),
+    prisma.correccionFichaje.deleteMany({ where: { profesorId: { in: ids } } }),
     prisma.registroJornada.deleteMany({ where: { profesorId: { in: ids }, timestamp: { gte: hace(75, 0) } } }),
   ]);
 
@@ -223,6 +234,21 @@ module.exports = async function sembrarDemoCompleta(prisma, { admin, carlos, lau
   const claveGestoria = 'sj_demo_gestoria_solo_lectura_pruebas_0002';
   await prisma.apiKey.create({ data: { nombre: 'Demo · Gestoría (solo lectura)', prefijo: claveGestoria.slice(0, 10), keyHash: crypto.createHash('sha256').update(claveGestoria).digest('hex'), scopes: 'lectura,economico', creadaPorId: admin.id } });
   await prisma.webhook.create({ data: { url: 'https://demo.ejemplo.test/avisos-administracion', secret: 'whsec_demo_avisos_pruebas', eventos: 'clases.mes_confirmado,solicitud.creada', activo: false } });
+  // Colaboradores y subcontratas: un saldo a favor (el ejemplo 5 h dadas − 2 recibidas = 3 h = 90 €), uno en contra con horas en revisión y un pago parcial, y uno saldado
+  const diaISO = n => { const d = hace(n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const norte = await prisma.colaborador.create({ data: { nombre: 'Escuela Sierra Norte', tipo: 'ESCUELA', cif: 'B11111111', email: 'sierranorte@escuela.com', telefono: '958 111 111', contacto: 'Marta (coordinación)', tarifaHora: 30, notas: 'Se liquida a final de temporada' } });
+  const marcos = await prisma.colaborador.create({ data: { nombre: 'Marcos Ruiz (autónomo)', tipo: 'AUTONOMO', cif: '12345678Z', telefono: '600 222 222', tarifaHora: 25 } });
+  const valle = await prisma.colaborador.create({ data: { nombre: 'Escuela Valle Sur', tipo: 'ESCUELA', email: 'vallesur@escuela.com', tarifaHora: 28 } });
+  const mov = (c, d, sentido, horas, tarifa, extra = {}) => ({ colaboradorId: c.id, fecha: diaISO(d), sentido, horas, tarifaHora: tarifa, creadoPorId: admin.id, ...extra });
+  await prisma.movimientoHoras.createMany({ data: [
+    mov(norte, 20, 'DADAS', 3, 30, { nota: 'Grupo de la mañana', estado: 'ACEPTADA', respondidoAt: hace(19) }), mov(norte, 20, 'DADAS', 2, 30, { nota: 'Clase particular' }),
+    mov(norte, 9, 'RECIBIDAS', 2, 30, { nota: 'Cubrieron a Laura', estado: 'ACEPTADA', respondidoAt: hace(8) }),
+    mov(marcos, 25, 'RECIBIDAS', 3, 25, { nota: 'Fin de semana', estado: 'ACEPTADA', respondidoAt: hace(24) }), mov(marcos, 12, 'RECIBIDAS', 2, 25, { nota: 'Grupo avanzado', estado: 'EN_REVISION', notaColaborador: 'Fueron 3 h, no 2', respondidoAt: hace(11) }), mov(marcos, 4, 'RECIBIDAS', 1, 25),
+    mov(valle, 30, 'DADAS', 4, 28, { estado: 'ACEPTADA', respondidoAt: hace(29) }), mov(valle, 15, 'RECIBIDAS', 4, 28, { estado: 'ACEPTADA', respondidoAt: hace(14) }),
+  ] });
+  await prisma.liquidacion.create({ data: { colaboradorId: marcos.id, fecha: diaISO(10), tipo: 'PAGO', horas: -2, importe: -50, nota: 'Transferencia', creadoPorId: admin.id } });
+  // Escuela Sierra Norte tiene acceso al portal (entra con el enlace o el código del correo)
+  await prisma.profesor.create({ data: { email: 'sierranorte@escuela.com', nombre: 'Escuela Sierra Norte', apellidos: '', password: hash, role: 'COLABORADOR', colaboradorId: norte.id, adheridoAt: hace(15) } });
   // WhatsApp: dos profesores con teléfono y avisos activados (solo se envía si administración conecta un número)
   await prisma.profesor.updateMany({ where: { id: { in: [laura.id, carlos.id] } }, data: { telefono: '+34600000001', avisosWhatsapp: true } });
   await prisma.profesor.update({ where: { id: miguel.id }, data: { telefono: '+34600000002', avisosWhatsapp: false } });

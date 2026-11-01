@@ -19,6 +19,9 @@ import Icono, { LogoMarca } from './Iconos';
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 import DashboardAdmin from './DashboardAdmin';
 import CorregirFichajes from './CorregirFichajes';
+import VistaColaboradores from './VistaColaboradores';
+import VistaColaborador from './VistaColaborador';
+import ModulosConfig from './ModulosConfig';
 import { leerSesion, guardarSesion as guardarSesionAlmacen, borrarSesion, restaurarSesion } from './sesion';
 const api = axios.create({ baseURL: API_BASE });
 
@@ -552,8 +555,9 @@ function App() {
 
   useEffect(() => {
     if (token && user) {
-      cargarHistorial(); cargarSolicitudes(); cargarMisDocumentos();
       cargarNotificaciones(); cargarConfig();
+      if (user.role === 'COLABORADOR') return; // el colaborador solo usa su portal
+      cargarHistorial(); cargarSolicitudes(); cargarMisDocumentos();
       if (user.role === 'ADMIN') {
         cargarAdminSolicitudes(); cargarProfesores(); cargarZonasAdmin(); cargarDocumentosAdmin(); cargarResumenAdmin();
         cargarNotifAdmin();
@@ -563,7 +567,7 @@ function App() {
 
   // Totales de clases del período elegido en el inicio (mes en curso o temporada)
   useEffect(() => {
-    if (!token) return;
+    if (!token || user?.role === 'COLABORADOR') return;
     const { desde, hasta } = rangoPeriodo(periodoDash);
     setClasesPeriodo(null);
     api.get(`/api/clases/periodo?desde=${desde}&hasta=${hasta}`, { headers: h() })
@@ -965,6 +969,7 @@ function App() {
   const registrosHoy   = historial[hoy] || [];
   const estadoFichaje  = registrosHoy[registrosHoy.length - 1]?.tipo || null;
   const esAdmin        = user?.role === 'ADMIN';
+  const esColab        = user?.role === 'COLABORADOR';
   const totalHoras     = Object.values(resumenDiario).reduce((s, d) => s + d.horas, 0).toFixed(1);
   const rango          = rangoPeriodo(periodoDash, horaActual);
   const diasPeriodo    = Object.entries(resumenDiario).filter(([dia]) => dia.slice(0, 7) >= rango.desde && dia.slice(0, 7) <= rango.hasta);
@@ -985,6 +990,7 @@ function App() {
         { id: 'informes',   icon: '📄', label: 'Informes' },
         { id: 'documentos', icon: '📁', label: 'Documentos', badge: docsPendientes },
         { id: 'usuarios',   icon: '👥', label: 'Usuarios' },
+        { id: 'colaboradores', icon: '🤝', label: 'Colaboradores', badge: resumenAdmin?.colaboradores?.enRevision || 0 },
         { id: 'zonas',      icon: '📍', label: 'Zonas' },
         { id: 'avisos',     icon: '🔔', label: 'Avisos' },
         { id: 'integraciones', icon: '🔗', label: 'Integraciones' },
@@ -1001,11 +1007,14 @@ function App() {
         { id: 'perfil',     icon: '⚙️', label: 'Mi perfil' },
       ];
 
-  const navItems = docsOn ? navItemsTodos : navItemsTodos.filter(i => i.id !== 'documentos');
+  // Módulos que administración apagó (y el de documentos, que además se puede apagar por despliegue)
+  const MODULO_DE = { documentos: 'documentos', clases: 'clases', misclases: 'clases', gestionar: 'libres', solicitar: 'libres', integraciones: 'integraciones', avisos: 'avisos', colaboradores: 'colaboradores' };
+  const modulos = configEscuela?.modulos;
+  const navItems = navItemsTodos.filter(i => (i.id !== 'documentos' || docsOn) && modulos?.[MODULO_DE[i.id]] !== false);
 
   const ICONO_NAV = {
     dashboard: 'inicio', presencia: 'presencia', gestionar: 'solicitudes', clases: 'clases', informes: 'informe', documentos: 'docs',
-    usuarios: 'usuarios', zonas: 'zonas', avisos: 'avisos', integraciones: 'enlace', config: 'config', perfil: 'perfil', fichar: 'reloj', misclases: 'clases', solicitar: 'calendario',
+    usuarios: 'usuarios', colaboradores: 'usuarios', zonas: 'zonas', avisos: 'avisos', integraciones: 'enlace', config: 'config', perfil: 'perfil', fichar: 'reloj', misclases: 'clases', solicitar: 'calendario',
   };
   const PRINCIPALES = esAdmin && !modoEmpleado ? ['dashboard', 'clases', 'usuarios', 'informes'] : ['dashboard', 'fichar', 'misclases', 'informes'];
   const navPrincipal = PRINCIPALES.map(id => navItems.find(i => i.id === id)).filter(Boolean);
@@ -1071,6 +1080,43 @@ function App() {
         <InstalarBanner evento={pwaInstallEvent} onInstalar={instalarPWA} />
         {cargando && <div className="loading-overlay"><div className="spinner" /></div>}
       </>
+    );
+  }
+
+  // ===== PORTAL DEL COLABORADOR (acceso opcional, solo ve su cuenta) =====
+  if (esColab) {
+    return (
+      <div className="app-container">
+        <header className="topbar">
+          <div className="topbar-in">
+            <div className="topbar-brand"><LogoMarca size={30} /><span>Ski Jornada</span></div>
+            <div className="topbar-right">
+              <button className="icon-btn" onClick={() => setNotifPanel(p => !p)} aria-label={`Notificaciones${notifNoLeidas ? `, ${notifNoLeidas} sin leer` : ''}`}>
+                <Icono n="campana" />{notifNoLeidas > 0 && <span className="badge-dot">{notifNoLeidas > 9 ? '9+' : notifNoLeidas}</span>}
+              </button>
+              <button className="icon-btn" onClick={logout} aria-label="Cerrar sesión"><Icono n="salir" /></button>
+            </div>
+          </div>
+        </header>
+        {notifPanel && (
+          <div className="notif-overlay" onClick={() => setNotifPanel(false)}>
+            <div className="notif-panel" onClick={e => e.stopPropagation()}>
+              <div className="notif-panel-header"><h3>Notificaciones</h3>{notifNoLeidas > 0 && <button className="btn-ghost notif-leer-todas" onClick={marcarTodasLeidas}>Marcar todas como leídas</button>}</div>
+              {!notificaciones.length ? <div className="notif-empty">Sin notificaciones</div> : (
+                <div className="notif-list">{notificaciones.map(n => (
+                  <div key={n.id} className={`notif-item notif-tipo-${n.tipo.toLowerCase()}${n.leida ? ' leida' : ''}`}>
+                    <span className="notif-icono">{n.tipo === 'ALERTA' ? '🚨' : n.tipo === 'AVISO' ? '⚠️' : 'ℹ️'}</span>
+                    <div className="notif-body"><strong className="notif-titulo">{n.titulo}</strong><p className="notif-mensaje">{n.mensaje}</p></div>
+                    {!n.leida && <span className="notif-dot" />}
+                  </div>
+                ))}</div>
+              )}
+            </div>
+          </div>
+        )}
+        <main><VistaColaborador api={api} h={h} toast$={toast$} /></main>
+        {toast && <div className={`toast toast-${toast.tipo}`}>{toast.msg}</div>}
+      </div>
     );
   }
 
@@ -1194,7 +1240,7 @@ function App() {
 
         {/* ===== DASHBOARD ADMIN ===== */}
         {esAdmin && !modoEmpleado && vista === 'dashboard' && (
-          <DashboardAdmin resumen={resumenAdmin} cargando={cargando} irA={setVista} recargar={cargarResumenAdmin}
+          <DashboardAdmin modulos={modulos} resumen={resumenAdmin} cargando={cargando} irA={setVista} recargar={cargarResumenAdmin}
             aprobar={id => responderSolicitud(id, true)} />
         )}
 
@@ -2364,12 +2410,16 @@ function App() {
                 </>
               )}
             </div>
+            <ModulosConfig api={api} h={h} toast$={toast$} onCambio={cargarConfig} />
           </div>
         )}
 
         {/* ===== MI PERFIL ===== */}
         {(!esAdmin || modoEmpleado) && vista === 'misclases' && (
           <VistaMisClases api={api} h={h} toast$={toast$} config={configEscuela} />
+        )}
+        {esAdmin && !modoEmpleado && vista === 'colaboradores' && (
+          <VistaColaboradores api={api} h={h} toast$={toast$} config={configEscuela} />
         )}
         {esAdmin && !modoEmpleado && vista === 'integraciones' && (
           <VistaIntegraciones api={api} h={h} toast$={toast$} />

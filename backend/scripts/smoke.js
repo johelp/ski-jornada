@@ -335,6 +335,84 @@ const pdf = nombre => {
   check('el fichaje anulado ya no cuenta en el informe', (await infJ()).data.totalHoras === 0);
   check('el profesor fue avisado de los cambios', ((await http('GET', '/api/notificaciones', { token: prof })).data || []).some(n => /registro de jornada/.test(n.titulo || '')));
 
+  { // bloque propio: sus constantes no chocan con las de otras secciones
+  seccion('6l. Colaboradores y subcontratas');
+  const emailCol = `colab.${Date.now()}@ejemplo.test`;
+  check('un profesor no gestiona colaboradores → 403', (await http('GET', '/api/admin/colaboradores', { token: prof })).status === 403);
+  check('un colaborador sin nombre se rechaza → 400', (await http('POST', '/api/admin/colaboradores', { token: admin, body: { nombre: '', tipo: 'ESCUELA' } })).status === 400);
+  const colC = await http('POST', '/api/admin/colaboradores', { token: admin, body: { nombre: 'Escuela A (prueba)', tipo: 'ESCUELA', email: emailCol, tarifaHora: 30 } });
+  check('se crea el colaborador con su valor hora', colC.status === 200 && colC.data.tarifaHora === 30);
+  const CID = colC.data.id;
+  check('horas con valor no válido → 400', (await http('POST', `/api/admin/colaboradores/${CID}/horas`, { token: admin, body: { fecha: '2026-02-03', sentido: 'DADAS', horas: 0 } })).status === 400);
+  check('fecha no válida → 400', (await http('POST', `/api/admin/colaboradores/${CID}/horas`, { token: admin, body: { fecha: 'mañana', sentido: 'DADAS', horas: 2 } })).status === 400);
+  const h1 = await http('POST', `/api/admin/colaboradores/${CID}/horas`, { token: admin, body: { fecha: '2026-02-03', sentido: 'DADAS', horas: 3, nota: 'Mañana' } });
+  const h2 = await http('POST', `/api/admin/colaboradores/${CID}/horas`, { token: admin, body: { fecha: '2026-02-03', sentido: 'DADAS', horas: 2 } });
+  const h3 = await http('POST', `/api/admin/colaboradores/${CID}/horas`, { token: admin, body: { fecha: '2026-02-10', sentido: 'RECIBIDAS', horas: 2 } });
+  check('se cargan horas dadas y recibidas con el valor hora del trato', h1.status === 200 && h3.status === 200 && h1.data.tarifaHora === 30);
+  const det0 = await http('GET', `/api/admin/colaboradores/${CID}`, { token: admin });
+  check('saldo: 5 h dadas − 2 recibidas = 3 h a favor = 90 €', det0.data.saldo.horas === 3 && det0.data.saldo.euros === 90, JSON.stringify(det0.data.saldo));
+  const dia0 = await http('GET', '/api/admin/colaboradores/dia?fecha=2026-02-03', { token: admin });
+  check('lo cargado en un día aparece junto, con su colaborador', dia0.status === 200 && dia0.data.movimientos.filter(m => m.colaboradorId === CID).length === 2 && dia0.data.movimientos[0].colaborador.nombre);
+  check('fecha no válida en la carga del día → 400', (await http('GET', '/api/admin/colaboradores/dia?fecha=ayer', { token: admin })).status === 400);
+  check('un pago superior al saldo se rechaza → 400', (await http('POST', `/api/admin/colaboradores/${CID}/liquidar`, { token: admin, body: { tipo: 'PAGO', horas: 10 } })).status === 400);
+  const l1 = await http('POST', `/api/admin/colaboradores/${CID}/liquidar`, { token: admin, body: { tipo: 'PAGO', horas: 1 } });
+  check('un pago parcial de 1 h deja 2 h / 60 €', l1.status === 200 && (await http('GET', `/api/admin/colaboradores/${CID}`, { token: admin })).data.saldo.euros === 60);
+  const eper = await http('GET', `/api/admin/colaboradores/${CID}?desde=2026-02-05&hasta=2026-02-28`, { token: admin });
+  check('el extracto del 5 al 28 de feb: saldo anterior 5 h, movimientos del periodo y saldo final 3 h', eper.data.periodo?.saldoAnterior?.horas === 5 && eper.data.movimientos.length === 1 && eper.data.periodo?.saldoFinal?.horas === 3, JSON.stringify(eper.data.periodo));
+  check('un colaborador no se mezcla con los profesores', !((await http('GET', '/api/admin/profesores', { token: admin })).data || []).some(u => u.role === 'COLABORADOR'));
+  check('dar acceso exige correo', (await (async () => { const sc = await http('POST', '/api/admin/colaboradores', { token: admin, body: { nombre: 'Sin correo', tipo: 'AUTONOMO', tarifaHora: 25 } }); return http('POST', `/api/admin/colaboradores/${sc.data.id}/acceso`, { token: admin }); })()).status === 400);
+
+  if (LOG && fs.existsSync(LOG)) {
+    const acc = await http('POST', `/api/admin/colaboradores/${CID}/acceso`, { token: admin });
+    check('administración da acceso al portal (opcional)', acc.status === 200);
+    await new Promise(r => setTimeout(r, 400));
+    const cc = leerCodigo(emailCol);
+    const ses = await http('POST', '/api/auth/codigo/verificar', { body: { email: emailCol, codigo: cc } });
+    check('el colaborador entra con el código', ses.status === 200 && ses.data.user.role === 'COLABORADOR');
+    const T = ses.data.token;
+    const mi = await http('GET', '/api/colaborador/mi', { token: T });
+    check('ve su cuenta: movimientos y saldo', mi.status === 200 && mi.data.movimientos.length === 3 && mi.data.saldo.horas === 2);
+    check('un colaborador no puede fichar ni cargar clases → 403', (await http('GET', '/api/clases/catalogo', { token: T })).status === 403 && (await http('GET', '/api/fichaje/historial', { token: T })).status === 403);
+    check('un colaborador no entra en administración → 403', (await http('GET', '/api/admin/colaboradores', { token: T })).status === 403);
+    check('pedir revisión exige explicar el motivo → 400', (await http('POST', `/api/colaborador/horas/${h1.data.id}/responder`, { token: T, body: { accion: 'REVISAR' } })).status === 400);
+    check('el colaborador acepta unas horas', (await http('POST', `/api/colaborador/horas/${h2.data.id}/responder`, { token: T, body: { accion: 'ACEPTAR' } })).data.estado === 'ACEPTADA');
+    check('el colaborador pide revisar otras', (await http('POST', `/api/colaborador/horas/${h1.data.id}/responder`, { token: T, body: { accion: 'REVISAR', nota: 'Fueron 2 h, no 3' } })).data.estado === 'EN_REVISION');
+    const det1 = await http('GET', `/api/admin/colaboradores/${CID}`, { token: admin });
+    check('las horas en revisión quedan fuera del saldo hasta aclararlas', det1.data.saldo.enRevisionHoras === 3);
+    const otro = await http('POST', '/api/admin/colaboradores', { token: admin, body: { nombre: 'Otra escuela', tipo: 'ESCUELA', tarifaHora: 20 } });
+    const ajeno = await http('POST', `/api/admin/colaboradores/${otro.data.id}/horas`, { token: admin, body: { fecha: '2026-02-03', sentido: 'DADAS', horas: 1 } });
+    check('un colaborador no responde horas de otro → 404', (await http('POST', `/api/colaborador/horas/${ajeno.data.id}/responder`, { token: T, body: { accion: 'ACEPTAR' } })).status === 404);
+    check('administración recibió los avisos', ((await http('GET', '/api/notificaciones', { token: admin })).data || []).some(n => /pide revisar unas horas/.test(n.titulo || '')));
+    const res1 = await http('GET', '/api/admin/resumen', { token: admin });
+    check('el panel cuenta las horas en revisión', res1.data.colaboradores?.enRevision >= 1);
+    check('editar horas las devuelve a pendientes', (await http('PUT', `/api/admin/colaboradores/horas/${h1.data.id}`, { token: admin, body: { horas: 2 } })).data.estado === 'PENDIENTE');
+    check('quitar el acceso corta la sesión', (await http('DELETE', `/api/admin/colaboradores/${CID}/acceso`, { token: admin })).status === 200 && (await http('GET', '/api/colaborador/mi', { token: T })).status === 401);
+  }
+  const est = await http('GET', '/api/admin/colaboradores/estadisticas?meses=12', { token: admin });
+  check('estadísticas: horas por mes, saldo por colaborador y totales', est.status === 200 && est.data.meses.length === 12 && est.data.totales && est.data.colaboradores.some(c => c.id === CID));
+  const lAll = await http('POST', `/api/admin/colaboradores/${CID}/liquidar`, { token: admin, body: { tipo: 'COMPENSACION', nota: 'Cerrado' } });
+  check('saldar todo deja el saldo a cero', lAll.status === 200 && (await http('GET', `/api/admin/colaboradores/${CID}`, { token: admin })).data.saldo.horas === 0);
+  check('sin saldo no hay nada que saldar → 400', (await http('POST', `/api/admin/colaboradores/${CID}/liquidar`, { token: admin, body: { tipo: 'PAGO' } })).status === 400);
+
+  seccion('6m. Módulos apagables');
+  const cfg0 = await http('GET', '/api/config', {});
+  check('la configuración publica qué módulos están activos', cfg0.data.modulos && cfg0.data.modulos.colaboradores === true);
+  check('un profesor no apaga módulos → 403', (await http('PUT', '/api/admin/modulos', { token: prof, body: { off: ['libres'] } })).status === 403);
+  check('un módulo desconocido se rechaza → 400', (await http('PUT', '/api/admin/modulos', { token: admin, body: { off: ['nada'] } })).status === 400);
+  await http('PUT', '/api/admin/modulos', { token: admin, body: { off: ['colaboradores', 'libres'] } });
+  check('apagado: colaboradores responde 404', (await http('GET', '/api/admin/colaboradores', { token: admin })).status === 404);
+  check('apagado: días libres responde 404', (await http('GET', '/api/libres/mis-solicitudes', { token: prof })).status === 404);
+  check('apagado: el panel deja de calcular colaboradores', (await http('GET', '/api/admin/resumen', { token: admin })).data.colaboradores === null);
+  check('lo esencial sigue funcionando (fichaje e informes)', (await http('GET', '/api/fichaje/historial', { token: prof })).status === 200);
+  check('/api/config refleja los módulos apagados', (await http('GET', '/api/config', {})).data.modulos.libres === false);
+  await http('PUT', '/api/admin/modulos', { token: admin, body: { off: [] } });
+  check('al volver a encenderlos responden', (await http('GET', '/api/admin/colaboradores', { token: admin })).status === 200 && (await http('GET', '/api/libres/mis-solicitudes', { token: prof })).status === 200);
+
+  // los colaboradores no se borran: se dejan inactivos para no ensuciar la lista
+  for (const c of (await http('GET', '/api/admin/colaboradores', { token: admin })).data || [])
+    if (/\(prueba\)|^Otra escuela$|^Sin correo$/.test(c.nombre) && c.activo) await http('PUT', `/api/admin/colaboradores/${c.id}`, { token: admin, body: { activo: false } });
+  }
+
   seccion('7. Limpieza');
   await http('POST', '/api/admin/clases/reabrir', { token: admin, body: { profesorId: me.id, mes: MES } });
   check('elimina la clase de prueba', (await http('DELETE', `/api/clases/${claseId}`, { token: prof })).status === 200);

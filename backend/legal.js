@@ -7,7 +7,7 @@ const TIPOS = Object.keys(VERSION);
 
 // Qué documentos debe aceptar cada usuario: todos reciben la información de privacidad;
 // la cuenta principal acepta además el contrato de encargo en nombre de la escuela.
-const requeridosPara = user => (user.esPrincipal ? ['PRIVACIDAD', 'ENCARGO'] : ['PRIVACIDAD']);
+const requeridosPara = user => (user.role === 'COLABORADOR' ? [] : user.esPrincipal ? ['PRIVACIDAD', 'ENCARGO'] : ['PRIVACIDAD']);
 
 function contexto(cfg, opciones = {}) {
   return {

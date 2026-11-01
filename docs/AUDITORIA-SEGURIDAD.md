@@ -90,5 +90,5 @@ Fecha: 31/10/2026 · Versión revisada: rama `docs/implementacion-legal` sobre `
 
 ## Cómo repetir la revisión
 
-- `node backend/scripts/smoke.js` ejecuta las comprobaciones de regresión de cada hallazgo (secciones 6d–6k; 149 comprobaciones) y corre en cada PR.
+- `node backend/scripts/smoke.js` ejecuta las comprobaciones de regresión de cada hallazgo (secciones 6d–6m; 189 comprobaciones) y corre en cada PR.
 - `npm audit --omit=dev` en `backend/` y `frontend/` (también en la integración continua).

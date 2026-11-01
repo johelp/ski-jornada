@@ -51,6 +51,21 @@ Para la persona o el equipo que administra la plataforma en la escuela. Una guí
 - **Avisos:** a una persona o a todo el equipo (campana + correo).
 - **Documentos** (si el módulo está activo): sube nóminas, contratos y certificados por profesor; ve quién firmó. Solo tú y la persona dueña los veis.
 
+## 6b. Colaboradores y subcontratas (opcional)
+
+Cuenta de horas con escuelas y autónomos que cubren horas o a los que prestamos profesores. Guía completa: `COLABORADORES.md`.
+
+1. **Colaboradores → + Nuevo:** nombre, tipo, **valor hora** del trato (correo opcional).
+2. **Cada día:** *Colaboradores → ⚡ Cargar el día*: colaborador, *dimos* o *nos dieron*, horas con un toque y una referencia; Enter y a la siguiente. Se repasa el planning al final del día y se carga todo de seguido.
+3. **Cargar horas** *dadas* (nos deben) o *recibidas* (les debemos), por día. El saldo (horas y euros) se calcula solo: 5 h dadas − 2 recibidas = **3 h a favor = 90 €** a 30 €/h.
+4. **Saldar** con un **pago** o una **compensación**, total o parcial.
+5. **Imprimir extracto** (PDF por día, con liquidaciones y saldo) para enviárselo o liquidar.
+6. **Acceso al portal** (opcional, con correo): el colaborador ve su cuenta y **acepta o pide revisión**; lo que está en revisión no cuenta en el saldo hasta aclararlo.
+
+## 6c. Apagar módulos que no usas
+
+*Config → Módulos:* desactiva clases, días libres, documentos, comparativa, integraciones, avisos o colaboradores. Desaparecen del menú y del panel; los datos se conservan y puedes reactivarlos.
+
 ## 7. Integraciones (opcional)
 
 *Integraciones*: **claves de API** (lectura, económico, planning), **webhooks** firmados y **importación del planning** por CSV. Una clave por sistema; se muestra **una sola vez**.

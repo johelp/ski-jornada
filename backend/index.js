@@ -221,6 +221,9 @@ const auth = async (req, res, next) => {
     const u = await usuarioVigente(payload.userId);
     if (!u || !u.activo) return res.status(401).json({ error: 'Cuenta desactivada o inexistente' });
     req.user = { userId: u.id, email: u.email, role: u.role, esPrincipal: u.esPrincipal };
+    // Una cuenta de colaborador solo llega a su propio portal, a sus avisos y a lo básico de la sesión
+    if (u.role === 'COLABORADOR' && !/^\/api\/(auth|colaborador|notificaciones|config|legal)(\/|$)/.test(req.originalUrl.split('?')[0]))
+      return res.status(403).json({ error: 'No autorizado para esta cuenta' });
     next();
   } catch {
     // Un fallo temporal de la base NO es una sesión inválida: con 401 el móvil cerraría la sesión del profesor
@@ -257,11 +260,28 @@ app.get('/uploads/:sub/:file', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Error leyendo el archivo' }); }
 });
 
-// Módulo de documentos activable por despliegue (DOCUMENTOS_HABILITADOS=false lo apaga, p. ej. si las nóminas se firman en otra plataforma)
+// ---- Módulos que administración puede apagar ----
+// Un módulo apagado desaparece del menú y sus endpoints responden 404. Lo esencial (fichaje, usuarios, informes, config) no se apaga.
+// `documentos` además se puede apagar por despliegue (DOCUMENTOS_HABILITADOS=false), y eso no se puede revertir desde la app.
 const DOCUMENTOS_ON = process.env.DOCUMENTOS_HABILITADOS !== 'false';
+const MODULOS = {
+  clases:        { nombre: 'Clases y primas', rutas: [/^\/api\/(admin\/)?clases(\/|$)/] },
+  libres:        { nombre: 'Días libres', rutas: [/^\/api\/libres(\/|$)/, /^\/api\/admin\/(solicitudes|informe-libres)(\/|$)/] },
+  documentos:    { nombre: 'Documentos', rutas: [/^\/api\/(admin\/)?documentos(\/|$)/, /^\/api\/admin\/profesores\/[^/]+\/documentos$/, /^\/uploads\/documentos\//] },
+  comparativa:   { nombre: 'Comparar con reservas', rutas: [/^\/api\/admin\/comparativa(\/|$)/] },
+  integraciones: { nombre: 'Integraciones y WhatsApp', rutas: [/^\/api\/admin\/(integraciones|whatsapp|planning)(\/|$)/, /^\/api\/v1(\/|$)/] },
+  avisos:        { nombre: 'Avisos masivos', rutas: [/^\/api\/admin\/notificaciones(\/|$)/] },
+  colaboradores: { nombre: 'Colaboradores y subcontratas', rutas: [/^\/api\/admin\/colaboradores(\/|$)/, /^\/api\/colaborador(\/|$)/] },
+};
+let modulosOff = new Set();
+const cargarModulosOff = async () => {
+  try { modulosOff = new Set(String((await getConfig()).modulosOff || '').split(',').filter(k => MODULOS[k])); } catch (e) { console.error('módulos:', e.message); }
+};
+const moduloActivo = k => !!MODULOS[k] && !modulosOff.has(k) && (k !== 'documentos' || DOCUMENTOS_ON);
+const modulosEstado = () => Object.fromEntries(Object.keys(MODULOS).map(k => [k, moduloActivo(k)]));
 app.use((req, res, next) => {
-  if (!DOCUMENTOS_ON && (/^\/api\/(admin\/)?documentos(\/|$)/.test(req.path) || /^\/api\/admin\/profesores\/[^/]+\/documentos$/.test(req.path) || req.path.startsWith('/uploads/documentos/')))
-    return res.status(404).json({ error: 'Módulo de documentos deshabilitado' });
+  for (const [k, m] of Object.entries(MODULOS))
+    if (!moduloActivo(k) && m.rutas.some(r => r.test(req.path))) return res.status(404).json({ error: `Módulo «${m.nombre}» desactivado`, modulo: k });
   next();
 });
 
@@ -753,6 +773,17 @@ app.post('/api/admin/solicitudes/:id/responder', auth, adminOnly, async (req, re
 
 // ============ ADMIN — Resumen del dashboard ============
 // Todo lo que requiere atención de administración, en una sola llamada.
+async function resumenColaboradores() {
+  const cols = await prisma.colaborador.findMany({ where: { activo: true }, include: { movimientos: true, liquidaciones: true } });
+  const filas = cols.map(c => ({ id: c.id, nombre: c.nombre, ...saldoDe(c.movimientos, c.liquidaciones) }));
+  return {
+    total: cols.length,
+    pendientes: filas.reduce((a, c) => a + c.pendientes, 0), enRevision: filas.reduce((a, c) => a + c.enRevision, 0),
+    aFavorEuros: r2(filas.filter(c => c.euros > 0).reduce((a, c) => a + c.euros, 0)),
+    enContraEuros: r2(-filas.filter(c => c.euros < 0).reduce((a, c) => a + c.euros, 0)),
+    listaRevision: filas.filter(c => c.enRevision > 0).slice(0, 5).map(c => ({ id: c.id, nombre: c.nombre, enRevision: c.enRevision })),
+  };
+}
 app.get('/api/admin/resumen', auth, adminOnly, async (req, res) => {
   try {
     const ahora = new Date();
@@ -807,6 +838,7 @@ app.get('/api/admin/resumen', auth, adminOnly, async (req, res) => {
       },
       documentos: { pendientesFirma: docs.length, lista: docs.slice(0, 5).map(d => ({ id: d.id, profesor: nombre(d.profesor), nombre: d.nombre, mes: d.mes })) },
       incidenciasSemana: incidencias,
+      colaboradores: moduloActivo('colaboradores') ? await resumenColaboradores() : null,
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Error obteniendo el resumen' }); }
 });
@@ -849,7 +881,7 @@ app.get('/api/admin/informe-libres', auth, adminOnly, async (req, res) => {
 // ============ ADMIN — Profesores ============
 app.get('/api/admin/profesores', auth, adminOnly, async (req, res) => {
   try {
-    const where = req.query.todos === 'true' ? {} : {};
+    const where = { role: { not: 'COLABORADOR' } }; // los colaboradores se gestionan en su módulo
     const profesores = await prisma.profesor.findMany({
       where,
       select: {
@@ -1404,6 +1436,309 @@ app.get('/api/admin/profesores/:id/documentos', auth, adminOnly, async (req, res
 });
 
 // ============ ADMIN — Presencia en tiempo real ============
+// ============ COLABORADORES Y SUBCONTRATAS ============
+// Escuelas y autónomos con los que se intercambian horas. Administración lo gestiona todo; si el colaborador tiene correo
+// se le puede dar acceso (opcional) a un portal de solo lectura donde acepta o pide revisar las horas.
+const fechaValida = f => FECHA_RE.test(f || '') && !isNaN(new Date(`${f}T12:00:00`));
+const signoMov = m => (m.sentido === 'DADAS' ? 1 : -1);
+
+// Saldo: + a favor de la escuela (nos deben), − en contra (les debemos). Lo que está en revisión queda aparte hasta aclararlo.
+function saldoDe(movs, liqs) {
+  let horas = 0, euros = 0, enRevisionH = 0, dadas = 0, recibidas = 0;
+  for (const m of movs) {
+    if (m.estado === 'EN_REVISION') { enRevisionH += m.horas; continue; }
+    horas += signoMov(m) * m.horas; euros += signoMov(m) * m.horas * m.tarifaHora;
+    if (m.sentido === 'DADAS') dadas += m.horas; else recibidas += m.horas;
+  }
+  for (const l of liqs) { horas -= l.horas; euros -= l.importe; }
+  return { horas: r2(horas), euros: r2(euros), dadas: r2(dadas), recibidas: r2(recibidas), enRevisionHoras: r2(enRevisionH),
+    pendientes: movs.filter(m => m.estado === 'PENDIENTE').length, enRevision: movs.filter(m => m.estado === 'EN_REVISION').length };
+}
+const colabPublico = c => ({ id: c.id, nombre: c.nombre, tipo: c.tipo, cif: c.cif, email: c.email, telefono: c.telefono, contacto: c.contacto, tarifaHora: c.tarifaHora, notas: c.notas, activo: c.activo });
+const accesoDe = c => { const u = (c.usuarios || [])[0]; return u ? { activo: u.activo, entro: !!u.adheridoAt } : null; };
+
+function validarColab(b, parcial = false) {
+  const d = {};
+  if (b.nombre !== undefined || !parcial) { const n = String(b.nombre || '').trim(); if (!n) return { error: 'El nombre es obligatorio' }; d.nombre = n.slice(0, 120); }
+  if (b.tipo !== undefined || !parcial) { if (!['ESCUELA', 'AUTONOMO'].includes(b.tipo || 'ESCUELA')) return { error: 'Tipo no válido' }; d.tipo = b.tipo || 'ESCUELA'; }
+  if (b.email !== undefined) {
+    const e = String(b.email || '').toLowerCase().trim();
+    if (e && !EMAIL_RE.test(e)) return { error: 'Email inválido' };
+    d.email = e || null;
+  }
+  for (const k of ['cif', 'telefono', 'contacto', 'notas']) if (b[k] !== undefined) d[k] = String(b[k] || '').trim().slice(0, 500) || null;
+  if (b.tarifaHora !== undefined || !parcial) { const t = Number(b.tarifaHora ?? 0); if (!(t >= 0 && t <= 1000)) return { error: 'Valor hora no válido' }; d.tarifaHora = r2(t); }
+  if (b.activo !== undefined) d.activo = !!b.activo;
+  return { d };
+}
+function validarMov(b, tarifaDefecto) {
+  if (!fechaValida(b.fecha)) return { error: 'Fecha no válida (AAAA-MM-DD)' };
+  if (!['DADAS', 'RECIBIDAS'].includes(b.sentido)) return { error: 'Indica si son horas dadas o recibidas' };
+  const horas = Number(b.horas);
+  if (!(horas > 0 && horas <= 500)) return { error: 'Las horas deben ser mayores que 0' };
+  const tarifa = b.tarifaHora === undefined || b.tarifaHora === '' ? tarifaDefecto : Number(b.tarifaHora);
+  if (!(tarifa >= 0 && tarifa <= 1000)) return { error: 'Valor hora no válido' };
+  return { d: { fecha: b.fecha, sentido: b.sentido, horas: r2(horas), tarifaHora: r2(tarifa), nota: String(b.nota || '').trim().slice(0, 300) || null } };
+}
+const avisarColaborador = async (req, colab, titulo, mensaje) => {
+  const us = await prisma.profesor.findMany({ where: { colaboradorId: colab.id, activo: true }, select: { id: true } });
+  if (us.length) await prisma.notificacion.createMany({ data: us.map(u => ({ titulo, mensaje, tipo: 'INFO', profesorId: u.id, enviadaPorId: req.user.userId })) }).catch(() => {});
+};
+
+app.get('/api/admin/colaboradores', auth, adminOnly, async (req, res) => {
+  try {
+    const cols = await prisma.colaborador.findMany({ orderBy: { nombre: 'asc' }, include: { movimientos: true, liquidaciones: true, usuarios: { select: { activo: true, adheridoAt: true } } } });
+    res.json(cols.map(c => ({ ...colabPublico(c), acceso: accesoDe(c), saldo: saldoDe(c.movimientos, c.liquidaciones) })));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error obteniendo colaboradores' }); }
+});
+
+// Estadísticas para el dashboard: horas dadas y recibidas por mes, saldo por colaborador y totales
+app.get('/api/admin/colaboradores/estadisticas', auth, adminOnly, async (req, res) => {
+  try {
+    const nMeses = Math.min(24, Math.max(1, parseInt(req.query.meses) || 12));
+    const [cols, movs, liqs] = await Promise.all([
+      prisma.colaborador.findMany({ orderBy: { nombre: 'asc' } }), prisma.movimientoHoras.findMany(), prisma.liquidacion.findMany(),
+    ]);
+    const ahora = new Date();
+    const meses = Array.from({ length: nMeses }, (_, i) => { const d = new Date(ahora.getFullYear(), ahora.getMonth() - (nMeses - 1 - i), 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; });
+    const porMes = meses.map(mes => {
+      const m = movs.filter(x => x.fecha.startsWith(mes) && x.estado !== 'EN_REVISION');
+      const dadas = r2(m.filter(x => x.sentido === 'DADAS').reduce((a, x) => a + x.horas, 0));
+      const recibidas = r2(m.filter(x => x.sentido === 'RECIBIDAS').reduce((a, x) => a + x.horas, 0));
+      return { mes, dadas, recibidas, neto: r2(dadas - recibidas) };
+    });
+    const porColaborador = cols.map(c => {
+      const s = saldoDe(movs.filter(x => x.colaboradorId === c.id), liqs.filter(x => x.colaboradorId === c.id));
+      return { id: c.id, nombre: c.nombre, tipo: c.tipo, activo: c.activo, ...s };
+    });
+    res.json({
+      meses: porMes, colaboradores: porColaborador,
+      totales: {
+        aFavorEuros: r2(porColaborador.filter(c => c.euros > 0).reduce((a, c) => a + c.euros, 0)),
+        enContraEuros: r2(-porColaborador.filter(c => c.euros < 0).reduce((a, c) => a + c.euros, 0)),
+        aFavorHoras: r2(porColaborador.filter(c => c.horas > 0).reduce((a, c) => a + c.horas, 0)),
+        enContraHoras: r2(-porColaborador.filter(c => c.horas < 0).reduce((a, c) => a + c.horas, 0)),
+        pendientes: porColaborador.reduce((a, c) => a + c.pendientes, 0), enRevision: porColaborador.reduce((a, c) => a + c.enRevision, 0),
+      },
+    });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error calculando estadísticas' }); }
+});
+
+// Todo lo cargado en un día (de todos los colaboradores): base de la pantalla de carga rápida
+app.get('/api/admin/colaboradores/dia', auth, adminOnly, async (req, res) => {
+  try {
+    const fecha = req.query.fecha || fechaLocal(new Date());
+    if (!fechaValida(fecha)) return res.status(400).json({ error: 'Fecha no válida' });
+    const movs = await prisma.movimientoHoras.findMany({ where: { fecha }, orderBy: { createdAt: 'asc' }, include: { colaborador: { select: { id: true, nombre: true } } } });
+    res.json({ fecha, movimientos: movs });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error obteniendo el día' }); }
+});
+
+app.post('/api/admin/colaboradores', auth, adminOnly, async (req, res) => {
+  try {
+    const v = validarColab(req.body); if (v.error) return res.status(400).json({ error: v.error });
+    const c = await prisma.colaborador.create({ data: v.d });
+    await auditar(req, 'colaborador.crear', null, { nombre: c.nombre });
+    res.json(colabPublico(c));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error creando colaborador' }); }
+});
+
+app.get('/api/admin/colaboradores/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const c = await prisma.colaborador.findUnique({ where: { id: req.params.id }, include: { usuarios: { select: { activo: true, adheridoAt: true } } } });
+    if (!c) return res.status(404).json({ error: 'Colaborador no encontrado' });
+    const { desde, hasta } = req.query;
+    if ((desde && !fechaValida(desde)) || (hasta && !fechaValida(hasta))) return res.status(400).json({ error: 'Fechas no válidas' });
+    const [movs, liqs] = await Promise.all([
+      prisma.movimientoHoras.findMany({ where: { colaboradorId: c.id }, orderBy: [{ fecha: 'asc' }, { createdAt: 'asc' }] }),
+      prisma.liquidacion.findMany({ where: { colaboradorId: c.id }, orderBy: [{ fecha: 'asc' }, { createdAt: 'asc' }] }),
+    ]);
+    const enRango = f => (!desde || f >= desde) && (!hasta || f <= hasta);
+    const movP = movs.filter(m => enRango(m.fecha)), liqP = liqs.filter(l => enRango(l.fecha));
+    const out = {
+      colaborador: { ...colabPublico(c), acceso: accesoDe(c) },
+      saldo: saldoDe(movs, liqs), movimientos: movP, liquidaciones: liqP,
+    };
+    if (desde || hasta) {
+      out.periodo = { desde: desde || null, hasta: hasta || null,
+        saldoAnterior: desde ? saldoDe(movs.filter(m => m.fecha < desde), liqs.filter(l => l.fecha < desde)) : null,
+        saldoFinal: hasta ? saldoDe(movs.filter(m => m.fecha <= hasta), liqs.filter(l => l.fecha <= hasta)) : saldoDe(movs, liqs) };
+    }
+    res.json(out);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error obteniendo el colaborador' }); }
+});
+
+app.put('/api/admin/colaboradores/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const c = await prisma.colaborador.findUnique({ where: { id: req.params.id }, include: { usuarios: true } });
+    if (!c) return res.status(404).json({ error: 'Colaborador no encontrado' });
+    const v = validarColab(req.body, true); if (v.error) return res.status(400).json({ error: v.error });
+    if (v.d.email !== undefined && c.usuarios.length && v.d.email !== c.email) return res.status(400).json({ error: 'Quita el acceso al portal antes de cambiar el correo' });
+    const n = await prisma.colaborador.update({ where: { id: c.id }, data: v.d });
+    if (v.d.activo === false) { await prisma.profesor.updateMany({ where: { colaboradorId: c.id }, data: { activo: false } }); c.usuarios.forEach(u => invalidarUsuario(u.id)); }
+    await auditar(req, 'colaborador.editar', null, { id: c.id, campos: Object.keys(v.d) });
+    res.json(colabPublico(n));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error guardando' }); }
+});
+
+// Horas dadas / recibidas
+app.post('/api/admin/colaboradores/:id/horas', auth, adminOnly, async (req, res) => {
+  try {
+    const c = await prisma.colaborador.findUnique({ where: { id: req.params.id } });
+    if (!c || !c.activo) return res.status(404).json({ error: 'Colaborador no encontrado o inactivo' });
+    const v = validarMov(req.body, c.tarifaHora); if (v.error) return res.status(400).json({ error: v.error });
+    const m = await prisma.movimientoHoras.create({ data: { ...v.d, colaboradorId: c.id, creadoPorId: req.user.userId } });
+    await avisarColaborador(req, c, 'Nuevas horas en tu cuenta', `${v.d.sentido === 'DADAS' ? 'Horas que te dimos' : 'Horas que nos diste'}: ${v.d.horas} h el ${v.d.fecha}. Revísalas y acéptalas o pide revisión.`);
+    await auditar(req, 'colaborador.horas_crear', null, { colaborador: c.nombre, ...v.d });
+    res.json(m);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error cargando horas' }); }
+});
+
+app.put('/api/admin/colaboradores/horas/:mid', auth, adminOnly, async (req, res) => {
+  try {
+    const m = await prisma.movimientoHoras.findUnique({ where: { id: req.params.mid }, include: { colaborador: true } });
+    if (!m) return res.status(404).json({ error: 'Movimiento no encontrado' });
+    const v = validarMov({ ...m, ...req.body }, m.tarifaHora); if (v.error) return res.status(400).json({ error: v.error });
+    const n = await prisma.movimientoHoras.update({ where: { id: m.id }, data: { ...v.d, estado: 'PENDIENTE', notaColaborador: null, respondidoAt: null } });
+    await avisarColaborador(req, m.colaborador, 'Se modificaron unas horas de tu cuenta', `Revisa las horas del ${v.d.fecha} y vuelve a aceptarlas.`);
+    await auditar(req, 'colaborador.horas_editar', null, { id: m.id, antes: { fecha: m.fecha, sentido: m.sentido, horas: m.horas, tarifaHora: m.tarifaHora }, despues: v.d });
+    res.json(n);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error modificando horas' }); }
+});
+
+// Administración marca las horas como aceptadas (p. ej. confirmadas por teléfono) o las devuelve a pendientes
+app.post('/api/admin/colaboradores/horas/:mid/estado', auth, adminOnly, async (req, res) => {
+  try {
+    const estado = req.body.estado;
+    if (!['ACEPTADA', 'PENDIENTE'].includes(estado)) return res.status(400).json({ error: 'Estado no válido' });
+    const m = await prisma.movimientoHoras.findUnique({ where: { id: req.params.mid } });
+    if (!m) return res.status(404).json({ error: 'Movimiento no encontrado' });
+    const n = await prisma.movimientoHoras.update({ where: { id: m.id }, data: { estado, respondidoAt: estado === 'ACEPTADA' ? new Date() : null, notaColaborador: estado === 'ACEPTADA' ? (String(req.body.nota || '').trim().slice(0, 300) || 'Confirmada por administración') : null } });
+    await auditar(req, 'colaborador.horas_estado', null, { id: m.id, estado });
+    res.json(n);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error actualizando' }); }
+});
+
+app.delete('/api/admin/colaboradores/horas/:mid', auth, adminOnly, async (req, res) => {
+  try {
+    const m = await prisma.movimientoHoras.findUnique({ where: { id: req.params.mid } });
+    if (!m) return res.status(404).json({ error: 'Movimiento no encontrado' });
+    await prisma.movimientoHoras.delete({ where: { id: m.id } });
+    await auditar(req, 'colaborador.horas_borrar', null, { fecha: m.fecha, sentido: m.sentido, horas: m.horas, estado: m.estado });
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error borrando' }); }
+});
+
+// Saldar: pago en dinero o compensación (horas contra horas). Sin `horas` salda todo el saldo.
+app.post('/api/admin/colaboradores/:id/liquidar', auth, adminOnly, async (req, res) => {
+  try {
+    const c = await prisma.colaborador.findUnique({ where: { id: req.params.id } });
+    if (!c) return res.status(404).json({ error: 'Colaborador no encontrado' });
+    const tipo = req.body.tipo;
+    if (!['PAGO', 'COMPENSACION'].includes(tipo)) return res.status(400).json({ error: 'Indica si es un pago o una compensación' });
+    const fecha = req.body.fecha || fechaLocal(new Date());
+    if (!fechaValida(fecha)) return res.status(400).json({ error: 'Fecha no válida' });
+    const [movs, liqs] = await Promise.all([prisma.movimientoHoras.findMany({ where: { colaboradorId: c.id } }), prisma.liquidacion.findMany({ where: { colaboradorId: c.id } })]);
+    const s = saldoDe(movs, liqs);
+    if (Math.abs(s.horas) < 0.01) return res.status(400).json({ error: 'No hay saldo que saldar' });
+    const signo = s.horas > 0 ? 1 : -1, max = Math.abs(s.horas);
+    const horas = req.body.horas === undefined || req.body.horas === '' ? max : r2(Number(req.body.horas));
+    if (!(horas > 0) || horas > max + 0.001) return res.status(400).json({ error: `Las horas a saldar deben estar entre 0 y ${max}` });
+    const completo = Math.abs(horas - max) < 0.01;
+    const valor = req.body.importe === undefined || req.body.importe === '' ? (completo ? Math.abs(s.euros) : horas * c.tarifaHora) : Number(req.body.importe);
+    if (!(valor >= 0 && valor <= 1e6)) return res.status(400).json({ error: 'Importe no válido' });
+    const l = await prisma.liquidacion.create({ data: {
+      colaboradorId: c.id, fecha, tipo, horas: signo * (completo ? max : horas), importe: signo * r2(valor),
+      nota: String(req.body.nota || '').trim().slice(0, 300) || null, creadoPorId: req.user.userId,
+    } });
+    await avisarColaborador(req, c, 'Se saldaron horas de tu cuenta', `${tipo === 'PAGO' ? 'Pago' : 'Compensación'} de ${Math.abs(l.horas)} h (${Math.abs(l.importe)} €).`);
+    await auditar(req, 'colaborador.liquidar', null, { colaborador: c.nombre, tipo, horas: l.horas, importe: l.importe });
+    res.json(l);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error saldando' }); }
+});
+
+app.delete('/api/admin/colaboradores/liquidaciones/:lid', auth, adminOnly, async (req, res) => {
+  try {
+    const l = await prisma.liquidacion.findUnique({ where: { id: req.params.lid } });
+    if (!l) return res.status(404).json({ error: 'Liquidación no encontrada' });
+    await prisma.liquidacion.delete({ where: { id: l.id } });
+    await auditar(req, 'colaborador.liquidacion_anular', null, { fecha: l.fecha, tipo: l.tipo, horas: l.horas, importe: l.importe });
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error anulando' }); }
+});
+
+// Acceso opcional al portal del colaborador
+app.post('/api/admin/colaboradores/:id/acceso', auth, adminOnly, async (req, res) => {
+  try {
+    const c = await prisma.colaborador.findUnique({ where: { id: req.params.id }, include: { usuarios: true } });
+    if (!c || !c.activo) return res.status(404).json({ error: 'Colaborador no encontrado o inactivo' });
+    if (!c.email) return res.status(400).json({ error: 'Añade un correo al colaborador para darle acceso' });
+    let u = c.usuarios[0];
+    if (!u) {
+      if (await prisma.profesor.findUnique({ where: { email: c.email } })) return res.status(400).json({ error: 'Ese correo ya está en uso por otra cuenta' });
+      u = await prisma.profesor.create({ data: {
+        email: c.email, nombre: c.nombre, apellidos: '', role: 'COLABORADOR', colaboradorId: c.id,
+        password: await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10),
+      } });
+      await auditar(req, 'colaborador.acceso_crear', u);
+    } else if (!u.activo) { u = await prisma.profesor.update({ where: { id: u.id }, data: { activo: true } }); invalidarUsuario(u.id); }
+    await enviarMagicLink(u, { invitacion: true });
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error dando acceso' }); }
+});
+
+app.delete('/api/admin/colaboradores/:id/acceso', auth, adminOnly, async (req, res) => {
+  try {
+    const us = await prisma.profesor.findMany({ where: { colaboradorId: req.params.id } });
+    await prisma.profesor.updateMany({ where: { colaboradorId: req.params.id }, data: { activo: false } });
+    us.forEach(u => invalidarUsuario(u.id));
+    await auditar(req, 'colaborador.acceso_quitar', null, { id: req.params.id });
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error quitando el acceso' }); }
+});
+
+// ---- Portal del colaborador (solo su propia cuenta) ----
+async function colaboradorDe(req) {
+  const u = await prisma.profesor.findUnique({ where: { id: req.user.userId }, select: { colaboradorId: true } });
+  if (!u?.colaboradorId) return null;
+  const c = await prisma.colaborador.findUnique({ where: { id: u.colaboradorId } });
+  return c && c.activo ? c : null;
+}
+app.get('/api/colaborador/mi', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'COLABORADOR') return res.status(403).json({ error: 'Solo para colaboradores' });
+    const c = await colaboradorDe(req); if (!c) return res.status(404).json({ error: 'Cuenta de colaborador no disponible' });
+    const [movs, liqs, cfg] = await Promise.all([
+      prisma.movimientoHoras.findMany({ where: { colaboradorId: c.id }, orderBy: [{ fecha: 'desc' }, { createdAt: 'desc' }] }),
+      prisma.liquidacion.findMany({ where: { colaboradorId: c.id }, orderBy: [{ fecha: 'desc' }, { createdAt: 'desc' }] }),
+      getConfig(),
+    ]);
+    // Visto desde la escuela: DADAS = horas que la escuela les dio. El portal lo etiqueta desde su punto de vista.
+    res.json({ escuela: { nombre: cfg.nombre, cif: cfg.cif, email: cfg.email }, colaborador: { nombre: c.nombre, tipo: c.tipo, tarifaHora: c.tarifaHora }, saldo: saldoDe(movs, liqs), movimientos: movs, liquidaciones: liqs });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error' }); }
+});
+
+app.post('/api/colaborador/horas/:mid/responder', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'COLABORADOR') return res.status(403).json({ error: 'Solo para colaboradores' });
+    const c = await colaboradorDe(req); if (!c) return res.status(404).json({ error: 'Cuenta de colaborador no disponible' });
+    const m = await prisma.movimientoHoras.findFirst({ where: { id: req.params.mid, colaboradorId: c.id } });
+    if (!m) return res.status(404).json({ error: 'Movimiento no encontrado' });
+    const accion = req.body.accion, nota = String(req.body.nota || '').trim().slice(0, 300);
+    if (!['ACEPTAR', 'REVISAR'].includes(accion)) return res.status(400).json({ error: 'Acción no válida' });
+    if (accion === 'REVISAR' && nota.length < 5) return res.status(400).json({ error: 'Explica qué hay que revisar (mín. 5 caracteres)' });
+    const n = await prisma.movimientoHoras.update({ where: { id: m.id }, data: { estado: accion === 'ACEPTAR' ? 'ACEPTADA' : 'EN_REVISION', notaColaborador: nota || null, respondidoAt: new Date() } });
+    const admins = await prisma.profesor.findMany({ where: { role: 'ADMIN', activo: true }, select: { id: true } });
+    await prisma.notificacion.createMany({ data: admins.map(a => ({
+      titulo: accion === 'ACEPTAR' ? `${c.nombre} aceptó unas horas` : `${c.nombre} pide revisar unas horas`,
+      mensaje: `${m.sentido === 'DADAS' ? 'Horas dadas' : 'Horas recibidas'} del ${m.fecha} (${m.horas} h).${nota ? ` Nota: ${nota}` : ''}`,
+      tipo: accion === 'ACEPTAR' ? 'INFO' : 'AVISO', profesorId: a.id, enviadaPorId: req.user.userId,
+    })) });
+    await auditar(req, accion === 'ACEPTAR' ? 'colaborador.acepta' : 'colaborador.pide_revision', null, { id: m.id });
+    res.json(n);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error' }); }
+});
+
 // ---- Corrección de fichajes (trazable: nunca se borra, se conserva el valor original, quién, cuándo y por qué) ----
 const instante = v => { const d = new Date(v); return isNaN(d) ? null : d; };
 // El trabajador siempre es informado de cualquier cambio en su registro
@@ -1608,7 +1943,23 @@ async function getConfig() {
 }
 
 app.get('/api/config', async (req, res) => {
-  try { res.json({ ...(await getConfig()), documentosHabilitados: DOCUMENTOS_ON, whatsappActivo: WHATSAPP_PERMITIDO && whatsapp.conectado() }); } catch (err) { res.status(500).json({ error: 'Error' }); }
+  try { res.json({ ...(await getConfig()), modulos: modulosEstado(), documentosHabilitados: DOCUMENTOS_ON, whatsappActivo: WHATSAPP_PERMITIDO && whatsapp.conectado() }); } catch (err) { res.status(500).json({ error: 'Error' }); }
+});
+
+// Apagar o encender módulos (cualquier administración). Cuerpo: { off: ['colaboradores', ...] }
+app.get('/api/admin/modulos', auth, adminOnly, (req, res) => {
+  res.json(Object.entries(MODULOS).map(([clave, m]) => ({ clave, nombre: m.nombre, activo: moduloActivo(clave), bloqueadoPorDespliegue: clave === 'documentos' && !DOCUMENTOS_ON })));
+});
+app.put('/api/admin/modulos', auth, adminOnly, async (req, res) => {
+  try {
+    const off = [...new Set((Array.isArray(req.body.off) ? req.body.off : []).map(String))];
+    if (off.some(k => !MODULOS[k])) return res.status(400).json({ error: 'Módulo desconocido' });
+    await getConfig();
+    await prisma.configEscuela.update({ where: { id: 'default' }, data: { modulosOff: off.join(',') } });
+    modulosOff = new Set(off);
+    await auditar(req, 'config.modulos', null, { apagados: off });
+    res.json(modulosEstado());
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error guardando los módulos' }); }
 });
 
 app.put('/api/admin/config', auth, adminOnly, async (req, res) => {
@@ -2579,6 +2930,7 @@ process.on('uncaughtException', e => console.error('uncaughtException:', e));
 
 // ============ START ============
 const PORT = process.env.PORT || 3000;
+cargarModulosOff();
 const servidor = app.listen(PORT, () => {
   console.log('========================================');
   console.log(`  Ski Jornada API — http://localhost:${PORT}`);

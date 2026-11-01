@@ -67,6 +67,7 @@ npm run dev                     # http://localhost:5173
 - [docs/ALCANCE-MVP.md](docs/ALCANCE-MVP.md) — alcance, estado, riesgos y decisiones pendientes del MVP
 - [docs/COMPARATIVA.md](docs/COMPARATIVA.md) — comparar el resumen de instructores del sistema de reservas con las horas cargadas
 - [docs/INTEGRACIONES.md](docs/INTEGRACIONES.md) — API con keys, webhooks e importación de planning
+- [docs/COLABORADORES.md](docs/COLABORADORES.md) — colaboradores y subcontratas (cuenta de horas, saldos, extractos) y módulos apagables
 - [docs/RGPD.md](docs/RGPD.md) — protección de datos: registro, política, contrato de encargo, medidas, brechas
 - [docs/MANUAL-IMPLEMENTACION.md](docs/MANUAL-IMPLEMENTACION.md) — implantar la plataforma en un cliente real (ejemplo Snowmotion): fases, datos, piloto, formación, régimen mensual
 - [docs/GUIA-ADMINISTRACION.md](docs/GUIA-ADMINISTRACION.md) · [docs/GUIA-PROFESOR.md](docs/GUIA-PROFESOR.md) — guías de uso para administración y profesores
