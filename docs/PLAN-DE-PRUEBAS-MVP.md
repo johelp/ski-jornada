@@ -27,6 +27,7 @@ Estado: ☐ pendiente · ✅ hecho. Quién: **Auto** (ya lo ejecuta el CI), **De
 - ☐ Entrar por enlace y por código de 6 dígitos; aceptar la información de privacidad.
 - ☐ Fichar entrada y salida (QR, GPS y la zona que use el cliente); fichar fuera de zona (incidencia).
 - ☐ Cargar, editar y borrar clases con primas; ver totales del mes y de la temporada.
+- ☐ Carga rápida en el móvil: «hoy, 1,5 h, misma disciplina» en menos de 10 segundos y 3 toques; **Deshacer**; cargar «Ayer» y «Otro día»; el aviso de mes anterior sin confirmar a principios de mes; confirmar el mes con el aviso en pantalla; lectura con VoiceOver/TalkBack de los botones de horas, disciplinas y primas.
 - ☐ Confirmar el mes y ver que ya no se edita; ver el resultado de la revisión.
 - ☐ Descargar su informe de jornada y de clases (PDF) y abrirlo en el móvil.
 - ☐ Pedir días libres (fechas inválidas rechazadas); ver la respuesta.
