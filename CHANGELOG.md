@@ -5,6 +5,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Fechas AAA
 ## [Sin publicar]
 
 ### Añadido
+- **Editar solicitudes de días libres:** el empleado edita o retira las pendientes; administración corrige cualquier solicitud (también respondidas) o la reabre. Aviso a la otra parte, eventos `solicitud.modificada` y `solicitud.cancelada` y registro de actividad.
+- **Exportar a Google Sheets** anotado en el roadmap como opción futura.
 - **Datos de demostración en una instancia de pruebas desplegada:** `SEED_DEMO=true` siembra una sola vez al arrancar, con correos reales para las cuentas demo (`SEED_EMAILS`), sin claves de API conocidas ni la clave «ski123» y respetando la configuración de la escuela (`SEED_RESPETAR_CONFIG`).
 - **Pantalla de carga de clases del profesor, rediseñada para el móvil:** día con *Hoy / Ayer / Otro día*, horas con botones grandes (≥ 44 px), la última disciplina recordada, botón que explica qué falta, Enter envía, aviso con **Deshacer** tras cargar, aviso de *mes anterior sin confirmar*, navegación de mes con ‹ ›, clases agrupadas por día, confirmación del mes sin diálogos nativos y roles accesibles en los botones.
 - **Carga rápida del día** para colaboradores: colaborador, dimos/nos dieron, horas con botones, referencia y Enter; recuerda la última elección y lista lo cargado ese día.
@@ -21,6 +23,9 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Fechas AAA
 - **Seed completo** de datos de ejemplo, **auditoría de seguridad**, estimador de **dimensionamiento**, copias diarias comprimidas y manual de implementación y guías de uso.
 
 ### Corregido
+- **Botón «Ver» de Clases (administración):** el detalle se abría debajo de la tabla, fuera de pantalla, y parecía no responder. Ahora lleva hasta él y marca la fila.
+- **Lista de empleados desactualizada:** se cargaba solo al iniciar sesión, así que las altas posteriores no aparecían en Usuarios hasta recargar (el panel de inicio sí se refrescaba). Ahora se actualiza al entrar en la pantalla y al volver a la app.
+- **Panel de colaboradores:** las horas «pendientes» ya no se presentan como «por aclarar»; solo lo que el colaborador pide revisar. Para colaboradores sin acceso al portal se muestran como «cargadas».
 - Textos del profesor en voseo («Elegí», «pedile») y decimales con punto («19.5 h») en la pantalla de clases.
 - El seed de demostración fallaba si existían correcciones de fichajes (restricción de clave foránea).
 - Cabecera tapada por el reloj y la batería en la app instalada (área segura superior).

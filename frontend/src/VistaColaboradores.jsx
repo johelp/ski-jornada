@@ -16,7 +16,7 @@ export function ChipSaldo({ saldo }) {
   return <span className={`col-saldo ${fav ? 'col-saldo-fav' : 'col-saldo-con'}`}>{fav ? 'Nos deben' : 'Les debemos'} {num(Math.abs(saldo.horas))} h · {eur(Math.abs(saldo.euros))}</span>;
 }
 
-export function TablaPorDia({ movs, acciones }) {
+export function TablaPorDia({ movs, acciones, sinPortal }) {
   const dias = agruparPorDia(movs).reverse();
   if (!dias.length) return <p className="dash-vacio">Todavía no hay horas cargadas.</p>;
   return (
@@ -30,7 +30,7 @@ export function TablaPorDia({ movs, acciones }) {
               <td>{m.sentido === 'DADAS' ? 'Dadas por nosotros' : 'Recibidas de ellos'}{m.nota && <small className="col-nota"> · {m.nota}</small>}</td>
               <td className={m.sentido === 'DADAS' ? 'col-mas' : 'col-menos'}>{m.sentido === 'DADAS' ? '+' : '−'}{num(m.horas)}</td>
               <td>{eur(m.horas * m.tarifaHora)}</td>
-              <td><span className={`col-est ${ESTADO[m.estado][1]}`}>{ESTADO[m.estado][0]}</span>{m.notaColaborador && <small className="col-nota"> «{m.notaColaborador}»</small>}</td>
+              <td><span className={`col-est ${ESTADO[m.estado][1]}`}>{m.estado === 'PENDIENTE' && sinPortal ? 'Cargada' : ESTADO[m.estado][0]}</span>{m.notaColaborador && <small className="col-nota"> «{m.notaColaborador}»</small>}</td>
               {acciones && <td className="col-acciones">{acciones(m)}</td>}
             </tr>
           )))}
@@ -166,7 +166,7 @@ function Detalle({ id, api, h, toast$, config, volver, recargarLista }) {
 
       <div className="card">
         <div className="card-header"><h2>Horas por día</h2></div>
-        <TablaPorDia movs={d.movimientos} acciones={m => (
+        <TablaPorDia movs={d.movimientos} sinPortal={!(c.acceso && c.acceso.activo)} acciones={m => (
           <>
             {m.estado !== 'ACEPTADA' && <button className="btn-ghost" title="Confirmada por teléfono o en persona" onClick={() => llamar(() => api.post(`/api/admin/colaboradores/horas/${m.id}/estado`, { estado: 'ACEPTADA' }, { headers: h() }), 'Marcada como aceptada')}>✓ Aceptar</button>}
             <button className="btn-ghost" onClick={() => setMov({ id: m.id, fecha: m.fecha, sentido: m.sentido, horas: String(m.horas), tarifaHora: String(m.tarifaHora), nota: m.nota || '' })}>Editar</button>
@@ -364,7 +364,7 @@ export default function VistaColaboradores({ api, h, toast$, config }) {
       <div className="col-totales">
         <div className="col-total col-total-fav"><b>{eur(t?.aFavorEuros)}</b><span>nos deben ({num(t?.aFavorHoras)} h)</span></div>
         <div className="col-total col-total-con"><b>{eur(t?.enContraEuros)}</b><span>les debemos ({num(t?.enContraHoras)} h)</span></div>
-        <div className="col-total"><b>{t?.pendientes ?? 0}</b><span>horas pendientes de aceptar</span></div>
+        <div className="col-total"><b>{t?.pendientes ?? 0}</b><span>esperan respuesta del colaborador</span></div>
         <div className={`col-total ${t?.enRevision ? 'col-total-rev' : ''}`}><b>{t?.enRevision ?? 0}</b><span>en revisión</span></div>
       </div>
       <div className="informe-tabs">
@@ -395,7 +395,7 @@ export default function VistaColaboradores({ api, h, toast$, config }) {
                     <div><strong>{c.nombre}</strong><small>{c.tipo === 'AUTONOMO' ? 'Autónomo' : 'Escuela'} · {eur(c.tarifaHora)}/h{c.acceso?.activo ? ' · con acceso' : ''}</small></div>
                     <div className="col-fila-der">
                       {c.saldo.enRevision > 0 && <span className="col-est col-est-rev">{c.saldo.enRevision} en revisión</span>}
-                      {c.saldo.pendientes > 0 && <span className="col-est col-est-pend">{c.saldo.pendientes} pend.</span>}
+                      {c.acceso?.activo && c.saldo.pendientes > 0 && <span className="col-est col-est-pend">{c.saldo.pendientes} sin responder</span>}
                       <ChipSaldo saldo={c.saldo} />
                     </div>
                   </button>

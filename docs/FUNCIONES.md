@@ -97,6 +97,7 @@ Estado: ✅ disponible · 🟡 disponible con límites · 🗺 planificado (ver 
 | Planilla general del mes | ✅ | Ordenable |
 | Informe de ausencias | ✅ | |
 | Aprobación de días libres | ✅ | Aprueba o rechaza con observación |
+| Editar solicitudes de días libres | ✅ | El empleado edita o retira las pendientes; administración corrige cualquier solicitud (también las respondidas) o la reabre; aviso a la otra parte y registro de actividad |
 
 ### Gestión documental (legajo)
 | Función | Estado | Detalle |

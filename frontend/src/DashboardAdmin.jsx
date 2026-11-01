@@ -86,14 +86,20 @@ export default function DashboardAdmin({ resumen, cargando, irA, aprobar, recarg
       )}
 
       {col && col.total > 0 && (
-        <Tarjeta titulo="Colaboradores: horas por aclarar" cuenta={col.enRevision + col.pendientes} tono={col.enRevision ? 'red' : 'amber'} vacio="Nada en revisión" onVer={() => irA('colaboradores')}>
+        <div className={`card dash-card ${col.enRevision > 0 ? 'dash-red' : ''}`}>
+          <div className="card-header">
+            <h2>Colaboradores{col.enRevision > 0 && <span className="dash-cuenta dash-cuenta-red">{col.enRevision}</span>}</h2>
+            <button className="btn-sm" onClick={() => irA('colaboradores')}>Ver cuentas →</button>
+          </div>
           <ul className="dash-lista">
-            {col.listaRevision.map(c => <li key={c.id}><div><strong>{c.nombre}</strong><small>{c.enRevision} movimiento{c.enRevision > 1 ? 's' : ''} en revisión</small></div></li>)}
-            <li><div><strong>{col.pendientes} horas pendientes de aceptar</strong>
-              <small>Nos deben {col.aFavorEuros.toLocaleString('es-ES')} € · les debemos {col.enContraEuros.toLocaleString('es-ES')} €</small></div>
-              <button className="btn-sm" onClick={() => irA('colaboradores')}>Ver cuentas</button></li>
+            {col.listaRevision.map(c => (
+              <li key={c.id}><div><strong>{c.nombre}</strong><small>Pide revisar {c.enRevision} movimiento{c.enRevision > 1 ? 's' : ''}</small></div>
+                <span className="estado-badge rechazado">En revisión</span></li>
+            ))}
+            {col.pendientes > 0 && <li><div><strong>{col.pendientes} {col.pendientes > 1 ? 'movimientos esperan' : 'movimiento espera'} respuesta</strong><small>De colaboradores con acceso al portal</small></div></li>}
+            <li><div><strong>Nos deben {col.aFavorEuros.toLocaleString('es-ES')} €</strong><small>Les debemos {col.enContraEuros.toLocaleString('es-ES')} €</small></div></li>
           </ul>
-        </Tarjeta>
+        </div>
       )}
 
       {on('libres') && <Tarjeta titulo="Próximas ausencias" cuenta={sol.proximas.length} tono="green" vacio="Sin ausencias aprobadas próximas" onVer={() => irA('gestionar')}>

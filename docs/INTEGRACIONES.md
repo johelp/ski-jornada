@@ -52,6 +52,8 @@ Alta: `POST /api/admin/integraciones/webhooks {url, eventos[]}` (URL **https**; 
 | `clases.mes_reabierto` | Se reabre un mes | `profesorId, mes` |
 | `documento.firmado` | El profesor sube un documento firmado | `documentoId, tipo, mes, profesorId` |
 | `solicitud.creada` | Un profesor pide días libres | `id, profesorId, fechaInicio, fechaFin, motivo` |
+| `solicitud.modificada` | El empleado o administración cambian una solicitud | `id, profesorId, fechaInicio, fechaFin, motivo` |
+| `solicitud.cancelada` | El empleado retira una solicitud pendiente | `id, profesorId` |
 | `solicitud.respondida` | Administración aprueba o rechaza | `id, profesorId, estado, observacion` |
 | `planning.importado` | Se importa planning | `filas, fuente` |
 

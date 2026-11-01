@@ -88,6 +88,9 @@ El informe incluye `revision` (`{estado, nota, revisadoAt}` o `null`) y, por cla
 ## Documentos (legajo)
 `POST /api/admin/documentos` 🛡 (multipart) · `GET /api/documentos/mis-documentos` · `POST /api/documentos/:id/firmar` · 🛡 `GET /api/admin/documentos` · 🛡 `GET /api/admin/profesores/:id/documentos`
 
+## Editar solicitudes de días libres
+`PUT /api/libres/:id` · `DELETE /api/libres/:id` (el empleado, solo sus solicitudes **pendientes**; si no, 409) · 🛡 `PUT /api/admin/solicitudes/:id` (cualquier solicitud, `reabrir: true` la devuelve a pendiente; avisa al empleado y queda en la auditoría).
+
 ## Avisos y configuración
 `GET /api/notificaciones` · `POST /api/notificaciones/leer-todas` · `POST /api/notificaciones/:id/leer` · 🛡 `GET|POST /api/admin/notificaciones` · 🛡 `DELETE /api/admin/notificaciones/:id` · `GET /api/config` · 🛡 `PUT /api/admin/config`
 

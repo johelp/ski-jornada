@@ -17,7 +17,7 @@ Estado: ☐ pendiente · ✅ hecho. Quién: **Auto** (ya lo ejecuta el CI), **De
 
 | Estado | Qué | Cómo |
 |--------|-----|------|
-| ✅ Auto | 189 comprobaciones: colaboradores y módulos, correcciones trazables de fichajes, permisos, clases e importes, confirmación y revisión, comparativa, integraciones, acceso por invitación y código, límites, subidas, panel, WhatsApp (sin conexión) | `node backend/scripts/smoke.js` (con `API_LOG` para las del código) |
+| ✅ Auto | 204 comprobaciones: colaboradores y módulos, correcciones trazables de fichajes, permisos, clases e importes, confirmación y revisión, comparativa, integraciones, acceso por invitación y código, límites, subidas, panel, WhatsApp (sin conexión) | `node backend/scripts/smoke.js` (con `API_LOG` para las del código) |
 | ✅ Auto | Compilación del frontend y `npm audit` | CI |
 | ☐ Dev | Ejecutar el smoke contra el entorno de pruebas desplegado, no solo en local | `BASE_URL=… ADMIN_TOKEN=… PROF_TOKEN=… PROF2_TOKEN=…` |
 
@@ -30,7 +30,7 @@ Estado: ☐ pendiente · ✅ hecho. Quién: **Auto** (ya lo ejecuta el CI), **De
 - ☐ Carga rápida en el móvil: «hoy, 1,5 h, misma disciplina» en menos de 10 segundos y 3 toques; **Deshacer**; cargar «Ayer» y «Otro día»; el aviso de mes anterior sin confirmar a principios de mes; confirmar el mes con el aviso en pantalla; lectura con VoiceOver/TalkBack de los botones de horas, disciplinas y primas.
 - ☐ Confirmar el mes y ver que ya no se edita; ver el resultado de la revisión.
 - ☐ Descargar su informe de jornada y de clases (PDF) y abrirlo en el móvil.
-- ☐ Pedir días libres (fechas inválidas rechazadas); ver la respuesta.
+- ☐ Pedir días libres (fechas inválidas rechazadas); ver la respuesta; **editar** y **retirar** una solicitud pendiente; con una ya respondida, administración la **edita** y la **reabre** y el empleado recibe el aviso.
 - ☐ Firmar un documento (si el módulo está activo); exportar mis datos.
 
 **Administración**
