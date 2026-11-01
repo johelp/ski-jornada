@@ -2,7 +2,7 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": { "builder": "NIXPACKS", "buildCommand": "npm install && npx prisma generate" },
   "deploy": {
-    "startCommand": "npx prisma migrate deploy && node prisma/bootstrap.js && node index.js",
+    "startCommand": "npx prisma migrate deploy && node prisma/bootstrap.js && node prisma/demo-arranque.js && node index.js",
     "healthcheckPath": "/api/salud",
     "restartPolicyType": "ON_FAILURE"
   }

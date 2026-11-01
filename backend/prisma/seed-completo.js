@@ -7,6 +7,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const legal = require('../legal');
+const { em } = require('./demo-emails');
+const EN_PRODUCCION = process.env.NODE_ENV === 'production'; // instancia de pruebas desplegada, no la de un cliente real
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
 const r2 = n => Math.round(n * 100) / 100;
@@ -58,16 +60,16 @@ module.exports = async function sembrarDemoCompleta(prisma, { admin, carlos, lau
   // ── Configuración de la escuela de ejemplo ────────────────────────────────
   await prisma.configEscuela.upsert({
     where: { id: 'default' }, create: { id: 'default' },
-    update: { nombre: 'Escuela de Esquí Demo', cif: 'B00000000', direccion: 'Calle de Ejemplo 1, Granada', telefono: '958 000 000', email: 'administracion@escuela.com', colorPrimario: '#0f4c81' },
+    update: process.env.SEED_RESPETAR_CONFIG === 'true' ? {} : { nombre: 'Escuela de Esquí Demo', cif: 'B00000000', direccion: 'Calle de Ejemplo 1, Granada', telefono: '958 000 000', email: 'administracion@escuela.com', colorPrimario: '#0f4c81' },
   });
 
   // ── Cuentas adicionales para cubrir todos los estados ─────────────────────
   const base = { password: hash, tipoJornada: 'COMPLETA', horasContrato: 35 };
   const cuenta = (email, datos) => prisma.profesor.upsert({ where: { email }, update: { password: hash, ...datos }, create: { email, ...base, ...datos } });
-  const empresa = await cuenta('administracion@escuela.com', { nombre: 'Administración', apellidos: '', role: 'ADMIN', esPrincipal: false, activo: true, adheridoAt: hace(40) });
-  const pablo = await cuenta('pablo.invitado@escuela.com', { nombre: 'Pablo', apellidos: 'Invitado', role: 'PROFESOR', activo: true, adheridoAt: null, tarifaHora: 17 });
-  const elena = await cuenta('elena.baja@escuela.com', { nombre: 'Elena', apellidos: 'Baja', role: 'PROFESOR', activo: false, adheridoAt: hace(120), tarifaHora: 18 });
-  const raul = await cuenta('raul.sintarifa@escuela.com', { nombre: 'Raúl', apellidos: 'Sin Tarifa', role: 'PROFESOR', activo: true, adheridoAt: hace(30), tarifaHora: null });
+  const empresa = await cuenta(em('administracion@escuela.com'), { nombre: 'Administración', apellidos: '', role: 'ADMIN', esPrincipal: false, activo: true, adheridoAt: hace(40) });
+  const pablo = await cuenta(em('pablo.invitado@escuela.com'), { nombre: 'Pablo', apellidos: 'Invitado', role: 'PROFESOR', activo: true, adheridoAt: null, tarifaHora: 17 });
+  const elena = await cuenta(em('elena.baja@escuela.com'), { nombre: 'Elena', apellidos: 'Baja', role: 'PROFESOR', activo: false, adheridoAt: hace(120), tarifaHora: 18 });
+  const raul = await cuenta(em('raul.sintarifa@escuela.com'), { nombre: 'Raúl', apellidos: 'Sin Tarifa', role: 'PROFESOR', activo: true, adheridoAt: hace(30), tarifaHora: null });
   const tarifas = [[carlos, 20, 60], [laura, 18, 55], [miguel, 16.5, 45], [sofia, 22, 20]];
   for (const [u, t, dias] of tarifas) await prisma.profesor.update({ where: { id: u.id }, data: { tarifaHora: t, adheridoAt: hace(dias), esPrincipal: false } });
   await prisma.profesor.update({ where: { id: admin.id }, data: { adheridoAt: hace(90), esPrincipal: true } });
@@ -228,17 +230,17 @@ module.exports = async function sembrarDemoCompleta(prisma, { admin, carlos, lau
 
   // ── Integraciones y registro de actividad ────────────────────────────────
   const claveDemo = 'sj_demo_clave_de_ejemplo_solo_pruebas_0001';
-  await prisma.apiKey.create({ data: { nombre: 'Demo · Sistema de reservas', prefijo: claveDemo.slice(0, 10), keyHash: crypto.createHash('sha256').update(claveDemo).digest('hex'), scopes: 'lectura,economico,planning', creadaPorId: admin.id } });
-  await prisma.webhook.create({ data: { url: 'https://demo.ejemplo.test/webhook', secret: 'whsec_demo_solo_pruebas', eventos: '*', activo: false } });
+  if (!EN_PRODUCCION) await prisma.apiKey.create({ data: { nombre: 'Demo · Sistema de reservas', prefijo: claveDemo.slice(0, 10), keyHash: crypto.createHash('sha256').update(claveDemo).digest('hex'), scopes: 'lectura,economico,planning', creadaPorId: admin.id } });
+  if (!EN_PRODUCCION) await prisma.webhook.create({ data: { url: 'https://demo.ejemplo.test/webhook', secret: 'whsec_demo_solo_pruebas', eventos: '*', activo: false } });
   // Casos de uso de ejemplo: gestoría (solo lectura económica) y aviso de confirmaciones/solicitudes a un canal
   const claveGestoria = 'sj_demo_gestoria_solo_lectura_pruebas_0002';
-  await prisma.apiKey.create({ data: { nombre: 'Demo · Gestoría (solo lectura)', prefijo: claveGestoria.slice(0, 10), keyHash: crypto.createHash('sha256').update(claveGestoria).digest('hex'), scopes: 'lectura,economico', creadaPorId: admin.id } });
-  await prisma.webhook.create({ data: { url: 'https://demo.ejemplo.test/avisos-administracion', secret: 'whsec_demo_avisos_pruebas', eventos: 'clases.mes_confirmado,solicitud.creada', activo: false } });
+  if (!EN_PRODUCCION) await prisma.apiKey.create({ data: { nombre: 'Demo · Gestoría (solo lectura)', prefijo: claveGestoria.slice(0, 10), keyHash: crypto.createHash('sha256').update(claveGestoria).digest('hex'), scopes: 'lectura,economico', creadaPorId: admin.id } });
+  if (!EN_PRODUCCION) await prisma.webhook.create({ data: { url: 'https://demo.ejemplo.test/avisos-administracion', secret: 'whsec_demo_avisos_pruebas', eventos: 'clases.mes_confirmado,solicitud.creada', activo: false } });
   // Colaboradores y subcontratas: un saldo a favor (el ejemplo 5 h dadas − 2 recibidas = 3 h = 90 €), uno en contra con horas en revisión y un pago parcial, y uno saldado
   const diaISO = n => { const d = hace(n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
-  const norte = await prisma.colaborador.create({ data: { nombre: 'Escuela Sierra Norte', tipo: 'ESCUELA', cif: 'B11111111', email: 'sierranorte@escuela.com', telefono: '958 111 111', contacto: 'Marta (coordinación)', tarifaHora: 30, notas: 'Se liquida a final de temporada' } });
+  const norte = await prisma.colaborador.create({ data: { nombre: 'Escuela Sierra Norte', tipo: 'ESCUELA', cif: 'B11111111', email: em('sierranorte@escuela.com'), telefono: '958 111 111', contacto: 'Marta (coordinación)', tarifaHora: 30, notas: 'Se liquida a final de temporada' } });
   const marcos = await prisma.colaborador.create({ data: { nombre: 'Marcos Ruiz (autónomo)', tipo: 'AUTONOMO', cif: '12345678Z', telefono: '600 222 222', tarifaHora: 25 } });
-  const valle = await prisma.colaborador.create({ data: { nombre: 'Escuela Valle Sur', tipo: 'ESCUELA', email: 'vallesur@escuela.com', tarifaHora: 28 } });
+  const valle = await prisma.colaborador.create({ data: { nombre: 'Escuela Valle Sur', tipo: 'ESCUELA', email: em('vallesur@escuela.com'), tarifaHora: 28 } });
   const mov = (c, d, sentido, horas, tarifa, extra = {}) => ({ colaboradorId: c.id, fecha: diaISO(d), sentido, horas, tarifaHora: tarifa, creadoPorId: admin.id, ...extra });
   await prisma.movimientoHoras.createMany({ data: [
     mov(norte, 20, 'DADAS', 3, 30, { nota: 'Grupo de la mañana', estado: 'ACEPTADA', respondidoAt: hace(19) }), mov(norte, 20, 'DADAS', 2, 30, { nota: 'Clase particular' }),
@@ -248,7 +250,7 @@ module.exports = async function sembrarDemoCompleta(prisma, { admin, carlos, lau
   ] });
   await prisma.liquidacion.create({ data: { colaboradorId: marcos.id, fecha: diaISO(10), tipo: 'PAGO', horas: -2, importe: -50, nota: 'Transferencia', creadoPorId: admin.id } });
   // Escuela Sierra Norte tiene acceso al portal (entra con el enlace o el código del correo)
-  await prisma.profesor.create({ data: { email: 'sierranorte@escuela.com', nombre: 'Escuela Sierra Norte', apellidos: '', password: hash, role: 'COLABORADOR', colaboradorId: norte.id, adheridoAt: hace(15) } });
+  await prisma.profesor.create({ data: { email: em('sierranorte@escuela.com'), nombre: 'Escuela Sierra Norte', apellidos: '', password: hash, role: 'COLABORADOR', colaboradorId: norte.id, adheridoAt: hace(15) } });
   // WhatsApp: dos profesores con teléfono y avisos activados (solo se envía si administración conecta un número)
   await prisma.profesor.updateMany({ where: { id: { in: [laura.id, carlos.id] } }, data: { telefono: '+34600000001', avisosWhatsapp: true } });
   await prisma.profesor.update({ where: { id: miguel.id }, data: { telefono: '+34600000002', avisosWhatsapp: false } });
@@ -289,6 +291,6 @@ module.exports = async function sembrarDemoCompleta(prisma, { admin, carlos, lau
 
   console.log(`\n✅ Escenario de prueba completo creado (meses ${M3} … ${M0}).`);
   console.log(`   📄 CSV de reservas de ejemplo: backend/prisma/demo/${nombreCsv}`);
-  console.log(`   🔑 API key de demostración: ${claveDemo}`);
+  if (!EN_PRODUCCION) console.log(`   🔑 API key de demostración: ${claveDemo}`);
   console.log('   Guía de escenarios: docs/DATOS-DE-PRUEBA.md');
 };

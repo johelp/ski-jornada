@@ -5,6 +5,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Fechas AAA
 ## [Sin publicar]
 
 ### Añadido
+- **Datos de demostración en una instancia de pruebas desplegada:** `SEED_DEMO=true` siembra una sola vez al arrancar, con correos reales para las cuentas demo (`SEED_EMAILS`), sin claves de API conocidas ni la clave «ski123» y respetando la configuración de la escuela (`SEED_RESPETAR_CONFIG`).
 - **Pantalla de carga de clases del profesor, rediseñada para el móvil:** día con *Hoy / Ayer / Otro día*, horas con botones grandes (≥ 44 px), la última disciplina recordada, botón que explica qué falta, Enter envía, aviso con **Deshacer** tras cargar, aviso de *mes anterior sin confirmar*, navegación de mes con ‹ ›, clases agrupadas por día, confirmación del mes sin diálogos nativos y roles accesibles en los botones.
 - **Carga rápida del día** para colaboradores: colaborador, dimos/nos dieron, horas con botones, referencia y Enter; recuerda la última elección y lista lo cargado ese día.
 - **Colaboradores y subcontratas:** cuenta de horas con escuelas y autónomos (dadas y recibidas por día, valor hora del trato, saldo en horas y euros, pagos y compensaciones, extracto PDF, estadísticas y aviso en el panel). Portal opcional para el colaborador, que acepta o pide revisar sus horas, sin acceso a nada más. Ver `docs/COLABORADORES.md`.
