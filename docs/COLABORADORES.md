@@ -17,6 +17,18 @@ La escuela cubre horas de otras escuelas o autónomos cuando le faltan profesore
 
 > **Ejemplo:** le damos 5 h a la escuela A y la escuela A nos dio 2 h → saldo **a favor 3 h**. Con la hora a 30 € → **90 €**. Pueden saldarlo con un pago de 90 € o compensándolo en horas futuras.
 
+### Carga rápida del día (lo habitual)
+
+Al terminar la jornada, el operador repasa el planning y carga las horas del día en *Colaboradores → ⚡ Cargar el día* (es la pestaña que se abre por defecto). Pensada para móvil y para hacerse en segundos:
+
+1. **Colaborador:** un toque (se recuerda el último).
+2. **¿Qué pasó?:** *Les dimos horas* o *Nos dieron horas* (un toque; se conserva para la siguiente carga).
+3. **Horas:** botones rápidos 0,5 · 1 · 1,5 · 2 · 3 · 4, o escribir otra cantidad.
+4. **Referencia** (opcional): clase, grupo, quién cubrió.
+5. **Enter** o el botón grande: queda cargado y el formulario se limpia (horas y referencia), listo para la siguiente.
+
+Debajo aparece **lo cargado ese día** con el neto por colaborador y un ✕ para quitar una línea equivocada. Con ◀ ▶ se carga o revisa otro día (para el que se olvidó ayer). El valor hora es el del trato; si hace falta otro, se cambia desde la ficha del colaborador.
+
 ### Cómo se usa (administración)
 
 1. **Colaboradores → + Nuevo:** nombre, tipo (escuela o autónomo), **valor hora** y, si quieres, correo, teléfono y contacto.
@@ -88,6 +100,7 @@ Todas con `Authorization: Bearer …` de una cuenta de administración. Ver `API
 |--------|------|----------|
 | GET / POST | `/api/admin/colaboradores` | Listar con saldo · crear |
 | GET | `/api/admin/colaboradores/estadisticas?meses=12` | Dashboard |
+| GET | `/api/admin/colaboradores/dia?fecha=AAAA-MM-DD` | Todo lo cargado ese día (carga rápida) |
 | GET / PUT | `/api/admin/colaboradores/:id` | Detalle (`?desde=&hasta=` para el extracto de un periodo) · editar |
 | POST | `/api/admin/colaboradores/:id/horas` | Cargar horas |
 | PUT / DELETE | `/api/admin/colaboradores/horas/:mid` | Editar (vuelve a pendiente) · borrar |

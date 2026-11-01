@@ -92,7 +92,7 @@ El informe incluye `revision` (`{estado, nota, revisadoAt}` o `null`) y, por cla
 `GET /api/notificaciones` · `POST /api/notificaciones/leer-todas` · `POST /api/notificaciones/:id/leer` · 🛡 `GET|POST /api/admin/notificaciones` · 🛡 `DELETE /api/admin/notificaciones/:id` · `GET /api/config` · 🛡 `PUT /api/admin/config`
 
 ## Colaboradores y módulos 🛡
-`GET|POST /api/admin/colaboradores` · `GET /api/admin/colaboradores/estadisticas` · `GET|PUT /api/admin/colaboradores/:id` (`?desde=&hasta=`) · `POST /api/admin/colaboradores/:id/horas` · `PUT|DELETE /api/admin/colaboradores/horas/:mid` · `POST /api/admin/colaboradores/horas/:mid/estado` · `POST /api/admin/colaboradores/:id/liquidar` · `DELETE /api/admin/colaboradores/liquidaciones/:lid` · `POST|DELETE /api/admin/colaboradores/:id/acceso` · `GET|PUT /api/admin/modulos` (`{ off: [...] }`).
+`GET|POST /api/admin/colaboradores` · `GET /api/admin/colaboradores/estadisticas` · `GET /api/admin/colaboradores/dia?fecha=` · `GET|PUT /api/admin/colaboradores/:id` (`?desde=&hasta=`) · `POST /api/admin/colaboradores/:id/horas` · `PUT|DELETE /api/admin/colaboradores/horas/:mid` · `POST /api/admin/colaboradores/horas/:mid/estado` · `POST /api/admin/colaboradores/:id/liquidar` · `DELETE /api/admin/colaboradores/liquidaciones/:lid` · `POST|DELETE /api/admin/colaboradores/:id/acceso` · `GET|PUT /api/admin/modulos` (`{ off: [...] }`).
 Portal del colaborador (rol `COLABORADOR`, solo estas rutas y las de sesión): `GET /api/colaborador/mi` · `POST /api/colaborador/horas/:mid/responder`. Un módulo apagado responde `404 { modulo }`. Detalle en `COLABORADORES.md`.
 
 ## WhatsApp (opcional; `WHATSAPP_ENABLED=false` lo oculta)

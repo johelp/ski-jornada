@@ -17,7 +17,7 @@ Estado: ☐ pendiente · ✅ hecho. Quién: **Auto** (ya lo ejecuta el CI), **De
 
 | Estado | Qué | Cómo |
 |--------|-----|------|
-| ✅ Auto | 187 comprobaciones: colaboradores y módulos, correcciones trazables de fichajes, permisos, clases e importes, confirmación y revisión, comparativa, integraciones, acceso por invitación y código, límites, subidas, panel, WhatsApp (sin conexión) | `node backend/scripts/smoke.js` (con `API_LOG` para las del código) |
+| ✅ Auto | 189 comprobaciones: colaboradores y módulos, correcciones trazables de fichajes, permisos, clases e importes, confirmación y revisión, comparativa, integraciones, acceso por invitación y código, límites, subidas, panel, WhatsApp (sin conexión) | `node backend/scripts/smoke.js` (con `API_LOG` para las del código) |
 | ✅ Auto | Compilación del frontend y `npm audit` | CI |
 | ☐ Dev | Ejecutar el smoke contra el entorno de pruebas desplegado, no solo en local | `BASE_URL=… ADMIN_TOKEN=… PROF_TOKEN=… PROF2_TOKEN=…` |
 
@@ -37,6 +37,7 @@ Estado: ☐ pendiente · ✅ hecho. Quién: **Auto** (ya lo ejecuta el CI), **De
 - ☐ Usuarios: importar CSV, invitar, reenviar, dar de baja (acceso cortado en segundos), roles (solo la cuenta principal).
 - ☐ Revisión: aprobar, discrepancia, corrección (reabre el mes), notas por clase; planificado frente a cargado.
 - ☐ Comparar con reservas con un CSV real del cliente; vincular nombres; revisar «NO ASIGNADO».
+- ☐ Carga rápida del día en el móvil: cargar 6 movimientos de varios colaboradores en menos de 2 minutos; quitar uno equivocado; cargar el día anterior con ◀.
 - ☐ Colaboradores: crear uno, cargar 5 h dadas y 2 recibidas (saldo 3 h = 90 € al valor hora), saldar parcial y total, imprimir el extracto PDF y abrirlo en el móvil.
 - ☐ Portal del colaborador: darle acceso con un correo real, entrar por enlace y por código, aceptar unas horas y pedir revisión de otras; el panel de administración lo refleja; quitar el acceso corta la sesión.
 - ☐ Módulos: apagar y encender cada módulo; el menú, el panel y la API se comportan igual en móvil y escritorio.

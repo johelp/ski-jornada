@@ -244,10 +244,107 @@ function Estadisticas({ est }) {
   );
 }
 
+
+// Carga rápida del día: el operador repasa el planning al terminar la jornada y carga las horas de un tirón.
+// Colaborador (un toque) → «Dimos» / «Nos dieron» (un toque) → horas (botón rápido) → referencia → Enter. Se conserva colaborador y sentido.
+const RAPIDAS = [0.5, 1, 1.5, 2, 3, 4];
+const sumaDia = d => { const t = d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }); return t.charAt(0).toUpperCase() + t.slice(1); };
+const mover = (iso, n) => { const d = new Date(`${iso}T12:00:00`); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const guardado = (k, def) => { try { return localStorage.getItem(k) || def; } catch { return def; } };
+
+function CargaRapida({ api, h, toast$, lista, onCambio }) {
+  const [fecha, setFecha] = useState(hoyISO());
+  const [colId, setColId] = useState(() => guardado('sj-col-ultimo', ''));
+  const [sentido, setSentido] = useState('');
+  const [horas, setHoras] = useState('');
+  const [ref, setRef] = useState('');
+  const [dia, setDia] = useState([]);
+  const [enviando, setEnviando] = useState(false);
+  const activos = (lista || []).filter(c => c.activo);
+  const cargarDia = useCallback(async () => {
+    try { setDia((await api.get('/api/admin/colaboradores/dia', { headers: h(), params: { fecha } })).data.movimientos); }
+    catch { setDia([]); }
+  }, [api, h, fecha]);
+  useEffect(() => { cargarDia(); }, [cargarDia]);
+  useEffect(() => { if (colId && !activos.some(c => c.id === colId)) setColId(''); }, [lista]); // eslint-disable-line
+
+  const elegir = id => { setColId(id); try { localStorage.setItem('sj-col-ultimo', id); } catch {} };
+  const listo = colId && sentido && Number(horas) > 0;
+  const enviar = async e => {
+    e?.preventDefault();
+    if (!listo || enviando) return;
+    setEnviando(true);
+    try {
+      await api.post(`/api/admin/colaboradores/${colId}/horas`, { fecha, sentido, horas: Number(horas), nota: ref }, { headers: h() });
+      const c = activos.find(x => x.id === colId);
+      toast$(`✓ ${sentido === 'DADAS' ? 'Dimos' : 'Nos dieron'} ${horas} h · ${c?.nombre}`, 'success', 2200);
+      setHoras(''); setRef('');
+      await cargarDia(); onCambio();
+    } catch (err) { toast$(err.response?.data?.error || 'No se pudo cargar', 'error', 5000); }
+    finally { setEnviando(false); }
+  };
+  const borrar = async m => {
+    try { await api.delete(`/api/admin/colaboradores/horas/${m.id}`, { headers: h() }); await cargarDia(); onCambio(); }
+    catch (err) { toast$(err.response?.data?.error || 'No se pudo borrar', 'error'); }
+  };
+  const netoPorCol = [...dia.reduce((mp, m) => mp.set(m.colaboradorId, { nombre: m.colaborador.nombre, h: (mp.get(m.colaboradorId)?.h || 0) + (m.sentido === 'DADAS' ? 1 : -1) * m.horas }), new Map()).values()];
+
+  if (lista && !activos.length) return <div className="card"><p className="dash-vacio">Crea primero un colaborador (pestaña «Colaboradores») para poder cargarle horas.</p></div>;
+  return (
+    <div>
+      <div className="card cr-card">
+        <div className="cr-fecha">
+          <button className="btn-ghost" onClick={() => setFecha(mover(fecha, -1))} aria-label="Día anterior">◀</button>
+          <div><strong>{sumaDia(new Date(`${fecha}T12:00:00`))}</strong>{fecha !== hoyISO() && <button className="btn-ghost" onClick={() => setFecha(hoyISO())}>Hoy</button>}</div>
+          <button className="btn-ghost" onClick={() => setFecha(mover(fecha, 1))} aria-label="Día siguiente">▶</button>
+        </div>
+        <form onSubmit={enviar}>
+          <p className="cr-etq">1 · Colaborador</p>
+          <div className="cr-chips">
+            {activos.map(c => <button type="button" key={c.id} className={`cr-chip${colId === c.id ? ' sel' : ''}`} onClick={() => elegir(c.id)}>{c.nombre}</button>)}
+          </div>
+          <p className="cr-etq">2 · ¿Qué pasó?</p>
+          <div className="cr-sentido">
+            <button type="button" className={`cr-dimos${sentido === 'DADAS' ? ' sel' : ''}`} onClick={() => setSentido('DADAS')}>⬆ Les dimos horas<small>nos deben</small></button>
+            <button type="button" className={`cr-dieron${sentido === 'RECIBIDAS' ? ' sel' : ''}`} onClick={() => setSentido('RECIBIDAS')}>⬇ Nos dieron horas<small>les debemos</small></button>
+          </div>
+          <p className="cr-etq">3 · Horas</p>
+          <div className="cr-chips">
+            {RAPIDAS.map(x => <button type="button" key={x} className={`cr-chip cr-h${Number(horas) === x ? ' sel' : ''}`} onClick={() => setHoras(String(x))}>{x}</button>)}
+            <input className="cr-horas" type="number" inputMode="decimal" min="0.25" step="0.25" placeholder="otra" value={horas} onChange={e => setHoras(e.target.value)} aria-label="Horas" />
+          </div>
+          <p className="cr-etq">4 · Referencia <small>(opcional)</small></p>
+          <input className="cr-ref" value={ref} onChange={e => setRef(e.target.value)} placeholder="Clase, grupo, profesor que cubrió…" maxLength={300} />
+          <button className="btn-primary cr-enviar" type="submit" disabled={!listo || enviando}>
+            {listo ? `Cargar ${horas} h · ${sentido === 'DADAS' ? 'les dimos' : 'nos dieron'}` : 'Elige colaborador, sentido y horas'}
+          </button>
+        </form>
+      </div>
+
+      <div className="card">
+        <div className="card-header"><h2>Cargado este día</h2></div>
+        {!dia.length ? <p className="dash-vacio">Todavía no hay horas este día.</p> : (
+          <>
+            <ul className="dash-lista">
+              {dia.map(m => (
+                <li key={m.id}>
+                  <div><strong>{m.colaborador.nombre}</strong><small>{m.sentido === 'DADAS' ? '⬆ Les dimos' : '⬇ Nos dieron'} <b>{num(m.horas)} h</b>{m.nota ? ` · ${m.nota}` : ''}</small></div>
+                  <button className="btn-ghost" onClick={() => borrar(m)} aria-label="Quitar">✕</button>
+                </li>
+              ))}
+            </ul>
+            <p className="cr-neto">{netoPorCol.map(c => `${c.nombre}: ${conSigno(c.h)} h`).join(' · ')}</p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function VistaColaboradores({ api, h, toast$, config }) {
   const [lista, setLista] = useState(null);
   const [est, setEst] = useState(null);
-  const [tab, setTab] = useState('lista');
+  const [tab, setTab] = useState('dia');
   const [sel, setSel] = useState(null);
   const [nuevo, setNuevo] = useState(false);
   const [verInactivos, setVerInactivos] = useState(false);
@@ -271,10 +368,11 @@ export default function VistaColaboradores({ api, h, toast$, config }) {
         <div className={`col-total ${t?.enRevision ? 'col-total-rev' : ''}`}><b>{t?.enRevision ?? 0}</b><span>en revisión</span></div>
       </div>
       <div className="informe-tabs">
+        <button className={`btn-tab${tab === 'dia' ? ' active' : ''}`} onClick={() => setTab('dia')}>⚡ Cargar el día</button>
         <button className={`btn-tab${tab === 'lista' ? ' active' : ''}`} onClick={() => setTab('lista')}>🤝 Colaboradores</button>
         <button className={`btn-tab${tab === 'est' ? ' active' : ''}`} onClick={() => setTab('est')}>📊 Estadísticas</button>
       </div>
-      {tab === 'est' ? <Estadisticas est={est} /> : (
+      {tab === 'dia' ? <CargaRapida api={api} h={h} toast$={toast$} lista={lista} onCambio={cargar} /> : tab === 'est' ? <Estadisticas est={est} /> : (
         <>
           {nuevo && <FormColaborador onCancelar={() => setNuevo(false)} onGuardar={async b => {
             try { const r = await api.post('/api/admin/colaboradores', b, { headers: h() }); toast$('Colaborador creado', 'success'); setNuevo(false); await cargar(); setSel(r.data.id); }

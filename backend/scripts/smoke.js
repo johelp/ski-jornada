@@ -351,6 +351,9 @@ const pdf = nombre => {
   check('se cargan horas dadas y recibidas con el valor hora del trato', h1.status === 200 && h3.status === 200 && h1.data.tarifaHora === 30);
   const det0 = await http('GET', `/api/admin/colaboradores/${CID}`, { token: admin });
   check('saldo: 5 h dadas − 2 recibidas = 3 h a favor = 90 €', det0.data.saldo.horas === 3 && det0.data.saldo.euros === 90, JSON.stringify(det0.data.saldo));
+  const dia0 = await http('GET', '/api/admin/colaboradores/dia?fecha=2026-02-03', { token: admin });
+  check('lo cargado en un día aparece junto, con su colaborador', dia0.status === 200 && dia0.data.movimientos.filter(m => m.colaboradorId === CID).length === 2 && dia0.data.movimientos[0].colaborador.nombre);
+  check('fecha no válida en la carga del día → 400', (await http('GET', '/api/admin/colaboradores/dia?fecha=ayer', { token: admin })).status === 400);
   check('un pago superior al saldo se rechaza → 400', (await http('POST', `/api/admin/colaboradores/${CID}/liquidar`, { token: admin, body: { tipo: 'PAGO', horas: 10 } })).status === 400);
   const l1 = await http('POST', `/api/admin/colaboradores/${CID}/liquidar`, { token: admin, body: { tipo: 'PAGO', horas: 1 } });
   check('un pago parcial de 1 h deja 2 h / 60 €', l1.status === 200 && (await http('GET', `/api/admin/colaboradores/${CID}`, { token: admin })).data.saldo.euros === 60);

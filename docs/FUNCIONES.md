@@ -120,6 +120,7 @@ Estado: ✅ disponible · 🟡 disponible con límites · 🗺 planificado (ver 
 | Función | Estado | Detalle |
 |---------|--------|---------|
 | Alta de colaboradores (escuelas y autónomos) con valor hora del trato | ✅ | Correo opcional |
+| Carga rápida del día (colaborador, dimos/nos dieron, horas con un toque, referencia, Enter) | ✅ | Pestaña por defecto; recuerda colaborador y sentido; lista lo cargado ese día con ✕ para quitar |
 | Horas dadas y recibidas por día | ✅ | Valor hora fijado en cada movimiento; editar, borrar, marcar aceptada |
 | Saldo en horas y en euros | ✅ | + a favor de la escuela, − en contra; lo «en revisión» queda aparte |
 | Saldar por pago o compensación, total o parcial | ✅ | Anulable |

@@ -5,6 +5,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Fechas AAA
 ## [Sin publicar]
 
 ### Añadido
+- **Carga rápida del día** para colaboradores: colaborador, dimos/nos dieron, horas con botones, referencia y Enter; recuerda la última elección y lista lo cargado ese día.
 - **Colaboradores y subcontratas:** cuenta de horas con escuelas y autónomos (dadas y recibidas por día, valor hora del trato, saldo en horas y euros, pagos y compensaciones, extracto PDF, estadísticas y aviso en el panel). Portal opcional para el colaborador, que acepta o pide revisar sus horas, sin acceso a nada más. Ver `docs/COLABORADORES.md`.
 - **Módulos apagables por administración** (*Config → Módulos*): clases, días libres, documentos, comparativa, integraciones, avisos y colaboradores; se ocultan del menú y del panel, la API responde 404 y los datos se conservan.
 - **Registro de jornada con correcciones trazables:** administración añade, modifica o anula fichajes con motivo obligatorio; se conserva el valor original, quién y cuándo (`CorreccionFichaje`); el fichaje anulado no se borra ni cuenta en los informes; el trabajador recibe un aviso; entra en el registro de actividad y en la exportación RGPD.

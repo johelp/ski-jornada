@@ -1524,6 +1524,16 @@ app.get('/api/admin/colaboradores/estadisticas', auth, adminOnly, async (req, re
   } catch (e) { console.error(e); res.status(500).json({ error: 'Error calculando estadísticas' }); }
 });
 
+// Todo lo cargado en un día (de todos los colaboradores): base de la pantalla de carga rápida
+app.get('/api/admin/colaboradores/dia', auth, adminOnly, async (req, res) => {
+  try {
+    const fecha = req.query.fecha || fechaLocal(new Date());
+    if (!fechaValida(fecha)) return res.status(400).json({ error: 'Fecha no válida' });
+    const movs = await prisma.movimientoHoras.findMany({ where: { fecha }, orderBy: { createdAt: 'asc' }, include: { colaborador: { select: { id: true, nombre: true } } } });
+    res.json({ fecha, movimientos: movs });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error obteniendo el día' }); }
+});
+
 app.post('/api/admin/colaboradores', auth, adminOnly, async (req, res) => {
   try {
     const v = validarColab(req.body); if (v.error) return res.status(400).json({ error: v.error });
