@@ -39,7 +39,7 @@ Ver `PILOTO-SNOWMOTION.md`: carga masiva de nóminas, archivado en Drive (cuenta
 - **Exportar a Google Sheets** (a petición, 01/11/2026): enviar o sincronizar con una hoja de cálculo, como opción, el resumen mensual de horas por profesor, el informe económico, la cuenta de horas de cada colaborador (saldos y movimientos por día) y la planilla de jornada. Opciones: botón «Exportar a Sheets» (OAuth de Google, copia puntual) o sincronización automática con la cuenta de servicio de Drive que ya está prevista para nóminas y copias. Hoy se puede conseguir sin programar con un webhook (`clases.revision`) hacia Make/Zapier (ver `INTEGRACIONES.md`) o con la exportación a CSV.
 - Liquidación: exportar a Excel/A3nom/Sage; informe consolidado por mes con totales por disciplina y prima.
 - Tarifas por titulación/nivel y por disciplina (hoy la tarifa es una por profesor).
-- Multi-escuela; registro de auditoría inmutable; firma electrónica legalmente válida (Autofirma/ViDeSigner); notificaciones push en iOS (Safari 16.4+ con VAPID).
+- Multi-escuela; registro de auditoría inmutable; firma electrónica legalmente válida con Autofirma App (plan en `PLAN-AUTOFIRMA.md`); notificaciones push en iOS (Safari 16.4+ con VAPID).
 - Migrar a Postgres si crece el uso o se necesita más de una réplica.
 
 ## Pendiente: repasar el resto del panel de administración
