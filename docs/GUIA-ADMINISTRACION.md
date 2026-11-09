@@ -49,7 +49,7 @@ Para la persona o el equipo que administra la plataforma en la escuela. Una guí
 
 - **Solicitudes:** aprueba o rechaza con observación. Con **Editar** corriges las fechas, el motivo o el comentario de cualquier solicitud, **aunque ya esté respondida** (p. ej. un cambio de fechas ya aprobado) y, si hace falta, **Guardar y volver a pendiente**. El empleado recibe un aviso y queda en el registro de actividad. Si el empleado cambia o retira una solicitud pendiente, recibes un aviso.
 - **Avisos:** a una persona o a todo el equipo (campana + correo).
-- **Documentos** (si el módulo está activo): sube nóminas, contratos y certificados por profesor; ve quién firmó. Solo tú y la persona dueña los veis.
+- **Documentos** (si el módulo está activo): sube nóminas, contratos y certificados por profesor; ve quién firmó y **si la firma es fiable**: *Firma íntegra* (el PDF lleva firma electrónica y no se tocó), *Con cambios tras firmar*, *Firma sin comprobar* o *Sin firma electrónica* (p. ej. firmado a mano y escaneado). *Ver comprobación* muestra el firmante, el emisor y la vigencia del certificado. «Íntegra» **no** acredita que el certificado esté validado ante un prestador de confianza. Un PDF modificado después de firmarse se rechaza al subirlo. Solo tú y la persona dueña los veis.
 
 ## 6b. Colaboradores y subcontratas (opcional)
 

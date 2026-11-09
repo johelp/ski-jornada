@@ -14,6 +14,7 @@ const path       = require('path');
 const fs         = require('fs');
 const { PrismaClient } = require('@prisma/client');
 const legal = require('./legal');
+const firmaPdf = require('./firmaPdf');
 
 dotenv.config();
 
@@ -1341,6 +1342,27 @@ app.post('/api/firma/enviar-email', auth, adminOnly, async (req, res) => {
   }
 });
 
+// Comprobación de la firma electrónica de un PDF subido (ver docs/PLAN-AUTOFIRMA.md, Fase 0)
+function comprobarPdfFirmado(ruta, rutaOriginal) {
+  const buf = fs.readFileSync(ruta);
+  const an = firmaPdf.analizarPdf(buf);
+  const extra = {};
+  if (rutaOriginal && fs.existsSync(rutaOriginal)) extra.conservaOriginal = firmaPdf.conservaOriginal(buf, fs.readFileSync(rutaOriginal));
+  return { an, datos: { firmaEstado: an.estado, firmaHuella: an.huella, firmaInfo: firmaPdf.resumenParaGuardar(an, extra) } };
+}
+// Un PDF cuya firma no coincide con su contenido se rechaza: se tocó después de firmarse
+const rechazarSiAlterado = (res, file, an) => {
+  if (an.estado !== firmaPdf.ESTADOS.ALTERADA) return false;
+  try { fs.unlinkSync(file.path); } catch {}
+  res.status(400).json({ error: 'El PDF firmado no es íntegro: su contenido no coincide con lo que se firmó (se modificó después de firmarlo). Vuelve a firmarlo y súbelo de nuevo.' });
+  return true;
+};
+const infoFirma = o => {
+  let info = null; try { info = o.firmaInfo ? JSON.parse(o.firmaInfo) : null; } catch {}
+  return { firmaEstado: o.firmaEstado || null, firmaInfo: info };
+};
+const conInfoFirma = o => { const { firmaInfo, ...resto } = o; return { ...resto, ...infoFirma(o) }; };
+
 app.post('/api/firma/subir-firmado', auth, upload.single('pdf'), verificarArchivo(['pdf']), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No se recibió ningún archivo' });
@@ -1348,12 +1370,15 @@ app.post('/api/firma/subir-firmado', auth, upload.single('pdf'), verificarArchiv
     if (!mes || !anio) return res.status(400).json({ error: 'Mes y año requeridos' });
 
     const mesKey = `${anio}-${String(mes).padStart(2, '0')}`;
+    const { an, datos } = comprobarPdfFirmado(req.file.path);
+    if (rechazarSiAlterado(res, req.file, an)) return;
     await prisma.firmaRegistro.upsert({
       where: { profesorId_mes: { profesorId: req.user.userId, mes: mesKey } },
-      update: { estado: 'FIRMADO', pdfFirmadoPath: req.file.filename, firmadoAt: new Date() },
-      create: { profesorId: req.user.userId, mes: mesKey, estado: 'FIRMADO', pdfFirmadoPath: req.file.filename, firmadoAt: new Date() },
+      update: { estado: 'FIRMADO', pdfFirmadoPath: req.file.filename, firmadoAt: new Date(), ...datos },
+      create: { profesorId: req.user.userId, mes: mesKey, estado: 'FIRMADO', pdfFirmadoPath: req.file.filename, firmadoAt: new Date(), ...datos },
     });
-    res.json({ success: true });
+    await auditar(req, 'firma.registro_subida', { id: req.user.userId, email: req.user.email }, { mes: mesKey, firmaEstado: an.estado });
+    res.json({ success: true, firmaEstado: an.estado, firmaInfo: infoFirma(datos).firmaInfo });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error subiendo firma' });
@@ -1366,7 +1391,7 @@ app.get('/api/firma/estado/:profesorId/:mes', auth, async (req, res) => {
     const firma = await prisma.firmaRegistro.findUnique({
       where: { profesorId_mes: { profesorId: targetId, mes: req.params.mes } },
     });
-    res.json({ estado: firma?.estado || 'PENDIENTE', firma: firma || null });
+    res.json({ estado: firma?.estado || 'PENDIENTE', firma: firma ? conInfoFirma(firma) : null });
   } catch (err) { res.status(500).json({ error: 'Error obteniendo estado' }); }
 });
 
@@ -1377,7 +1402,7 @@ app.get('/api/admin/firmas', auth, adminOnly, async (req, res) => {
       orderBy: { createdAt: 'desc' },
     });
     res.json(firmas.map(f => ({
-      ...f,
+      ...conInfoFirma(f),
       profesorNombre: `${f.profesor.nombre} ${f.profesor.apellidos}`,
       firmadoUrl: f.pdfFirmadoPath ? `/uploads/firmas/${f.pdfFirmadoPath}` : null,
     })));
@@ -1429,7 +1454,7 @@ app.get('/api/documentos/mis-documentos', auth, async (req, res) => {
       orderBy: { createdAt: 'desc' },
     });
     res.json(docs.map(d => ({
-      ...d,
+      ...conInfoFirma(d),
       archivoUrl: `/uploads/documentos/${d.archivoPath}`,
       firmaUrl: d.firmaPath ? `/uploads/firmas/${d.firmaPath}` : null,
     })));
@@ -1445,12 +1470,15 @@ app.post('/api/documentos/:id/firmar', auth, uploadFirma.single('pdf'), verifica
     if (doc.profesorId !== req.user.userId && req.user.role !== 'ADMIN')
       return res.status(403).json({ error: 'No autorizado' });
 
+    const { an, datos } = comprobarPdfFirmado(req.file.path, path.join(UPLOAD_DIR, 'documentos', path.basename(doc.archivoPath)));
+    if (rechazarSiAlterado(res, req.file, an)) return;
     const updated = await prisma.documentoLegajo.update({
       where: { id: req.params.id },
-      data: { estado: 'FIRMADO', firmaPath: req.file.filename, firmadoAt: new Date() },
+      data: { estado: 'FIRMADO', firmaPath: req.file.filename, firmadoAt: new Date(), ...datos },
     });
-    emitirEvento('documento.firmado', { documentoId: updated.id, tipo: updated.tipo, mes: updated.mes, profesorId: updated.profesorId });
-    res.json({ success: true, documento: { ...updated, firmaUrl: `/uploads/firmas/${updated.firmaPath}` } });
+    await auditar(req, 'documento.firma_subida', { id: doc.profesorId }, { documentoId: doc.id, firmaEstado: an.estado });
+    emitirEvento('documento.firmado', { documentoId: updated.id, tipo: updated.tipo, mes: updated.mes, profesorId: updated.profesorId, firmaEstado: an.estado });
+    res.json({ success: true, documento: { ...conInfoFirma(updated), firmaUrl: `/uploads/firmas/${updated.firmaPath}` } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error firmando documento' });
@@ -1464,7 +1492,7 @@ app.get('/api/admin/documentos', auth, adminOnly, async (req, res) => {
       orderBy: { createdAt: 'desc' },
     });
     res.json(docs.map(d => ({
-      ...d,
+      ...conInfoFirma(d),
       archivoUrl: `/uploads/documentos/${d.archivoPath}`,
       firmaUrl: d.firmaPath ? `/uploads/firmas/${d.firmaPath}` : null,
       profesorNombre: `${d.profesor.nombre} ${d.profesor.apellidos}`,
@@ -1479,7 +1507,7 @@ app.get('/api/admin/profesores/:id/documentos', auth, adminOnly, async (req, res
       orderBy: { createdAt: 'desc' },
     });
     res.json(docs.map(d => ({
-      ...d,
+      ...conInfoFirma(d),
       archivoUrl: `/uploads/documentos/${d.archivoPath}`,
       firmaUrl: d.firmaPath ? `/uploads/firmas/${d.firmaPath}` : null,
     })));

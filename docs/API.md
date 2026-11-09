@@ -86,7 +86,18 @@ El informe incluye `revision` (`{estado, nota, revisadoAt}` o `null`) y, por cla
 `POST /api/libres/solicitar` · `GET /api/libres/mis-solicitudes` · 🛡 `GET /api/admin/resumen` (panel: solicitudes por estado, horas por revisar, documentos, equipo) · 🛡 `GET /api/admin/solicitudes` · 🛡 `POST /api/admin/solicitudes/:id/responder`
 
 ## Documentos (legajo)
-`POST /api/admin/documentos` 🛡 (multipart) · `GET /api/documentos/mis-documentos` · `POST /api/documentos/:id/firmar` · 🛡 `GET /api/admin/documentos` · 🛡 `GET /api/admin/profesores/:id/documentos`
+`POST /api/admin/documentos` 🛡 (multipart) · `GET /api/documentos/mis-documentos` · `POST /api/documentos/:id/firmar` (PDF; comprueba la firma, ver abajo) · 🛡 `GET /api/admin/documentos` · 🛡 `GET /api/admin/profesores/:id/documentos`
+
+**Comprobación de la firma del PDF** (`POST /api/documentos/:id/firmar` y `POST /api/firma/subir-firmado`): la respuesta y los listados añaden `firmaEstado` y `firmaInfo`, y los documentos también `firmaHuella` (SHA-256).
+
+| `firmaEstado` | Significado |
+|---------------|-------------|
+| `INTEGRA` | Lleva firma electrónica y el contenido no cambió desde que se firmó |
+| `CON_CAMBIOS` | Firma correcta, pero se añadió contenido tras firmar |
+| `NO_COMPROBADA` | Hay firma que no se pudo comprobar (formato o algoritmo no soportado) |
+| `SIN_FIRMA_ELECTRONICA` | PDF sin firma digital (p. ej. firmado a mano y escaneado); se acepta igual |
+
+Un PDF cuya firma **no coincide con su contenido** se rechaza con **400**. `firmaInfo`: `firmas[]` (`firmante`, `emisor`, `certDesde`/`certHasta`, `certVigente`, `fechaDeclarada`, `nota`), `cubreTodo` y, en documentos, `conservaOriginal`. El evento `documento.firmado` incluye `firmaEstado`. No valida la cadena de confianza del certificado ni su revocación.
 
 ## Editar solicitudes de días libres
 `PUT /api/libres/:id` · `DELETE /api/libres/:id` (el empleado, solo sus solicitudes **pendientes**; si no, 409) · 🛡 `PUT /api/admin/solicitudes/:id` (cualquier solicitud, `reabrir: true` la devuelve a pendiente; avisa al empleado y queda en la auditoría).

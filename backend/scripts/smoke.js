@@ -437,6 +437,54 @@ const pdf = nombre => {
   check('el registro de actividad guarda las ediciones de administración', ((await http('GET', '/api/admin/auditoria?limit=100', { token: admin })).data || []).some(x => x.accion === 'solicitud.editar' && x.detalle?.id === SID) && ((await http('GET', '/api/admin/auditoria?limit=100', { token: admin })).data || []).some(x => x.accion === 'solicitud.reabrir'));
   }
 
+  seccion('6o. Firma electrónica de PDF: comprobación al subir');
+  {
+    const firmaPdf = require('../firmaPdf');
+    let fx = null;
+    try { fx = require('./firma-fixtures'); fx.crearPdfFirmado(); } catch (e) { fx = null; console.log(`  (se omite: no se pueden generar PDF firmados de prueba — ${e.message.split('\n')[0]})`); }
+    if (fx) {
+      const formPdf = (buf, nombre, campos = {}) => { const f = new FormData(); Object.entries(campos).forEach(([k, v]) => f.append(k, v)); f.append('pdf', new Blob([buf], { type: 'application/pdf' }), nombre); return f; };
+      const original = fx.crearPdfSinFirma();
+      const dSub = await http('POST', '/api/admin/documentos', { token: admin, form: formPdf(original, 'contrato.pdf', { profesorId: me.id, tipo: 'CONTRATO', nombre: 'Contrato de prueba' }) });
+      const dId = dSub.data.documento?.id;
+      const dFirma = b => http('POST', `/api/documentos/${dId}/firmar`, { token: prof, form: formPdf(b, 'f.pdf') });
+      const dEstado = async () => ((await http('GET', '/api/admin/documentos', { token: admin })).data || []).find(d => d.id === dId);
+
+      const sinFirma = await dFirma(original);
+      check('un PDF sin firma digital se acepta, etiquetado «sin firma electrónica»', sinFirma.status === 200 && sinFirma.data.documento.firmaEstado === 'SIN_FIRMA_ELECTRONICA' && sinFirma.data.documento.estado === 'FIRMADO');
+
+      const bueno = fx.crearPdfFirmado();
+      const ok1 = await dFirma(bueno);
+      check('un PDF con firma digital correcta queda «íntegra»', ok1.status === 200 && ok1.data.documento.firmaEstado === 'INTEGRA');
+      const adm = await dEstado();
+      check('administración ve el estado, la huella y el firmante', adm?.firmaEstado === 'INTEGRA' && /^[0-9a-f]{64}$/.test(adm.firmaHuella || '') && adm.firmaInfo?.firmas?.[0]?.firmante === 'GARCIA LOPEZ MARIA');
+      check('no se guarda el NIF del certificado', !JSON.stringify(adm || {}).includes('12345678Z'));
+      check('guarda si el firmado conserva el original (aquí no: el fixture lo reescribe)', adm?.firmaInfo?.conservaOriginal === false);
+
+      const tocado = Buffer.from(bueno); tocado[40] ^= 1;
+      const rt = await dFirma(tocado);
+      check('un PDF modificado después de firmarse se rechaza → 400', rt.status === 400 && /no es íntegro/.test(rt.data.error || ''));
+      check('al rechazarlo, el documento conserva su estado anterior', (await dEstado())?.firmaEstado === 'INTEGRA');
+
+      const conExtra = await dFirma(Buffer.concat([bueno, Buffer.from('% añadido tras firmar\n')]));
+      check('contenido añadido tras la firma → «con cambios posteriores»', conExtra.status === 200 && conExtra.data.documento.firmaEstado === 'CON_CAMBIOS');
+      check('detecta que un PDF firmado conserva el original byte a byte', firmaPdf.conservaOriginal(Buffer.concat([original, Buffer.from('x')]), original) && !firmaPdf.conservaOriginal(original, Buffer.concat([original, Buffer.from('x')])));
+      check('un PDF con ByteRange falso no rompe el servidor', (await dFirma(Buffer.from('%PDF-1.4\n/ByteRange [0 5 9999 9999]\n%%EOF'))).status === 200);
+
+      const sha1 = await dFirma(fx.crearPdfFirmado({ md: 'sha1' }));
+      check('una firma con SHA-1 se acepta pero avisa de que es débil', sha1.status === 200 && /SHA-1/.test((await dEstado())?.firmaInfo?.firmas?.[0]?.nota || ''));
+
+      // Hoja mensual de jornada firmada
+      const hoja = await http('POST', '/api/firma/subir-firmado', { token: prof, form: formPdf(fx.crearPdfFirmado(), 'hoja.pdf', { mes: '04', anio: '2031' }) });
+      check('la hoja mensual firmada se comprueba igual', hoja.status === 200 && hoja.data.firmaEstado === 'INTEGRA');
+      check('administración ve la comprobación en la lista de firmas', ((await http('GET', '/api/admin/firmas', { token: admin })).data || []).some(f => f.mes === '2031-04' && f.firmaEstado === 'INTEGRA'));
+      check('una hoja mensual alterada se rechaza → 400', (await http('POST', '/api/firma/subir-firmado', { token: prof, form: formPdf(tocado, 'hoja.pdf', { mes: '04', anio: '2031' }) })).status === 400);
+
+      const aud = (await http('GET', '/api/admin/auditoria?limit=200', { token: admin })).data || [];
+      check('el registro de actividad anota cada firma subida con su estado', aud.some(x => x.accion === 'documento.firma_subida' && x.detalle?.firmaEstado === 'INTEGRA') && aud.some(x => x.accion === 'firma.registro_subida'));
+    }
+  }
+
   seccion('7. Limpieza');
   await http('POST', '/api/admin/clases/reabrir', { token: admin, body: { profesorId: me.id, mes: MES } });
   check('elimina la clase de prueba', (await http('DELETE', `/api/clases/${claseId}`, { token: prof })).status === 200);
