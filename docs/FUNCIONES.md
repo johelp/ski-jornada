@@ -106,7 +106,7 @@ Estado: ✅ disponible · 🟡 disponible con límites · 🗺 planificado (ver 
 | Ver pendientes de firma / firmados | ✅ | Filtros por estado; descarga del original y del firmado |
 | Acceso protegido a los archivos | ✅ | Solo el administrador y el profesor dueño, con sesión |
 | Carga masiva y archivado en Drive | 🗺 | Ver `PILOTO-SNOWMOTION.md` |
-| Firma electrónica con validez legal | 🗺 | Autofirma / ViDeSigner |
+| Firma electrónica con validez legal | 🗺 | Autofirma App; plan por fases en `PLAN-AUTOFIRMA.md` |
 
 ### Integraciones y datos personales
 | Función | Estado | Detalle |

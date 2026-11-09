@@ -5,6 +5,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Fechas AAA
 ## [Sin publicar]
 
 ### Añadido
+- **Plan de integración de Autofirma App** (`docs/PLAN-AUTOFIRMA.md`): fases, requisitos del manual de la AGE, cambios de modelo y riesgos. Detecta además que hoy cualquier PDF subido se marca como firmado.
 - **Editar solicitudes de días libres:** el empleado edita o retira las pendientes; administración corrige cualquier solicitud (también respondidas) o la reabre. Aviso a la otra parte, eventos `solicitud.modificada` y `solicitud.cancelada` y registro de actividad.
 - **Exportar a Google Sheets** anotado en el roadmap como opción futura.
 - **Datos de demostración en una instancia de pruebas desplegada:** `SEED_DEMO=true` siembra una sola vez al arrancar, con correos reales para las cuentas demo (`SEED_EMAILS`), sin claves de API conocidas ni la clave «ski123» y respetando la configuración de la escuela (`SEED_RESPETAR_CONFIG`).
