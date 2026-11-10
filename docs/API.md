@@ -95,9 +95,10 @@ El informe incluye `revision` (`{estado, nota, revisadoAt}` o `null`) y, por cla
 | `INTEGRA` | Lleva firma electrónica y el contenido no cambió desde que se firmó |
 | `CON_CAMBIOS` | Firma correcta, pero se añadió contenido tras firmar |
 | `NO_COMPROBADA` | Hay firma que no se pudo comprobar (formato o algoritmo no soportado) |
-| `SIN_FIRMA_ELECTRONICA` | PDF sin firma digital (p. ej. firmado a mano y escaneado); se acepta igual |
+| `INTEGRA_AUTOFIRMADA` | Firma digital íntegra pero con un **certificado propio** (autofirmado): no hay prestador detrás; se acepta, etiquetado «firmado, sin certificado reconocido» |
+| `SIN_FIRMA_ELECTRONICA` | PDF sin firma digital (p. ej. firmado a mano y escaneado); se acepta igual, etiquetado «firmado, sin certificado» |
 
-Un PDF cuya firma **no coincide con su contenido** se rechaza con **400**. `firmaInfo`: `firmas[]` (`firmante`, `emisor`, `certDesde`/`certHasta`, `certVigente`, `fechaDeclarada`, `nota`), `cubreTodo` y, en documentos, `conservaOriginal`. El evento `documento.firmado` incluye `firmaEstado`. No valida la cadena de confianza del certificado ni su revocación.
+Un PDF cuya firma **no coincide con su contenido** se rechaza con **400**. `firmaInfo`: `firmas[]` (`firmante`, `emisor`, `autofirmado`, `certDesde`/`certHasta`, `certVigente`, `fechaDeclarada`, `nota`), `cubreTodo` y, en documentos, `conservaOriginal`. El evento `documento.firmado` incluye `firmaEstado`. No valida la cadena de confianza del certificado ni su revocación.
 
 ## Editar solicitudes de días libres
 `PUT /api/libres/:id` · `DELETE /api/libres/:id` (el empleado, solo sus solicitudes **pendientes**; si no, 409) · 🛡 `PUT /api/admin/solicitudes/:id` (cualquier solicitud, `reabrir: true` la devuelve a pendiente; avisa al empleado y queda en la auditoría).
