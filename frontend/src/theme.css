@@ -699,3 +699,11 @@ header.topbar { padding-left: max(12px, env(safe-area-inset-left)); padding-righ
 .firma-detalle p { margin: .25rem 0; line-height: 1.4; }
 .firma-detalle .firma-huella { font-family: ui-monospace, monospace; }
 .firma-detalle .firma-nota { font-style: italic; }
+
+/* Firma dibujada en pantalla */
+.firma-pantalla { margin-top: .75rem; padding: .75rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface, #fff); max-width: 30rem; }
+.firma-lienzo { display: block; width: 100%; height: 11rem; border: 2px dashed var(--border); border-radius: 8px; background: #fff; touch-action: none; cursor: crosshair; }
+.firma-acepto { display: flex; gap: .6rem; align-items: flex-start; margin: .75rem 0; font-size: .85rem; line-height: 1.4; cursor: pointer; }
+.firma-acepto input { width: 1.25rem; height: 1.25rem; margin-top: .1rem; flex: none; }
+.firma-botones { display: flex; gap: .5rem; flex-wrap: wrap; }
+.firma-botones button { min-height: 44px; }

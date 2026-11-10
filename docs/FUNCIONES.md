@@ -50,7 +50,7 @@ Estado: ✅ disponible · 🟡 disponible con límites · 🗺 planificado (ver 
 |---------|--------|---------|
 | Solicitar días libres | ✅ | Vacaciones, asuntos propios, enfermedad; ve la respuesta y la observación |
 | Documentos (nóminas, contratos, certificados) | ✅ (se puede apagar por despliegue con `DOCUMENTOS_HABILITADOS=false`) | Ve los que le sube administración, los abre y sube la versión firmada |
-| Firma | 🟡 | **Subida del PDF firmado fuera**, con **comprobación de la firma** en el servidor (electrónica íntegra / firmado sin certificado reconocido / firmado sin certificado / con cambios / sin comprobar; rechaza PDF alterados; no valida la cadena de confianza); sirve certificado digital (Autofirma/Adobe) o a mano y escaneado. La firma dibujada en pantalla se **retiró** (no se insertaba en el documento ni tenía validez). La firma electrónica integrada sigue en el roadmap |
+| Firma | 🟡 | **Subida del PDF firmado fuera**, con **comprobación de la firma** en el servidor (electrónica íntegra / firmado sin certificado reconocido / firmado sin certificado / con cambios / sin comprobar; rechaza PDF alterados; no valida la cadena de confianza); sirve certificado digital (Autofirma/Adobe) o a mano y escaneado. **Firma en pantalla** (opción): se dibuja y se **estampa en una página final de constancia** del PDF, con una nota de que deja constancia de recepción y lectura pero no vale como firma con certificado (`docs/legal/TEXTO-FIRMA-EN-PANTALLA.md`). La firma con certificado integrada (Autofirma) sigue en el roadmap |
 | Notificaciones | ✅ | Campana in-app + correo |
 | Perfil, teléfono, hora de recordatorio | ✅ | |
 | App instalable (PWA) | ✅ | Android (Chrome) e iPhone (Safari → Añadir a inicio) |

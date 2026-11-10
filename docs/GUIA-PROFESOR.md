@@ -44,7 +44,7 @@ Carga cada clase **el mismo día**: es más rápido y evita olvidos.
 ## 5. Otras cosas
 
 - **Días libres:** *Más → Días libres* → solicitud con fechas y motivo; verás la respuesta. Mientras esté **pendiente** puedes **Editar** (cambiar fechas, motivo o comentario) o **Retirar** la solicitud; administración recibe un aviso. Si ya está respondida, pídele a administración que la modifique.
-- **Documentos:** *Más → Documentos* (si tu escuela lo usa). Para firmar, descarga el original, fírmalo con tu certificado digital (Autofirma o Adobe) o a mano y escaneado, y súbelo en PDF. La app comprueba la firma y te dice cómo quedó: con certificado queda como firma electrónica; a mano o con un certificado propio queda como «firmado, sin certificado»; si modificas el PDF después de firmarlo, no lo acepta.
+- **Documentos:** *Más → Documentos* (si tu escuela lo usa). Para firmar puedes pulsar **✍ Firmar en pantalla**: dibujas tu firma, marcas que recibiste y leíste el documento y se añade al PDF una página final de constancia. Ojo: eso deja constancia de la **recepción y lectura**, pero **no es una firma con certificado**. Si el documento exige certificado, descarga el original, fírmalo con tu certificado digital (Autofirma o Adobe) o a mano y escaneado, y súbelo en PDF. La app comprueba la firma y te dice cómo quedó: con certificado queda como firma electrónica; a mano o con un certificado propio queda como «firmado, sin certificado»; si modificas el PDF después de firmarlo, no lo acepta.
 - **Avisos:** campana arriba a la derecha.
 - **Tus datos:** *Más → Mi perfil* → **Exportar mis datos** y **Ver información de privacidad**.
 
