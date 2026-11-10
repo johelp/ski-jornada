@@ -10,11 +10,19 @@ const base = (extra = '') => `%PDF-1.7\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endo
 
 function crearPdfSinFirma() { return Buffer.from(base(), 'latin1'); }
 
-function crearPdfFirmado({ cn = 'GARCIA LOPEZ MARIA - NIF 12345678Z', md = 'sha256' } = {}) {
+// conCA: el certificado del firmante lo emite una CA de pega (como en un certificado real); si no, es autofirmado
+function crearPdfFirmado({ cn = 'GARCIA LOPEZ MARIA - NIF 12345678Z', md = 'sha256', conCA = false } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'firma-test-'));
   try {
     const key = path.join(dir, 'k.pem'), crt = path.join(dir, 'c.pem');
-    execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', key, '-out', crt, '-days', '30', '-subj', `/C=ES/O=Prueba/CN=${cn}`], { stdio: 'ignore' });
+    if (conCA) {
+      const caKey = path.join(dir, 'ca.key'), caCrt = path.join(dir, 'ca.pem'), csr = path.join(dir, 'c.csr');
+      execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', caKey, '-out', caCrt, '-days', '30', '-subj', '/C=ES/O=Prueba/CN=AC DE PRUEBA'], { stdio: 'ignore' });
+      execFileSync('openssl', ['req', '-new', '-newkey', 'rsa:2048', '-nodes', '-keyout', key, '-out', csr, '-subj', `/C=ES/O=Prueba/CN=${cn}`], { stdio: 'ignore' });
+      execFileSync('openssl', ['x509', '-req', '-in', csr, '-CA', caCrt, '-CAkey', caKey, '-CAcreateserial', '-out', crt, '-days', '30'], { stdio: 'ignore' });
+    } else {
+      execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', key, '-out', crt, '-days', '30', '-subj', `/C=ES/O=Prueba/CN=${cn}`], { stdio: 'ignore' });
+    }
     const sig = `4 0 obj<</Type/Sig/Filter/Adobe.PPKLite/SubFilter/adbe.pkcs7.detached/ByteRange [0 0000000000 0000000000 0000000000]/Contents <${'0'.repeat(HEX)}>>>endobj\n`;
     const pdf = Buffer.from(base(sig), 'latin1');
     const txt = pdf.toString('latin1');

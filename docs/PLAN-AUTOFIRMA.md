@@ -36,6 +36,7 @@ Fuera de alcance: firma manuscrita en pantalla (se retiró: no tenía validez), 
 - El resultado se guarda en `firmaEstado` (`INTEGRA`, `CON_CAMBIOS`, `NO_COMPROBADA`, `SIN_FIRMA_ELECTRONICA`), no en un «tipo de firma» aparte; más `firmaHuella` y `firmaInfo` (JSON: firmante, emisor, vigencia del certificado, hora declarada por el firmante).
 - Comprueba el resumen del contenido y la **firma criptográfica** contra la clave del certificado incluido (RSA y ECDSA con SHA-1/256/384/512; RSA-PSS queda como `NO_COMPROBADA`). **Rechaza (400)** un PDF cuya firma no coincide con su contenido.
 - «Conserva el original» es **informativo** (`conservaOriginal`), no bloquea: muchos firmadores reescriben el PDF, y eso no es una alteración.
+- Distingue el **certificado propio** (autofirmado): `INTEGRA_AUTOFIRMADA`. La firma manuscrita escaneada y la firma con certificado propio se **aceptan** como firmadas, etiquetadas «sin certificado»/«sin certificado reconocido».
 - Se aplica también a la **hoja mensual firmada**. No se guarda el NIF del certificado.
 - Sigue sin validar la cadena de confianza ni la revocación (Fase 3): por eso el mejor estado es «íntegra», no «válida».
 

@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const ESTADOS = {
   SIN_FIRMA_ELECTRONICA: 'SIN_FIRMA_ELECTRONICA', // PDF sin firma digital (p. ej. firmado a mano y escaneado)
   INTEGRA: 'INTEGRA',                             // firma criptográficamente correcta sobre el documento
+  INTEGRA_AUTOFIRMADA: 'INTEGRA_AUTOFIRMADA',     // íntegra, pero con un certificado propio (autofirmado): no hay prestador detrás
   CON_CAMBIOS: 'CON_CAMBIOS',                     // firma correcta, pero hay contenido añadido después de firmar
   NO_COMPROBADA: 'NO_COMPROBADA',                 // hay firma, pero no se ha podido comprobar (formato o algoritmo no soportado)
   ALTERADA: 'ALTERADA',                           // el contenido no coincide con lo firmado: documento modificado
@@ -155,6 +156,8 @@ function analizarPdf(buffer) {
         f.certDesde = new Date(r.cert.validFrom).toISOString(); f.certHasta = new Date(r.cert.validTo).toISOString();
         const cuando = r.declarada || new Date();
         f.certVigente = cuando >= new Date(r.cert.validFrom) && cuando <= new Date(r.cert.validTo);
+        // Certificado autofirmado: el mismo que firma y emite. Cualquiera puede crear uno (p. ej. el que genera Adobe en un clic)
+        try { f.autofirmado = r.cert.subject === r.cert.issuer && r.cert.verify(r.cert.publicKey); } catch { f.autofirmado = false; }
       }
       if (r.declarada) f.fechaDeclarada = r.declarada.toISOString(); // la declara el propio firmante: no es un sello de tiempo
       if (r.hash === 'sha1') f.nota = `${f.nota ? `${f.nota} ` : ''}Usa SHA-1, un algoritmo considerado débil.`;
@@ -171,7 +174,7 @@ function analizarPdf(buffer) {
   if (alterada) estado = ESTADOS.ALTERADA;
   else if (sinComprobar) estado = ESTADOS.NO_COMPROBADA;
   else if (!cubreTodo) estado = ESTADOS.CON_CAMBIOS;
-  else estado = ESTADOS.INTEGRA;
+  else estado = firmas.every(f => f.autofirmado) ? ESTADOS.INTEGRA_AUTOFIRMADA : ESTADOS.INTEGRA;
   return { estado, huella, firmas, cubreTodo };
 }
 

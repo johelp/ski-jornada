@@ -451,11 +451,14 @@ const pdf = nombre => {
       const dEstado = async () => ((await http('GET', '/api/admin/documentos', { token: admin })).data || []).find(d => d.id === dId);
 
       const sinFirma = await dFirma(original);
-      check('un PDF sin firma digital se acepta, etiquetado «sin firma electrónica»', sinFirma.status === 200 && sinFirma.data.documento.firmaEstado === 'SIN_FIRMA_ELECTRONICA' && sinFirma.data.documento.estado === 'FIRMADO');
+      check('un PDF sin firma digital (p. ej. manuscrita escaneada) se acepta, etiquetado «firmado, sin certificado»', sinFirma.status === 200 && sinFirma.data.documento.firmaEstado === 'SIN_FIRMA_ELECTRONICA' && sinFirma.data.documento.estado === 'FIRMADO');
 
-      const bueno = fx.crearPdfFirmado();
+      const propio = fx.crearPdfFirmado();
+      const okp = await dFirma(propio);
+      check('una firma digital con certificado propio (autofirmado) queda «íntegra, sin certificado reconocido»', okp.status === 200 && okp.data.documento.firmaEstado === 'INTEGRA_AUTOFIRMADA' && okp.data.documento.firmaInfo.firmas[0].autofirmado === true);
+      const bueno = fx.crearPdfFirmado({ conCA: true });
       const ok1 = await dFirma(bueno);
-      check('un PDF con firma digital correcta queda «íntegra»', ok1.status === 200 && ok1.data.documento.firmaEstado === 'INTEGRA');
+      check('un PDF con firma digital de un certificado emitido por una CA queda «íntegra»', ok1.status === 200 && ok1.data.documento.firmaEstado === 'INTEGRA' && ok1.data.documento.firmaInfo.firmas[0].autofirmado === false);
       const adm = await dEstado();
       check('administración ve el estado, la huella y el firmante', adm?.firmaEstado === 'INTEGRA' && /^[0-9a-f]{64}$/.test(adm.firmaHuella || '') && adm.firmaInfo?.firmas?.[0]?.firmante === 'GARCIA LOPEZ MARIA');
       check('no se guarda el NIF del certificado', !JSON.stringify(adm || {}).includes('12345678Z'));
@@ -475,7 +478,7 @@ const pdf = nombre => {
       check('una firma con SHA-1 se acepta pero avisa de que es débil', sha1.status === 200 && /SHA-1/.test((await dEstado())?.firmaInfo?.firmas?.[0]?.nota || ''));
 
       // Hoja mensual de jornada firmada
-      const hoja = await http('POST', '/api/firma/subir-firmado', { token: prof, form: formPdf(fx.crearPdfFirmado(), 'hoja.pdf', { mes: '04', anio: '2031' }) });
+      const hoja = await http('POST', '/api/firma/subir-firmado', { token: prof, form: formPdf(fx.crearPdfFirmado({ conCA: true }), 'hoja.pdf', { mes: '04', anio: '2031' }) });
       check('la hoja mensual firmada se comprueba igual', hoja.status === 200 && hoja.data.firmaEstado === 'INTEGRA');
       check('administración ve la comprobación en la lista de firmas', ((await http('GET', '/api/admin/firmas', { token: admin })).data || []).some(f => f.mes === '2031-04' && f.firmaEstado === 'INTEGRA'));
       check('una hoja mensual alterada se rechaza → 400', (await http('POST', '/api/firma/subir-firmado', { token: prof, form: formPdf(tocado, 'hoja.pdf', { mes: '04', anio: '2031' }) })).status === 400);

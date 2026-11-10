@@ -878,7 +878,8 @@ function App() {
       const fd = new FormData(); fd.append('pdf', file);
       const { data } = await api.post(`/api/documentos/${docId}/firmar`, fd, { headers: { Authorization: `Bearer ${token}` } });
       const est = data.documento?.firmaEstado;
-      if (est === 'SIN_FIRMA_ELECTRONICA') toast$('Enviado. Ojo: el PDF no lleva firma electrónica; queda como «sin firma electrónica».', 'warning', 6000);
+      if (est === 'SIN_FIRMA_ELECTRONICA') toast$('Enviado: queda como «firmado, sin certificado» (el PDF no lleva firma electrónica).', 'success', 5000);
+      else if (est === 'INTEGRA_AUTOFIRMADA') toast$('Enviado: queda como «firmado, sin certificado reconocido» (certificado propio).', 'success', 5000);
       else if (est === 'CON_CAMBIOS' || est === 'NO_COMPROBADA') toast$('Enviado, pero la firma no se pudo comprobar del todo; administración lo revisará.', 'warning', 6000);
       else toast$('Documento firmado enviado correctamente ✓', 'success');
       cargarMisDocumentos();
