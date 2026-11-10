@@ -55,6 +55,7 @@ Cada cliente tiene su **propio despliegue y base de datos** (ver `MULTI-DESPLIEG
 - Información: entregar a cada autónomo y a las personas con acceso al portal la información del art. 13.
 
 **Tratamiento 5 (opcional) — Documentos laborales** *(solo si se activa el módulo)*: nóminas, contratos y certificados. Base: contrato/obligación legal. Conservación: `[plazo]`.
+- Al subir un PDF firmado, el servidor lee la firma electrónica y guarda **nombre y emisor del certificado, fechas de validez, huella SHA-256 y el resultado de la comprobación**. **No guarda el NIF/NIE** que lleve el certificado (se descarta del nombre). El PDF firmado sí puede contener esos datos en su interior: se trata como el resto del legajo.
 
 ## 3. Información al interesado (art. 13) — texto para profesores
 

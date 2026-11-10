@@ -22,6 +22,7 @@ import CorregirFichajes from './CorregirFichajes';
 import VistaColaboradores from './VistaColaboradores';
 import VistaColaborador from './VistaColaborador';
 import ModulosConfig from './ModulosConfig';
+import EstadoFirma from './EstadoFirma';
 import { leerSesion, guardarSesion as guardarSesionAlmacen, borrarSesion, restaurarSesion } from './sesion';
 const api = axios.create({ baseURL: API_BASE });
 
@@ -875,8 +876,11 @@ function App() {
     setCargando(true);
     try {
       const fd = new FormData(); fd.append('pdf', file);
-      await api.post(`/api/documentos/${docId}/firmar`, fd, { headers: { Authorization: `Bearer ${token}` } });
-      toast$('Documento firmado enviado correctamente ✓', 'success');
+      const { data } = await api.post(`/api/documentos/${docId}/firmar`, fd, { headers: { Authorization: `Bearer ${token}` } });
+      const est = data.documento?.firmaEstado;
+      if (est === 'SIN_FIRMA_ELECTRONICA') toast$('Enviado. Ojo: el PDF no lleva firma electrónica; queda como «sin firma electrónica».', 'warning', 6000);
+      else if (est === 'CON_CAMBIOS' || est === 'NO_COMPROBADA') toast$('Enviado, pero la firma no se pudo comprobar del todo; administración lo revisará.', 'warning', 6000);
+      else toast$('Documento firmado enviado correctamente ✓', 'success');
       cargarMisDocumentos();
       if (firmaFileRefs.current[docId]) firmaFileRefs.current[docId].value = '';
     } catch (err) { toast$(err.response?.data?.error || 'Error al subir firma', 'error'); }
@@ -1529,6 +1533,7 @@ function App() {
                           <span className={`estado-badge ${doc.estado === 'FIRMADO' ? 'aprobado' : 'pendiente'}`}>
                             {doc.estado === 'FIRMADO' ? '✓ Firmado' : '⏳ Pendiente'}
                           </span>
+                          {doc.estado === 'FIRMADO' && <EstadoFirma doc={doc} />}
                         </div>
                         <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>
                           {TIPO_DOC_LABEL[doc.tipo] || doc.tipo}{doc.mes ? ` · ${doc.mes}` : ''} · Subido {new Date(doc.createdAt).toLocaleDateString('es-ES')}
@@ -2003,6 +2008,7 @@ function App() {
                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{TIPO_DOC_LABEL[doc.tipo] || doc.tipo}{doc.mes ? ` · ${doc.mes}` : ''} · {new Date(doc.createdAt).toLocaleDateString('es-ES')}</div>
                           </div>
                           <span className={`estado-badge ${doc.estado === 'FIRMADO' ? 'aprobado' : 'pendiente'}`} style={{ flexShrink: 0 }}>{doc.estado === 'FIRMADO' ? '✓ Firmado' : '⏳ Pendiente'}</span>
+                          {doc.estado === 'FIRMADO' && <EstadoFirma doc={doc} detalle />}
                           <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
                             <button type="button" className="btn-sm" onClick={() => abrirArchivo(doc.archivoUrl)}>↓ Original</button>
                             {doc.estado === 'FIRMADO' && doc.firmaUrl && (

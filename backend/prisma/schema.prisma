@@ -116,6 +116,9 @@ model FirmaRegistro {
   emailEnviadoAt DateTime?
   pdfFirmadoPath String?
   firmadoAt      DateTime?
+  firmaEstado    String?
+  firmaHuella    String?
+  firmaInfo      String?
   createdAt      DateTime  @default(now())
 
   @@unique([profesorId, mes])
@@ -133,6 +136,9 @@ model DocumentoLegajo {
   estado      String    @default("PENDIENTE")
   firmaPath   String?
   firmadoAt   DateTime?
+  firmaEstado String?
+  firmaHuella String?
+  firmaInfo   String?
   createdAt   DateTime  @default(now())
 }
 
