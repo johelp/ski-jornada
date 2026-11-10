@@ -488,6 +488,46 @@ const pdf = nombre => {
     }
   }
 
+  seccion('6p. Firma en pantalla estampada en el PDF');
+  {
+    const { PDFDocument } = require('pdf-lib');
+    let fx = null; try { fx = require('./firma-fixtures'); fx.crearPdfFirmado(); } catch { fx = null; }
+    const nodeCrypto = require('crypto');
+    const PNG1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    const base = await PDFDocument.create(); base.addPage([300, 300]);
+    const orig = Buffer.from(await base.save());
+    const formPdf = (buf, nombre, campos = {}) => { const f = new FormData(); Object.entries(campos).forEach(([k, v]) => f.append(k, v)); f.append('pdf', new Blob([buf], { type: 'application/pdf' }), nombre); return f; };
+    const nuevoDoc = async (buf, nombre) => (await http('POST', '/api/admin/documentos', { token: admin, form: formPdf(buf, `${nombre}.pdf`, { profesorId: me.id, tipo: 'OTRO', nombre }) })).data.documento?.id;
+    const idP = await nuevoDoc(orig, 'Recibí de prueba');
+    const firmarP = (id, body, token = prof) => http('POST', `/api/documentos/${id}/firmar-pantalla`, { token, body });
+
+    check('/api/config indica que la firma en pantalla está disponible', (await http('GET', '/api/config', { token: prof })).data.firmaPantalla === true);
+    check('sin confirmar que lo leyó → 400', (await firmarP(idP, { firma: PNG1 })).status === 400);
+    check('una firma que no es una imagen PNG → 400', (await firmarP(idP, { firma: 'data:image/png;base64,AAAA', acepto: true })).status === 400);
+    check('un script disfrazado de firma → 400', (await firmarP(idP, { firma: 'data:text/html;base64,PHNjcmlwdD4=', acepto: true })).status === 400);
+    check('otro empleado no puede firmar el documento → 403', (await firmarP(idP, { firma: PNG1, acepto: true }, prof2)).status === 403);
+    check('administración tampoco firma por el empleado → 403', (await firmarP(idP, { firma: PNG1, acepto: true }, admin)).status === 403);
+
+    const ok = await firmarP(idP, { firma: PNG1, acepto: true });
+    check('el empleado firma en pantalla: documento firmado, «recepción»', ok.status === 200 && ok.data.documento.estado === 'FIRMADO' && ok.data.documento.firmaEstado === 'FIRMA_EN_PANTALLA');
+    const sel = await fetch(BASE + ok.data.documento.firmaUrl, { headers: { Authorization: `Bearer ${admin}` } });
+    const salida = Buffer.from(await sel.arrayBuffer());
+    const pdfSal = await PDFDocument.load(salida);
+    check('el PDF firmado tiene una página más (la constancia) y conserva la original', pdfSal.getPageCount() === 2);
+    const adm = ((await http('GET', '/api/admin/documentos', { token: admin })).data || []).find(d => d.id === idP);
+    check('guarda la huella del original y del PDF firmado', adm?.firmaInfo?.huellaOriginal === nodeCrypto.createHash('sha256').update(orig).digest('hex') && adm.firmaHuella === nodeCrypto.createHash('sha256').update(salida).digest('hex'));
+    check('firmar otra vez un documento ya firmado → 409', (await firmarP(idP, { firma: PNG1, acepto: true })).status === 409);
+
+    if (fx) {
+      const idS = await nuevoDoc(fx.crearPdfFirmado({ conCA: true }), 'Ya firmado con certificado');
+      check('un PDF que ya lleva firma digital no admite firma en pantalla (la invalidaría) → 400', (await firmarP(idS, { firma: PNG1, acepto: true })).status === 400);
+    }
+    const idR = await nuevoDoc(Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF'), 'PDF raro');
+    const raro = await firmarP(idR, { firma: PNG1, acepto: true });
+    check('un PDF que no se puede abrir da un error claro, no un 500', [200, 422].includes(raro.status));
+    check('el registro de actividad anota la firma en pantalla', ((await http('GET', '/api/admin/auditoria?limit=200', { token: admin })).data || []).some(x => x.accion === 'documento.firma_pantalla'));
+  }
+
   seccion('7. Limpieza');
   await http('POST', '/api/admin/clases/reabrir', { token: admin, body: { profesorId: me.id, mes: MES } });
   check('elimina la clase de prueba', (await http('DELETE', `/api/clases/${claseId}`, { token: prof })).status === 200);

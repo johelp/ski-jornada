@@ -23,6 +23,7 @@ import VistaColaboradores from './VistaColaboradores';
 import VistaColaborador from './VistaColaborador';
 import ModulosConfig from './ModulosConfig';
 import EstadoFirma from './EstadoFirma';
+import FirmaPantalla from './FirmaPantalla';
 import { leerSesion, guardarSesion as guardarSesionAlmacen, borrarSesion, restaurarSesion } from './sesion';
 const api = axios.create({ baseURL: API_BASE });
 
@@ -280,6 +281,7 @@ function App() {
   const [docNuevo, setDocNuevo]         = useState({ profesorId: '', tipo: 'NOMINA', nombre: '', mes: '', file: null });
   const docNuevoFileRef  = useRef(null);
   const firmaFileRefs    = useRef({});
+  const [firmandoDoc, setFirmandoDoc] = useState(null); // documento que se está firmando en pantalla
 
   const h = useCallback(() => ({ Authorization: `Bearer ${token}` }), [token]);
   const toast$ = useCallback((msg, tipo = 'info', ms = 3500) => {
@@ -870,6 +872,15 @@ function App() {
     finally { setCargando(false); }
   };
 
+  const firmarEnPantalla = async (docId, firma) => {
+    setCargando(true);
+    try {
+      await api.post(`/api/documentos/${docId}/firmar-pantalla`, { firma, acepto: true }, { headers: { Authorization: `Bearer ${token}` } });
+      toast$('Firmado: queda constancia de recepción en el PDF ✓', 'success', 5000);
+      setFirmandoDoc(null); cargarMisDocumentos();
+    } catch (err) { toast$(err.response?.data?.error || 'No se pudo firmar', 'error', 6000); }
+    finally { setCargando(false); }
+  };
   const subirFirmaProfesor = async (docId) => {
     const file = firmaFileRefs.current[docId]?.files?.[0];
     if (!file) { toast$('Selecciona el PDF firmado', 'warning'); return; }
@@ -1550,7 +1561,11 @@ function App() {
                     </div>
                     {doc.estado !== 'FIRMADO' && (
                       <div style={{ marginTop: '0.75rem' }}>
-                        <p className="firma-ayuda">Para firmarlo: descarga el original con «Ver original», fírmalo con tu certificado digital (p. ej. Autofirma o Adobe) o a mano y escaneado, y súbelo aquí en PDF.</p>
+                        {configEscuela?.firmaPantalla !== false && (firmandoDoc === doc.id
+                          ? <FirmaPantalla enviando={cargando} onFirmar={f => firmarEnPantalla(doc.id, f)} onCancelar={() => setFirmandoDoc(null)} />
+                          : <p style={{ margin: '0 0 .75rem' }}><button type="button" className="btn-sm" style={{ background: 'var(--primary)', color: 'white', border: 'none', minHeight: 44 }} onClick={() => setFirmandoDoc(doc.id)}>✍ Firmar en pantalla</button>
+                              <small className="form-hint" style={{ display: 'block' }}>Deja constancia de que recibiste y leíste el documento. No es una firma con certificado.</small></p>)}
+                        <p className="firma-ayuda">O fírmalo fuera: descarga el original con «Ver original», fírmalo con tu certificado digital (p. ej. Autofirma o Adobe) o a mano y escaneado, y súbelo aquí en PDF.</p>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                           <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)' }}>PDF firmado:</label>
                           <input type="file" accept="application/pdf" style={{ fontSize: '0.8rem' }}
