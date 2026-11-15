@@ -13,7 +13,7 @@ Manual para quien mantiene una instancia. Complementa `DEPLOY.md` (montaje) y `R
 
 ## Salud y monitorización
 
-- `GET /api/salud` → `{ ok, version, uptimeSeg }` y comprueba la base de datos (503 si falla). Railway lo usa como *healthcheck* (`backend/railway.json`).
+- `GET /api/salud` → `{ ok, version, commit, uptimeSeg }` (`version` = semver de `backend/package.json`, `commit` = el que despliega Railway; ver `VERSIONADO.md`) y comprueba la base de datos (503 si falla). Railway lo usa como *healthcheck* (`backend/railway.json`).
 - **Monitor externo (recomendado, gratis):** UptimeRobot / Better Stack / Cloudflare Health Checks apuntando a `https://api.skijornada.johelpastorino.com/api/salud` cada 5 min, con aviso por correo. Un segundo monitor a la web (`https://skijornada.johelpastorino.com`).
 - **Logs:** Railway → servicio `api` → *Logs*. Mensajes útiles: `✅ Administrador listo` (arranque), `💾 Copia de seguridad creada`, `unhandledRejection`, `Resend 4xx` (fallos de correo).
 - **Correo:** panel de Resend → *Logs* (entregas, rebotes, quejas).

@@ -14,6 +14,7 @@ const path       = require('path');
 const fs         = require('fs');
 const { PrismaClient } = require('@prisma/client');
 const legal = require('./legal');
+const APP_VERSION = require('./package.json').version;
 const firmaPdf = require('./firmaPdf');
 const firmaPantalla = require('./firmaPantalla');
 
@@ -294,7 +295,7 @@ app.use((req, res, next) => {
 app.get('/api/salud', async (req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    res.json({ ok: true, zonaHoraria: process.env.TZ, version: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) || 'local', uptimeSeg: Math.round(process.uptime()), ahora: new Date().toISOString() });
+    res.json({ ok: true, zonaHoraria: process.env.TZ, version: APP_VERSION, commit: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) || 'local', uptimeSeg: Math.round(process.uptime()), ahora: new Date().toISOString() });
   } catch (e) { console.error('salud:', e.message); res.status(503).json({ ok: false, error: 'Base de datos no disponible' }); }
 });
 

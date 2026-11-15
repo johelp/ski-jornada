@@ -5,6 +5,7 @@ export const PANTALLAS = {
   profesor: [
     { id: 'inicio', titulo: 'Inicio', texto: 'Reloj, botón de fichar y los totales del mes en curso o de la temporada.' },
     { id: 'clase', titulo: 'Cargar clase', texto: 'Horas, disciplina y primas en pocos toques, pensado para una mano.' },
+    { id: 'firma', titulo: 'Firmar un documento', texto: 'Firma con el dedo y queda una constancia de recepción en el PDF.' },
     { id: 'informe', titulo: 'Mi informe', texto: 'Horas, importe estimado y el visto bueno de administración.' },
   ],
   admin: [
@@ -12,25 +13,26 @@ export const PANTALLAS = {
     { id: 'revision', titulo: 'Revisión', texto: 'Aprueba, marca discrepancias o pide correcciones con una nota.' },
     { id: 'equipo', titulo: 'Equipo e invitaciones', texto: 'Importa la lista, invita a los pendientes y ve quién ya entró.' },
     { id: 'comparativa', titulo: 'Comparar con reservas', texto: 'Cruza el resumen de tu sistema de reservas con las horas cargadas.' },
+    { id: 'colaboradores', titulo: 'Colaboradores', texto: 'Horas dadas y recibidas con otras escuelas y autónomos, con su saldo.' },
   ],
 };
 
-const Telefono = ({ children }) => (
+const Telefono = ({ children, activa = 2 }) => (
   <div className="mk-phone" aria-hidden="true">
     <div className="mk-notch" />
     <div className="mk-screen">{children}</div>
     <div className="mk-tabbar">
-      {['Inicio', 'Fichar', 'Clases', 'Informes', 'Más'].map((t, i) => <span key={t} className={i === 2 ? 'on' : ''}>{t}</span>)}
+      {['Inicio', 'Fichar', 'Clases', 'Informes', 'Más'].map((t, i) => <span key={t} className={i === activa ? 'on' : ''}>{t}</span>)}
     </div>
   </div>
 );
 
-const Escritorio = ({ children, ruta }) => (
+const Escritorio = ({ children, ruta, activo = 'Clases' }) => (
   <div className="mk-desk" aria-hidden="true">
     <div className="mk-bar"><i /><i /><i /><span>{ruta}</span></div>
     <div className="mk-body">
       <div className="mk-side">
-        {['Panel', 'Clases', 'Usuarios', 'Informes', 'Integraciones'].map((t, i) => <span key={t} className={t === 'Clases' ? 'on' : ''}>{t}</span>)}
+        {['Panel', 'Clases', 'Usuarios', 'Colaboradores', 'Integraciones'].map(t => <span key={t} className={t === activo ? 'on' : ''}>{t}</span>)}
       </div>
       <div className="mk-main">{children}</div>
     </div>
@@ -81,6 +83,29 @@ export function Pantalla({ id }) {
           </div>
           <div className="mk-btn">Descargar informe PDF</div>
         </Telefono>
+      );
+    case 'firma':
+      return (
+        <Telefono activa={4}>
+          <p className="mk-h">Contrato de temporada <span className="mk-ok">Pendiente</span></p>
+          <div className="mk-rev"><b>Para firmar</b><small>Léelo y firma con el dedo</small></div>
+          <div className="mk-field" style={{ height: 70 }}><small>Tu firma</small><b style={{ fontFamily: 'cursive', fontWeight: 400 }}>Laura García</b></div>
+          <div className="mk-rows"><p><span>☑ He recibido y leído el documento</span></p></div>
+          <div className="mk-btn">✍ Firmar documento</div>
+          <small className="mk-l">Se añade una página de constancia al PDF</small>
+        </Telefono>
+      );
+    case 'colaboradores':
+      return (
+        <Escritorio ruta="Colaboradores" activo="Colaboradores">
+          <p className="mk-h">Colaboradores y subcontratas</p>
+          <div className="mk-tiles four">
+            <Tile n="3 h" l="Nos deben" c="g" /><Tile n="90 €" l="A favor" c="a" /><Tile n="2" l="En revisión" /><Tile n="3" l="Colaboradores" />
+          </div>
+          <div className="mk-class"><b>ES</b><span>Escuela Sierra Norte <i>escuela</i></span><em className="ok">+3 h · 90 €</em></div>
+          <div className="mk-class warn"><b>MR</b><span>Marcos Ruiz <i>autónomo</i></span><em className="wa">−2 h · en revisión</em></div>
+          <div className="mk-class"><b>EV</b><span>Escuela Valle Sur <i>escuela</i></span><em className="ok">Saldado</em></div>
+        </Escritorio>
       );
     case 'resumen':
       return (

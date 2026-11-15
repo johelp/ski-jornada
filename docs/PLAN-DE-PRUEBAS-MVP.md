@@ -17,7 +17,7 @@ Estado: ☐ pendiente · ✅ hecho. Quién: **Auto** (ya lo ejecuta el CI), **De
 
 | Estado | Qué | Cómo |
 |--------|-----|------|
-| ✅ Auto | 233 comprobaciones: colaboradores y módulos, correcciones trazables de fichajes, permisos, clases e importes, confirmación y revisión, comparativa, integraciones, acceso por invitación y código, límites, subidas, panel, WhatsApp (sin conexión) | `node backend/scripts/smoke.js` (con `API_LOG` para las del código) |
+| ✅ Auto | 234 comprobaciones: colaboradores y módulos, correcciones trazables de fichajes, permisos, clases e importes, confirmación y revisión, comparativa, integraciones, acceso por invitación y código, límites, subidas, panel, WhatsApp (sin conexión) | `node backend/scripts/smoke.js` (con `API_LOG` para las del código) |
 | ✅ Auto | Compilación del frontend y `npm audit` | CI |
 | ☐ Dev | Ejecutar el smoke contra el entorno de pruebas desplegado, no solo en local | `BASE_URL=… ADMIN_TOKEN=… PROF_TOKEN=… PROF2_TOKEN=…` |
 
@@ -81,6 +81,7 @@ Estado: ☐ pendiente · ✅ hecho. Quién: **Auto** (ya lo ejecuta el CI), **De
 ## 7. Operación
 
 - ☐ `/api/salud` en verde y un monitor externo avisando.
+- ☐ La versión que muestra la app (menú / «Más») coincide con la de `/api/salud`; tras un despliegue, si no coinciden, el botón **Actualizar** deja la app al día.
 - ☐ Copia diaria generada y **restauración probada** en un entorno limpio.
 - ☐ Región UE en Railway; secretos propios de la instancia.
 - ☐ Correo: SPF, DKIM y DMARC; enlace y código llegan a bandeja (no a spam) en Gmail, Outlook e iCloud.
