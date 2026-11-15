@@ -253,3 +253,5 @@ body:has(.lp) { background: #fff; }
 .lp-codigo input { text-align: center; font-size: 1.8rem !important; letter-spacing: 0.4em; font-weight: 800; font-variant-numeric: tabular-nums; margin: 0 !important; padding-left: 0.4em !important; }
 .lp .lp-nav { padding-top: env(safe-area-inset-top, 0px); }
 @media (max-width: 959px) { .lp .lp-nav { padding-top: calc(env(safe-area-inset-top, 0px) + 6px); } }
+
+.lp-version { font-variant-numeric: tabular-nums; }

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import './Landing.css';
 import { Pantalla, PANTALLAS } from './Mockups';
 import { PoliticaPrivacidad } from './AceptacionLegal';
+import { APP_VERSION, APP_COMMIT, APP_FECHA } from './Version';
 
 // Marca por despliegue (variables de build de Cloudflare Pages; ver docs/MULTI-DESPLIEGUE.md)
 const APP_NAME = import.meta.env.VITE_APP_NAME || 'Ski Jornada';
@@ -26,18 +27,25 @@ const ICONOS = {
   calendario: <Icon><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></Icon>,
   revision: <Icon><path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="9" /></Icon>,
   comparar: <Icon><path d="M7 4v16M3 8l4-4 4 4M17 20V4M21 16l-4 4-4-4" /></Icon>,
+  colaboradores: <Icon><circle cx="9" cy="8" r="3" /><circle cx="17" cy="9" r="2.4" /><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M15 14.2c.6-.2 1.3-.3 2-.3 2.2 0 4 1.8 4 4" /></Icon>,
+  documento: <Icon><path d="M7 3h8l4 4v14H7z" /><path d="M15 3v4h4M10 17c1-2 2-2 3 0s2 0 3-1" /></Icon>,
+  modulos: <Icon><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><path d="M17.5 14v7M14 17.5h7" /></Icon>,
   enlace: <Icon><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1" /></Icon>,
 };
 
 const FUNCIONES = [
   { icono: 'reloj', titulo: 'Fichaje fiable', texto: 'Entrada y salida con QR rotativo, GPS o NFC. La hora la marca el servidor, no el móvil.' },
-  { icono: 'clases', titulo: 'Clases y primas', texto: 'Cada profesor carga horas por disciplina y marca las primas: idioma, disca, repetida…' },
+  { icono: 'informe', titulo: 'Registro de jornada con trazabilidad', texto: 'Informe mensual del registro de jornada. Los fichajes no se borran: las correcciones quedan anotadas con quién, cuándo y por qué.' },
+  { icono: 'clases', titulo: 'Clases y primas, en segundos', texto: 'Cada profesor carga horas por disciplina con las primas (idioma, disca, repetida…) desde el móvil y puede deshacer.' },
   { icono: 'calendario', titulo: 'Mes y temporada', texto: 'El inicio muestra las horas del mes en curso y, con un toque, los totales de la temporada.' },
-  { icono: 'informe', titulo: 'Informe económico', texto: 'PDF mensual con horas, primas e importe estimado cuando hay tarifas cargadas.' },
   { icono: 'revision', titulo: 'Revisión de administración', texto: 'Aprobar, marcar discrepancias o pedir correcciones, con notas que ve el profesor.' },
   { icono: 'comparar', titulo: 'Compara con tus reservas', texto: 'Cruza el resumen de instructores de tu sistema de reservas con lo cargado y detecta diferencias.' },
+  { icono: 'colaboradores', titulo: 'Colaboradores y subcontratas', texto: 'Lleva la cuenta de horas dadas y recibidas con otras escuelas y autónomos: saldo, extracto en PDF y saldar por pago o compensación.' },
+  { icono: 'documento', titulo: 'Documentos y firma', texto: 'Contratos y documentos por empleado. Firma con certificado (se comprueba que no se modificó) o en pantalla, como constancia de recepción.' },
+  { icono: 'modulos', titulo: 'A tu medida', texto: 'Cada escuela enciende solo lo que usa: clases, días libres, documentos, colaboradores, integraciones…' },
   { icono: 'enlace', titulo: 'Se conecta con tus sistemas', texto: 'API con claves, webhooks firmados e importación del planning para reservas y nóminas.' },
-  { icono: 'escudo', titulo: 'Datos protegidos', texto: 'Cada escuela con su propia instancia; cada profesor ve solo lo suyo y puede exportar sus datos.' },
+  { icono: 'informe', titulo: 'Informe económico', texto: 'PDF mensual con horas, primas e importe estimado cuando hay tarifas cargadas.' },
+  { icono: 'escudo', titulo: 'Datos protegidos', texto: 'Cada escuela con su propia instancia; cada profesor ve solo lo suyo, puede exportar sus datos y todo cambio queda en el registro de actividad.' },
 ];
 
 const PASOS = [
@@ -117,7 +125,7 @@ export default function Landing({
               <h1>Horas, clases y primas de tu equipo, listas para liquidar</h1>
               <p className="lp-lead">
                 La escuela da de alta su cuenta de administración y carga la lista de su equipo. Cada profesor recibe su
-                invitación, ficha y carga sus clases desde el móvil, y administración revisa, compara con reservas y liquida.
+                invitación, ficha y carga sus clases desde el móvil, y administración revisa, compara con reservas, lleva las cuentas con colaboradores y liquida.
               </p>
               <div className="lp-cta">
                 <button className="lp-btn lp-btn-primary" onClick={e => abrir('profesor', e)}>Acceso profesores</button>
@@ -190,6 +198,8 @@ export default function Landing({
                   <li>{ICONOS.check}Disciplinas, primas y tarifas configurables</li>
                   <li>{ICONOS.check}Revisa, aprueba y comenta las horas</li>
                   <li>{ICONOS.check}Compara con el sistema de reservas</li>
+                  <li>{ICONOS.check}Cuenta de horas con colaboradores y subcontratas</li>
+                  <li>{ICONOS.check}Corrige fichajes con trazabilidad y enciende solo los módulos que usa</li>
                 </ul>
                 <button className="lp-btn lp-btn-primary" onClick={e => abrir('admin', e)}>Entrar como administración</button>
               </article>
@@ -202,6 +212,7 @@ export default function Landing({
                   <li>{ICONOS.check}Ven horas e importe del mes o de la temporada</li>
                   <li>{ICONOS.check}Notas y visto bueno de administración</li>
                   <li>{ICONOS.check}Informe mensual y económico en PDF</li>
+                  <li>{ICONOS.check}Firma sus documentos desde el móvil</li>
                 </ul>
                 <button className="lp-btn lp-btn-outline" onClick={e => abrir('profesor', e)}>Entrar como profesor</button>
               </article>
@@ -249,7 +260,7 @@ export default function Landing({
       </main>
 
       <footer className="lp-foot">
-        <div className="lp-wrap">© {new Date().getFullYear()} {APP_NAME}{LUGAR ? ` · ${LUGAR}` : ''} · <button className="lp-link" onClick={() => setVerPrivacidad(true)}>Política de privacidad</button></div>
+        <div className="lp-wrap">© {new Date().getFullYear()} {APP_NAME}{LUGAR ? ` · ${LUGAR}` : ''} · <span className="lp-version" title={`Compilada el ${APP_FECHA || '—'}${APP_COMMIT !== 'local' ? ` · commit ${APP_COMMIT}` : ''}`}>Versión {APP_VERSION}</span> · <button className="lp-link" onClick={() => setVerPrivacidad(true)}>Política de privacidad</button></div>
       </footer>
 
       {acceso && (

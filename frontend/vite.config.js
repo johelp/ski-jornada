@@ -1,5 +1,8 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import { readFileSync } from 'node:fs'
+
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
@@ -9,6 +12,12 @@ export default defineConfig(({ mode }) => {
   }
   return {
     plugins: [react()],
+    // Versión visible en la app: la de package.json, el commit que compila Cloudflare Pages (o GitHub) y la fecha de compilación
+    define: {
+      __APP_VERSION__: JSON.stringify(pkg.version),
+      __APP_COMMIT__: JSON.stringify((env.CF_PAGES_COMMIT_SHA || env.GITHUB_SHA || '').slice(0, 7) || 'local'),
+      __APP_FECHA__: JSON.stringify(new Date().toISOString().slice(0, 10)),
+    },
     server: { port: 5173, hmr: { overlay: false } },
   }
 })

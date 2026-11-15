@@ -24,6 +24,7 @@ import VistaColaborador from './VistaColaborador';
 import ModulosConfig from './ModulosConfig';
 import EstadoFirma from './EstadoFirma';
 import FirmaPantalla from './FirmaPantalla';
+import VersionApp from './Version';
 import { leerSesion, guardarSesion as guardarSesionAlmacen, borrarSesion, restaurarSesion } from './sesion';
 const api = axios.create({ baseURL: API_BASE });
 
@@ -1160,6 +1161,7 @@ function App() {
         {navItems.map(item => <BotonNav key={item.id} item={item} />)}
         <div style={{ flex: 1 }} />
         <button className="nav-item" onClick={logout}><Icono n="salir" /><span>Cerrar sesión</span></button>
+        <VersionApp api={api} />
       </nav>
 
       <nav className="bottom-nav" aria-label="Principal">
@@ -1191,6 +1193,7 @@ function App() {
               {pwaInstallEvent && <button onClick={() => { instalarPWA(); setMasAbierto(false); }}><Icono n="instalar" size={20} />Instalar la app</button>}
               <button className="salir" onClick={logout}><Icono n="salir" size={20} />Cerrar sesión</button>
             </div>
+            <VersionApp api={api} />
           </div>
         </div>
       )}

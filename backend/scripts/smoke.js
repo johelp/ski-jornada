@@ -212,6 +212,7 @@ const pdf = nombre => {
   seccion('6e. Operación: salud y copia de seguridad');
   const salud = await http('GET', '/api/salud');
   check('el chequeo de salud comprueba la base de datos', salud.status === 200 && salud.data.ok === true);
+  check('el chequeo de salud informa la versión (semver de package.json)', /^\d+\.\d+\.\d+$/.test(salud.data.version || '') && salud.data.version === require('../package.json').version);
   const bk = await http('GET', '/api/admin/backup/descargar', { token: admin });
   const cab = bk.status === 200 && bk.data.byteLength > 1000 ? Buffer.from(bk.data.slice(0, 15)).toString('latin1') : '';
   check('la cuenta principal descarga una copia SQLite válida', cab === 'SQLite format 3');
