@@ -37,6 +37,7 @@ Fuera de alcance: firma manuscrita en pantalla (se retiró: no tenía validez), 
 - Comprueba el resumen del contenido y la **firma criptográfica** contra la clave del certificado incluido (RSA y ECDSA con SHA-1/256/384/512; RSA-PSS queda como `NO_COMPROBADA`). **Rechaza (400)** un PDF cuya firma no coincide con su contenido.
 - «Conserva el original» es **informativo** (`conservaOriginal`), no bloquea: muchos firmadores reescriben el PDF, y eso no es una alteración.
 - Distingue el **certificado propio** (autofirmado): `INTEGRA_AUTOFIRMADA`. La firma manuscrita escaneada y la firma con certificado propio se **aceptan** como firmadas, etiquetadas «sin certificado»/«sin certificado reconocido».
+- Además, la **firma en pantalla** (`FIRMA_EN_PANTALLA`) se estampa en una página final de constancia, con nota de alcance (`docs/legal/TEXTO-FIRMA-EN-PANTALLA.md`).
 - Se aplica también a la **hoja mensual firmada**. No se guarda el NIF del certificado.
 - Sigue sin validar la cadena de confianza ni la revocación (Fase 3): por eso el mejor estado es «íntegra», no «válida».
 

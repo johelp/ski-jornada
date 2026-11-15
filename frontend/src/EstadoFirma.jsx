@@ -5,6 +5,7 @@
 const ETIQUETA = {
   INTEGRA: ['Firma electrónica íntegra', 'aprobado', 'El PDF lleva firma electrónica con certificado y no se ha modificado desde que se firmó.'],
   INTEGRA_AUTOFIRMADA: ['Firmado, sin certificado reconocido', 'pendiente', 'Lleva una firma digital hecha con un certificado propio (autofirmado): el documento no se tocó, pero ningún prestador de confianza respalda la identidad del firmante.'],
+  FIRMA_EN_PANTALLA: ['Firmado en pantalla (recepción)', 'pendiente', 'Firma dibujada en pantalla y estampada en el PDF: deja constancia de recepción y lectura, pero no es una firma con certificado ni tiene su valor legal.'],
   CON_CAMBIOS: ['Con cambios tras firmar', 'pendiente', 'La firma es correcta, pero se añadió contenido al PDF después de firmarlo.'],
   NO_COMPROBADA: ['Firma sin comprobar', 'pendiente', 'El PDF lleva firma, pero no se ha podido comprobar automáticamente.'],
   SIN_FIRMA_ELECTRONICA: ['Firmado, sin certificado', 'pendiente', 'Se subió como firmado, pero no lleva firma electrónica ni certificado (por ejemplo, firma manuscrita escaneada).'],
@@ -19,7 +20,7 @@ export default function EstadoFirma({ doc, detalle = false }) {
   return (
     <span className="firma-estado">
       <span className={`estado-badge ${clase}`} title={ayuda}>{texto}</span>
-      {detalle && (firmas.length > 0 || est === 'SIN_FIRMA_ELECTRONICA') && (
+      {detalle && (firmas.length > 0 || est === 'SIN_FIRMA_ELECTRONICA' || est === 'FIRMA_EN_PANTALLA') && (
         <details className="firma-detalle">
           <summary>Ver comprobación</summary>
           <p>{ayuda}</p>
@@ -34,7 +35,8 @@ export default function EstadoFirma({ doc, detalle = false }) {
           ))}
           {doc.firmaInfo?.conservaOriginal === false && est !== 'SIN_FIRMA_ELECTRONICA' && <p>El PDF se reescribió al firmar: compruébalo visualmente con el original.</p>}
           {doc.firmaHuella && <p className="firma-huella">Huella SHA-256: {doc.firmaHuella.slice(0, 16)}…</p>}
-          {est !== 'SIN_FIRMA_ELECTRONICA' && <p className="firma-nota">No se ha validado el certificado ante un prestador de confianza ni su vigencia o revocación.</p>}
+          {est === 'FIRMA_EN_PANTALLA' && doc.firmaInfo?.firmante && <p>Firmó: <b>{doc.firmaInfo.firmante}</b>. La constancia (con fecha, hora y huella del original) es la última página del PDF.</p>}
+          {est !== 'SIN_FIRMA_ELECTRONICA' && est !== 'FIRMA_EN_PANTALLA' && <p className="firma-nota">No se ha validado el certificado ante un prestador de confianza ni su vigencia o revocación.</p>}
         </details>
       )}
     </span>

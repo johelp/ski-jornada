@@ -15,6 +15,7 @@ const fs         = require('fs');
 const { PrismaClient } = require('@prisma/client');
 const legal = require('./legal');
 const firmaPdf = require('./firmaPdf');
+const firmaPantalla = require('./firmaPantalla');
 
 dotenv.config();
 
@@ -265,6 +266,8 @@ app.get('/uploads/:sub/:file', auth, async (req, res) => {
 // Un módulo apagado desaparece del menú y sus endpoints responden 404. Lo esencial (fichaje, usuarios, informes, config) no se apaga.
 // `documentos` además se puede apagar por despliegue (DOCUMENTOS_HABILITADOS=false), y eso no se puede revertir desde la app.
 const DOCUMENTOS_ON = process.env.DOCUMENTOS_HABILITADOS !== 'false';
+// Firma dibujada en pantalla (firma electrónica simple, sin certificado); se puede apagar por despliegue
+const FIRMA_PANTALLA_ON = process.env.FIRMA_PANTALLA_HABILITADA !== 'false';
 const MODULOS = {
   clases:        { nombre: 'Clases y primas', rutas: [/^\/api\/(admin\/)?clases(\/|$)/] },
   libres:        { nombre: 'Días libres', rutas: [/^\/api\/libres(\/|$)/, /^\/api\/admin\/(solicitudes|informe-libres)(\/|$)/] },
@@ -1485,6 +1488,43 @@ app.post('/api/documentos/:id/firmar', auth, uploadFirma.single('pdf'), verifica
   }
 });
 
+// Firma dibujada en pantalla: se estampa en una página final del PDF con una nota de alcance (firma electrónica simple)
+app.post('/api/documentos/:id/firmar-pantalla', auth, async (req, res) => {
+  try {
+    if (!FIRMA_PANTALLA_ON) return res.status(404).json({ error: 'La firma en pantalla no está habilitada' });
+    const doc = await prisma.documentoLegajo.findUnique({ where: { id: req.params.id }, include: { profesor: true } });
+    if (!doc) return res.status(404).json({ error: 'Documento no encontrado' });
+    if (doc.profesorId !== req.user.userId) return res.status(403).json({ error: 'Solo la persona destinataria puede firmar su documento' });
+    if (doc.estado === 'FIRMADO') return res.status(409).json({ error: 'Este documento ya está firmado' });
+    if (req.body.acepto !== true) return res.status(400).json({ error: 'Confirma que has recibido y leído el documento' });
+    const png = firmaPantalla.pngDesdeDataUrl(req.body.firma);
+    if (!png) return res.status(400).json({ error: 'La firma no es válida: dibújala de nuevo' });
+
+    const rutaOriginal = path.join(UPLOAD_DIR, 'documentos', path.basename(doc.archivoPath));
+    if (!fs.existsSync(rutaOriginal)) return res.status(404).json({ error: 'No se encuentra el archivo original' });
+    const original = fs.readFileSync(rutaOriginal);
+    if (firmaPdf.analizarPdf(original).firmas.length)
+      return res.status(400).json({ error: 'Este PDF ya lleva firma digital: añadirle una firma en pantalla la invalidaría. Fírmalo con tu certificado y súbelo.' });
+
+    const cfg = await getConfig();
+    let resultado;
+    try {
+      resultado = await firmaPantalla.estamparFirma({ pdfOriginal: original, png, firmante: `${doc.profesor.nombre} ${doc.profesor.apellidos}`.trim(), documento: doc.nombre, escuela: cfg.nombre });
+    } catch (e) { console.error('estamparFirma:', e.message); return res.status(422).json({ error: 'No se pudo añadir la firma a este PDF (¿está protegido con contraseña?). Fírmalo fuera y súbelo.' }); }
+
+    const nombreArchivo = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.pdf`;
+    fs.writeFileSync(path.join(UPLOAD_DIR, 'firmas', nombreArchivo), resultado.pdf);
+    const firmaInfo = JSON.stringify({ tipo: 'PANTALLA', firmante: `${doc.profesor.nombre} ${doc.profesor.apellidos}`.trim(), huellaOriginal: resultado.huellaOriginal });
+    const updated = await prisma.documentoLegajo.update({
+      where: { id: doc.id },
+      data: { estado: 'FIRMADO', firmaPath: nombreArchivo, firmadoAt: new Date(), firmaEstado: 'FIRMA_EN_PANTALLA', firmaHuella: firmaPantalla.sha256(resultado.pdf), firmaInfo },
+    });
+    await auditar(req, 'documento.firma_pantalla', { id: doc.profesorId, email: doc.profesor.email }, { documentoId: doc.id });
+    emitirEvento('documento.firmado', { documentoId: updated.id, tipo: updated.tipo, mes: updated.mes, profesorId: updated.profesorId, firmaEstado: 'FIRMA_EN_PANTALLA' });
+    res.json({ success: true, documento: { ...conInfoFirma(updated), firmaUrl: `/uploads/firmas/${updated.firmaPath}` } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error firmando el documento' }); }
+});
+
 app.get('/api/admin/documentos', auth, adminOnly, async (req, res) => {
   try {
     const docs = await prisma.documentoLegajo.findMany({
@@ -2022,7 +2062,7 @@ async function getConfig() {
 }
 
 app.get('/api/config', async (req, res) => {
-  try { res.json({ ...(await getConfig()), modulos: modulosEstado(), documentosHabilitados: DOCUMENTOS_ON, whatsappActivo: WHATSAPP_PERMITIDO && whatsapp.conectado() }); } catch (err) { res.status(500).json({ error: 'Error' }); }
+  try { res.json({ ...(await getConfig()), modulos: modulosEstado(), documentosHabilitados: DOCUMENTOS_ON, firmaPantalla: FIRMA_PANTALLA_ON, whatsappActivo: WHATSAPP_PERMITIDO && whatsapp.conectado() }); } catch (err) { res.status(500).json({ error: 'Error' }); }
 });
 
 // Apagar o encender módulos (cualquier administración). Cuerpo: { off: ['colaboradores', ...] }
