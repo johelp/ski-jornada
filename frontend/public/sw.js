@@ -2,7 +2,7 @@
 // Proporciona instalación PWA y caché básico de assets estáticos.
 // Los recordatorios de navegador se programan desde la app (App.jsx).
 
-const CACHE_NAME = 'ski-jornada-v2';
+const CACHE_NAME = 'ski-jornada-v3';
 const STATIC_ASSETS = ['/', '/src/main.jsx', '/src/App.jsx', '/src/App.css'];
 
 self.addEventListener('install', (event) => {
@@ -42,27 +42,29 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Push notifications (para recordatorios enviados desde el servidor en el futuro)
+// Notificaciones push: el servidor envía { title, body, tag, url } cifrado; hay que mostrar siempre una notificación (lo exige el navegador)
 self.addEventListener('push', (event) => {
-  if (!event.data) return;
-  const data = event.data.json();
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { data = { body: event.data ? event.data.text() : '' }; }
   event.waitUntil(
     self.registration.showNotification(data.title || '⛷️ Ski Jornada', {
-      body: data.body,
-      icon: '/favicon.svg',
-      badge: '/favicon.svg',
+      body: data.body || '',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
       tag: data.tag || 'ski-jornada',
       renotify: true,
+      data: { url: data.url || '/' },
     })
   );
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/';
   event.waitUntil(
-    clients.matchAll({ type: 'window' }).then(list => {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
       if (list.length) return list[0].focus();
-      return clients.openWindow('/');
+      return clients.openWindow(url);
     })
   );
 });

@@ -25,6 +25,9 @@ import ModulosConfig from './ModulosConfig';
 import EstadoFirma from './EstadoFirma';
 import FirmaPantalla from './FirmaPantalla';
 import VersionApp from './Version';
+import NotificacionesPush from './NotificacionesPush';
+import BannerPush from './BannerPush';
+import { desactivarPush, resincronizarPush } from './push';
 import { leerSesion, guardarSesion as guardarSesionAlmacen, borrarSesion, restaurarSesion } from './sesion';
 const api = axios.create({ baseURL: API_BASE });
 
@@ -336,16 +339,14 @@ function App() {
     setTiempoFichado(null);
   }, [historial, serverTimeOffset]);
 
-  // ===== NOTIFICATIONS — request permission on login =====
-  useEffect(() => {
-    if (token && 'Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-  }, [token]);
+  // ===== NOTIFICACIONES PUSH =====
+  // El permiso ya no se pide al entrar (molesta y en iPhone exige un toque): se activan desde «Mi perfil» o el aviso de inicio.
+  const [pushActivo, setPushActivo] = useState(false);
+  useEffect(() => { if (token) resincronizarPush({ api, headers: h() }); }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ===== SCHEDULE REMINDER NOTIFICATION =====
   useEffect(() => {
-    if (!token || !user?.horaRecordatorio) return;
+    if (!token || !user?.horaRecordatorio || pushActivo) return; // con push activo, el recordatorio lo envía el servidor aunque la app esté cerrada
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     const [hh, mm] = user.horaRecordatorio.split(':').map(Number);
     const ahora  = new Date(Date.now() + serverTimeOffset);
@@ -367,7 +368,7 @@ function App() {
       }
     }, delay);
     return () => clearTimeout(tid);
-  }, [token, user?.horaRecordatorio, serverTimeOffset, historial]);
+  }, [token, user?.horaRecordatorio, serverTimeOffset, historial, pushActivo]);
 
   // ===== DATA LOADERS =====
   const cargarHistorial = useCallback(() => load(async () => {
@@ -922,7 +923,8 @@ function App() {
     } catch { toast$('No se pudo exportar', 'error'); }
   };
 
-  const logout = () => { borrarSesion(); setToken(null); setUser(null); };
+  // Al cerrar sesión se quita este dispositivo de las notificaciones: en un móvil compartido no debe recibir los avisos de la persona anterior
+  const logout = async () => { await desactivarPush({ api, headers: h(), rapido: true }).catch(() => {}); setPushActivo(false); borrarSesion(); setToken(null); setUser(null); };
 
   // ===== ESTADO ACTUAL =====
   const hoy = fechaLocal(horaActual);
@@ -1175,6 +1177,7 @@ function App() {
       </nav>
 
       <InstalarBanner evento={pwaInstallEvent} onInstalar={instalarPWA} />
+      <BannerPush config={configEscuela} onIr={() => setVista('perfil')} />
 
       {masAbierto && (
         <div className="sheet-overlay" onClick={() => setMasAbierto(false)}>
@@ -2487,13 +2490,6 @@ function App() {
                   <div className="perfil-info-row"><span>Teléfono WhatsApp</span><strong>{user?.telefono || <em style={{ color: 'var(--text-muted)' }}>No configurado</em>}</strong></div>
                   {configEscuela?.whatsappActivo && <div className="perfil-info-row"><span>Avisos por WhatsApp</span><strong>{user?.avisosWhatsapp ? '✓ Activados' : 'Desactivados'}</strong></div>}
                   <div className="perfil-info-row"><span>Recordatorio de salida</span><strong>{user?.horaRecordatorio || '17:00'}</strong></div>
-                  <div className="perfil-info-row"><span>Notificaciones</span>
-                    <strong>
-                      {'Notification' in window
-                        ? Notification.permission === 'granted' ? '✓ Activadas' : Notification.permission === 'denied' ? '✗ Bloqueadas' : 'Sin configurar'
-                        : 'No soportado'}
-                    </strong>
-                  </div>
                 </div>
               )}
             </div>
@@ -2510,16 +2506,8 @@ function App() {
               </div>
             </div>
 
-            {/* Activar notificaciones si no están activas */}
-            {'Notification' in window && Notification.permission !== 'granted' && (
-              <div className="card">
-                <h2>Activar notificaciones</h2>
-                <p style={{ color: 'var(--text-muted)', marginBottom: '0.75rem' }}>Las notificaciones del navegador te avisarán cuando sea hora de fichar la salida.</p>
-                <button className="btn-primary" style={{ width: 'auto' }} onClick={() => Notification.requestPermission().then(p => { if (p === 'granted') toast$('Notificaciones activadas ✓', 'success'); })}>
-                  🔔 Activar notificaciones
-                </button>
-              </div>
-            )}
+            {/* Notificaciones push en este dispositivo, con guía visual para iPhone y Android */}
+            <NotificacionesPush api={api} h={h} config={configEscuela} toast$={toast$} onCambio={setPushActivo} />
           </div>
         )}
 

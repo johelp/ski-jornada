@@ -16,6 +16,8 @@ jobs:
       PASSWORD_LOGIN: 'true'
       FRONTEND_URL: http://localhost:5173
       PORT: '3000'
+      PUSH_SIMULADO: 'true'
+      VAPID_SUBJECT: mailto:ci@example.com
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,6 +25,8 @@ jobs:
       - run: npm ci
       - run: npx prisma migrate deploy
       - run: node prisma/seed.js
+      - name: Claves VAPID de prueba (push simulado)
+        run: node scripts/vapid-keys.js --env >> "$GITHUB_ENV"
       - name: Arrancar la API
         run: |
           node index.js > ../api.log 2>&1 &

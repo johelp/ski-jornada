@@ -38,6 +38,7 @@ model Profesor {
   planning                 PlanningClase[]
   aceptaciones             AceptacionLegal[]
   notificacionesRecibidas  Notificacion[] @relation("NotifRecibidas")
+  suscripcionesPush        SuscripcionPush[]
   notificacionesEnviadas   Notificacion[] @relation("NotifEnviadas")
 }
 
@@ -140,6 +141,21 @@ model DocumentoLegajo {
   firmaHuella String?
   firmaInfo   String?
   createdAt   DateTime  @default(now())
+}
+
+// Dispositivo que activó las notificaciones push (una persona puede tener varios)
+model SuscripcionPush {
+  id            String    @id @default(uuid())
+  profesorId    String
+  profesor      Profesor  @relation(fields: [profesorId], references: [id], onDelete: Cascade)
+  endpoint      String    @unique
+  p256dh        String
+  auth          String
+  dispositivo   String?
+  createdAt     DateTime  @default(now())
+  ultimoEnvioAt DateTime?
+
+  @@index([profesorId])
 }
 
 model Notificacion {

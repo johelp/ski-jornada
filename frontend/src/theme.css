@@ -711,3 +711,31 @@ header.topbar { padding-left: max(12px, env(safe-area-inset-left)); padding-righ
 /* Indicador de versión */
 .version-app { font-size: .72rem; color: var(--text-muted); text-align: center; padding: .4rem .5rem; line-height: 1.4; }
 .version-actualizar { margin-left: .4rem; min-height: 32px; padding: .2rem .7rem; border-radius: 999px; border: 1px solid var(--primary); background: transparent; color: var(--primary); font-weight: 600; font-size: .72rem; cursor: pointer; }
+
+/* Notificaciones push: cuadro del perfil y guía visual */
+.notif-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: .5rem; flex-wrap: wrap; }
+.notif-cab h2 { margin: 0; }
+.notif-chip { font-size: .78rem; font-weight: 700; padding: .25rem .7rem; border-radius: 999px; background: var(--border); color: var(--text-muted); }
+.notif-chip.ok { background: var(--success-bg); color: var(--success-text); }
+.notif-chip.mal { background: var(--danger-bg); color: var(--danger-text); }
+.notif-chip.aviso { background: var(--warning-bg); color: var(--warning-text); }
+.notif-txt { color: var(--text-muted); margin: .6rem 0; line-height: 1.45; font-size: .92rem; }
+.notif-btn { width: auto; min-height: 44px; }
+.notif-acciones { display: flex; gap: .5rem; flex-wrap: wrap; }
+.notif-acciones button { min-height: 44px; }
+.notif-como { margin-top: .75rem; min-height: 44px; text-align: left; background: none; border: 0; color: var(--primary); font-weight: 600; cursor: pointer; padding: 0; }
+.notif-disp { margin-top: .75rem; font-size: .85rem; }
+.notif-disp ul { list-style: none; margin: .25rem 0 0; padding: 0; }
+.notif-disp li { display: flex; justify-content: space-between; align-items: center; gap: .5rem; padding: .25rem 0; border-top: 1px solid var(--border); }
+.guia-push { margin-top: .75rem; }
+.guia-tabs { display: inline-flex; gap: 2px; padding: 3px; background: var(--border); border-radius: 999px; margin-bottom: .75rem; }
+.guia-tabs button { min-height: 40px; padding: 0 1.1rem; border: 0; border-radius: 999px; background: transparent; font-weight: 700; color: var(--text-muted); cursor: pointer; }
+.guia-tabs button.on { background: #fff; color: var(--primary); box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+.guia-pasos { list-style: none; margin: 0; padding: 0; display: grid; gap: .75rem; }
+.guia-paso { display: grid; grid-template-columns: 7.5rem 1fr; gap: .9rem; align-items: center; padding: .6rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface, #fff); }
+.guia-ilu { width: 100%; height: auto; background: #f1f5f9; border-radius: 10px; }
+.guia-paso strong { display: flex; align-items: center; gap: .5rem; font-size: .95rem; }
+.guia-paso p { margin: .3rem 0 0; font-size: .85rem; line-height: 1.4; color: var(--text-muted); }
+.guia-num { flex: none; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--primary); color: #fff; display: inline-grid; place-items: center; font-size: .8rem; }
+.guia-consejos { margin: .75rem 0 0; padding-left: 1.1rem; font-size: .82rem; color: var(--text-muted); line-height: 1.45; }
+@media (max-width: 420px) { .guia-paso { grid-template-columns: 5.5rem 1fr; gap: .6rem; } }

@@ -4,6 +4,9 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Fechas AAA
 
 ## [Sin publicar]
 
+### Añadido
+- **Notificaciones push (Web Push + VAPID):** opt-in por dispositivo desde *Mi perfil*, con guía visual para iPhone y Android, aviso de inicio, prueba y lista de dispositivos. Cada aviso interno se envía también como push; recordatorio de salida y de fin de mes desde el servidor aunque la app esté cerrada. El permiso ya no se pide al entrar. Al cerrar sesión se quita el dispositivo. Claves con `npm run vapid`; ver `docs/NOTIFICACIONES-PUSH.md`. Migración `push_suscripciones`; dependencia `web-push`.
+
 ## [1.1.0] — 2026-11-15 · Colaboradores, firma y registro de jornada
 
 ### Añadido

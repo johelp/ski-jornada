@@ -529,6 +529,62 @@ const pdf = nombre => {
     check('el registro de actividad anota la firma en pantalla', ((await http('GET', '/api/admin/auditoria?limit=200', { token: admin })).data || []).some(x => x.accion === 'documento.firma_pantalla'));
   }
 
+  seccion('6q. Notificaciones push');
+  {
+    const nodeCrypto = require('crypto');
+    const fs = require('fs');
+    const b64u = b => Buffer.from(b).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const cfg = (await http('GET', '/api/config')).data;
+    const ecdh = nodeCrypto.createECDH('prime256v1'); ecdh.generateKeys();
+    const claves = { p256dh: b64u(ecdh.getPublicKey()), auth: b64u(nodeCrypto.randomBytes(16)) };
+    const endpoint = `https://fcm.googleapis.com/fcm/send/smoke-${nodeCrypto.randomBytes(6).toString('hex')}`;
+    const subs = (body, token = prof) => http('POST', '/api/push/suscribir', { token, body });
+
+    check('/api/dispositivos exige sesión → 401', (await http('GET', '/api/push/dispositivos')).status === 401);
+    if (!cfg.pushDisponible) {
+      console.log('  (push sin configurar en este servidor: se comprueba solo que lo rechaza)');
+      check('sin claves VAPID, suscribirse da 503', (await subs({ subscription: { endpoint, keys: claves } })).status === 503);
+    } else {
+      check('/api/config publica la clave pública VAPID', typeof cfg.vapidPublicKey === 'string' && cfg.vapidPublicKey.length > 60 && !('vapidPrivateKey' in cfg));
+      check('rechaza una dirección interna (SSRF) → 400', (await subs({ subscription: { endpoint: 'http://169.254.169.254/latest', keys: claves } })).status === 400);
+      check('rechaza un servidor que no es un servicio de push → 400', (await subs({ subscription: { endpoint: 'https://evil.example.com/push', keys: claves } })).status === 400);
+      check('rechaza un puerto distinto del 443 → 400', (await subs({ subscription: { endpoint: 'https://fcm.googleapis.com:8443/x', keys: claves } })).status === 400);
+      check('rechaza claves mal formadas → 400', (await subs({ subscription: { endpoint, keys: { p256dh: 'abc', auth: 'abc' } } })).status === 400);
+
+      const alta = await subs({ subscription: { endpoint, keys: claves } });
+      check('el empleado activa las notificaciones en su dispositivo', alta.status === 200 && alta.data.success);
+      const l1 = (await http('GET', '/api/push/dispositivos', { token: prof })).data;
+      check('el dispositivo aparece en su lista (y no se exponen las claves)', l1.dispositivos?.some(d => d.id === alta.data.id) && !JSON.stringify(l1).includes(claves.auth));
+      check('otro empleado no ve ese dispositivo', !((await http('GET', '/api/push/dispositivos', { token: prof2 })).data.dispositivos || []).some(d => d.id === alta.data.id));
+
+      const prueba = await http('POST', '/api/push/probar', { token: prof });
+      check('la notificación de prueba se envía al dispositivo', prueba.status === 200 && prueba.data.enviadas === 1);
+      check('otra prueba seguida se frena → 429', (await http('POST', '/api/push/probar', { token: prof })).status === 429);
+      if (process.env.API_LOG && process.env.PUSH_SIMULADO === 'true') {
+        let log = ''; try { log = fs.readFileSync(process.env.API_LOG, 'utf8'); } catch {}
+        check('la petición de push se construye y se cifra con las claves del dispositivo (modo simulado)', /SIMULADO\] push/.test(log) && !/push: /.test(log));
+      }
+
+      if (process.env.API_LOG && process.env.PUSH_SIMULADO === 'true') {
+        const titulo = `Aviso push ${nodeCrypto.randomBytes(3).toString('hex')}`;
+        await http('POST', '/api/admin/notificaciones', { token: admin, body: { titulo, mensaje: 'Prueba de aviso', destinatarioId: me.id } });
+        await new Promise(r => setTimeout(r, 600));
+        let log2 = ''; try { log2 = fs.readFileSync(process.env.API_LOG, 'utf8'); } catch {}
+        check('un aviso de administración llega también como push al dispositivo', log2.includes(`SIMULADO] push`) && log2.includes(titulo));
+      }
+      const mueve = await subs({ subscription: { endpoint, keys: claves } }, prof2);
+      check('el mismo dispositivo pasa a quien acaba de entrar (móvil compartido)', mueve.status === 200 && !((await http('GET', '/api/push/dispositivos', { token: prof })).data.dispositivos || []).some(d => d.endpoint === endpoint));
+      check('quien lo perdió no puede quitarlo → 0 quitados', (await http('POST', '/api/push/baja', { token: prof, body: { endpoint } })).data.quitados === 0);
+      const ex = (await http('GET', '/api/auth/me/exportar', { token: prof2 })).data;
+      check('la exportación de datos incluye los dispositivos (sin claves)', Array.isArray(ex.dispositivosNotificaciones) && ex.dispositivosNotificaciones.length >= 1 && !JSON.stringify(ex).includes(claves.auth));
+      check('quitar el dispositivo por su dirección', (await http('POST', '/api/push/baja', { token: prof2, body: { endpoint } })).data.quitados === 1);
+      const vacia = await http('POST', '/api/push/probar', { token: prof2 });
+      check('sin dispositivos, la prueba no envía nada', vacia.status === 200 && vacia.data.enviadas === 0);
+      const aud = (await http('GET', '/api/admin/auditoria?limit=200', { token: admin })).data || [];
+      check('el registro de actividad anota activar y desactivar', aud.some(x => x.accion === 'push.activar') && aud.some(x => x.accion === 'push.desactivar'));
+    }
+  }
+
   seccion('7. Limpieza');
   await http('POST', '/api/admin/clases/reabrir', { token: admin, body: { profesorId: me.id, mes: MES } });
   check('elimina la clase de prueba', (await http('DELETE', `/api/clases/${claseId}`, { token: prof })).status === 200);
