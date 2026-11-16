@@ -17,6 +17,7 @@ jobs:
       FRONTEND_URL: http://localhost:5173
       PORT: '3000'
       PUSH_SIMULADO: 'true'
+      FLOTA_ON: 'true'
       VAPID_SUBJECT: mailto:ci@example.com
     steps:
       - uses: actions/checkout@v4

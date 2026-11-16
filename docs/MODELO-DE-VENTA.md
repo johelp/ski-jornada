@@ -62,7 +62,7 @@ Mantener el modelo actual y añadir una **capa de control** tuya:
 
 1. **Registro de clientes** (`clientes.yml` en un repositorio privado, sin secretos): nombre, tramo, dominio, proyecto de Railway, proyecto de Pages, versión desplegada, fecha de alta y de renovación.
 2. **Un solo código, versiones etiquetadas.** Hoy cada fusión a `main` despliega solo. Con varios clientes conviene desplegar por **anillos**: `main` actualiza solo la demo; las etiquetas `vX.Y.Z` las toman primero un cliente piloto y después el resto. Así un fallo no llega a todos a la vez.
-3. **Script de despliegue y estado** (`scripts/flota.js`, por construir): recorre el registro, consulta `/api/salud` de cada cliente (ya devuelve `version` y `commit`) y muestra una tabla con quién va en qué versión, quién está caído y a quién le toca actualizar. Para actualizar usa la API de Railway y de Cloudflare Pages.
+3. **Registro y script de estado** (**construido en 1.3.0**, ver `FLOTA.md`): la pantalla *Flota* de la demo y `scripts/flota.js` consultan `/api/salud` de cada cliente y muestran quién va en qué versión y quién está caído. **Falta** el despliegue automático por anillos, que usaría la API de Railway y de Cloudflare Pages con tokens guardados en un gestor de secretos.
 4. **Migraciones automáticas.** El arranque ya ejecuta `prisma migrate deploy`, así que actualizar es publicar la versión y comprobar `/api/salud`.
 5. **Secretos fuera del repositorio**, en un gestor (variables por cliente según las plantillas de `deploy/`).
 6. **Alertas**: monitor de disponibilidad por cliente, aviso si la versión difiere de la esperada y si la última copia es antigua.
@@ -95,5 +95,5 @@ Empezar con la **opción A**, construir la capa de control cuando se cierre el s
 2. Confirmar precios actuales de Railway y Resend antes de presupuestar.
 3. Revisar con asesor legal el contrato de servicio y el encargo de tratamiento (`RGPD.md`, `legal/`).
 4. Preparar un modelo de contrato y una hoja de oferta de una página.
-5. Construir el registro de clientes y `scripts/flota.js` al cerrar el segundo cliente.
+5. ~~Construir el registro de clientes y `scripts/flota.js`~~ → hecho (1.3.0). Siguiente: despliegue por anillos y alertas.
 6. Definir qué cubre el soporte (horario, tiempos de respuesta) y qué se cobra aparte.

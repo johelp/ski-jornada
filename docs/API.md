@@ -79,6 +79,10 @@ El informe incluye `revision` (`{estado, nota, revisadoAt}` o `null`) y, por cla
 | GET | `/api/firma/estado/:profesorId/:mes` | Estado de la firma |
 | GET 🛡 | `/api/admin/firmas` | Firmas pendientes |
 
+## Flota de clientes (solo proveedor)
+Requiere `FLOTA_ON=true` (si no, 404) y la cuenta **principal** (403 a otros). Ver `FLOTA.md`.
+🛡 `GET /api/admin/flota` (lista, versión de referencia, tramos y anillos) · 🛡 `POST /api/admin/flota` · 🛡 `PUT /api/admin/flota/:id` · 🛡 `DELETE /api/admin/flota/:id` · 🛡 `POST /api/admin/flota/comprobar` (todos los activos) · 🛡 `POST /api/admin/flota/:id/comprobar` (límite 12/min). Cuerpo de alta: `nombre`, `urlApi` (https), `urlApp`, `tramo`, `anillo`, `versionEsperada` (`1.2.0`), `railwayProyecto`, `pagesProyecto`, `altaAt`, `renovacionAt`, `notas`, `activo`. `GET /api/config` añade `flotaOn`.
+
 ## Archivos (protegidos)
 `GET /uploads/documentos/:file` y `GET /uploads/firmas/:file` requieren `Authorization: Bearer`. Admin: todo. Profesor: solo los suyos (403 si no). Ver `ARQUITECTURA.md`.
 

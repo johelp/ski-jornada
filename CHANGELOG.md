@@ -4,6 +4,15 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Fechas AAA
 
 ## [Sin publicar]
 
+## [1.3.0] — 2026-11-16 · Flota de clientes
+
+### Añadido
+- **Flota de clientes** (solo en la instalación del proveedor, con `FLOTA_ON=true` y para la cuenta principal): registro de las instalaciones (nombre, tramo, anillo de actualización, direcciones públicas, proyectos, versión esperada, alta y renovación; **sin secretos**) y comprobación de su estado consultando `/api/salud` y `/api/config` de cada una (al día, desactualizado, caído, versión, commit, latencia, push). Nueva pantalla **Flota** y script `backend/scripts/flota.js` (código de salida 0/1/2, `--json`, `--archivo`). Defensa contra SSRF compartida con los webhooks (`backend/redSegura.js`). Migración `flota_clientes`; sin dependencias nuevas. Ver `docs/FLOTA.md`.
+- Documento `docs/MODELO-DE-VENTA.md`: precios por tramos, costes estimados y opciones de gestión centralizada.
+
+### Corregido
+- El acceso por contraseña (solo demo y pruebas) devolvía el usuario sin `esPrincipal`, por lo que la cuenta principal no veía las opciones reservadas hasta recargar.
+
 ## [1.2.0] — 2026-11-16 · Notificaciones push, landing de venta y manual de despliegue
 
 ### Añadido

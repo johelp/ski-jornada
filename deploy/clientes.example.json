@@ -1,0 +1,15 @@
+[
+  {
+    "nombre": "Escuela de ejemplo",
+    "tramo": "MEDIA",
+    "anillo": "CLIENTE",
+    "urlApi": "https://api.ejemplo-escuela.com",
+    "urlApp": "https://app.ejemplo-escuela.com",
+    "railwayProyecto": "ski-jornada-ejemplo",
+    "pagesProyecto": "ski-jornada-ejemplo",
+    "versionEsperada": "1.2.0",
+    "altaAt": "2026-12-01",
+    "renovacionAt": "2027-12-01",
+    "notas": "Sin secretos: solo direcciones públicas y datos de gestión."
+  }
+]

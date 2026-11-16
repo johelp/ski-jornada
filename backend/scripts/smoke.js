@@ -585,6 +585,47 @@ const pdf = nombre => {
     }
   }
 
+  seccion('6r. Flota de clientes');
+  {
+    const cfgF = (await http('GET', '/api/config')).data;
+    if (!cfgF.flotaOn) console.log('  (FLOTA_ON no activo: se omite)');
+    else {
+      const { execFileSync } = require('child_process');
+      const nombre = `Cliente de prueba ${Date.now() % 100000}`;
+      check('un profesor no accede a la flota → 403', (await http('GET', '/api/admin/flota', { token: prof })).status === 403);
+      const lista0 = await http('GET', '/api/admin/flota', { token: admin });
+      check('la cuenta principal lista la flota y ve la versión de referencia', lista0.status === 200 && /^\d+\.\d+\.\d+$/.test(lista0.data.versionReferencia) && Array.isArray(lista0.data.clientes));
+      check('rechaza una dirección sin https', (await http('POST', '/api/admin/flota', { token: admin, body: { nombre, urlApi: 'http://ejemplo.com' } })).status === 400);
+      check('rechaza una dirección con usuario y contraseña', (await http('POST', '/api/admin/flota', { token: admin, body: { nombre, urlApi: 'https://u:p@ejemplo.com' } })).status === 400);
+      check('rechaza un tramo desconocido', (await http('POST', '/api/admin/flota', { token: admin, body: { nombre, urlApi: BASE, tramo: 'GIGANTE' } })).status === 400);
+      check('rechaza una versión esperada mal escrita', (await http('POST', '/api/admin/flota', { token: admin, body: { nombre, urlApi: BASE, versionEsperada: 'v1' } })).status === 400);
+      check('rechaza un cliente sin nombre', (await http('POST', '/api/admin/flota', { token: admin, body: { urlApi: BASE } })).status === 400);
+      const alta = await http('POST', '/api/admin/flota', { token: admin, body: { nombre, tramo: 'media', anillo: 'piloto', urlApi: `${BASE}/ruta/ignorada`, renovacionAt: '2027-12-01', notas: 'prueba' } });
+      check('da de alta un cliente (la dirección se reduce a su origen)', alta.status === 201 && alta.data.urlApi === new URL(BASE).origin && alta.data.tramo === 'MEDIA' && alta.data.anillo === 'PILOTO');
+      const id = alta.data.id;
+      const comp = await http('POST', `/api/admin/flota/${id}/comprobar`, { token: admin });
+      const yo = (comp.data.clientes || []).find(c => c.id === id);
+      check('comprueba un cliente: al día, con versión, commit y latencia', comp.status === 200 && yo?.ultimoEstado === 'AL_DIA' && yo.ultimaVersion === comp.data.versionReferencia && yo.ultimaLatenciaMs >= 0 && !!yo.ultimaComprobacionAt);
+      check('detecta si el push está activo en el cliente', typeof yo?.ultimoPush === 'boolean');
+      await http('PUT', `/api/admin/flota/${id}`, { token: admin, body: { versionEsperada: '0.0.1' } });
+      const des = (await http('POST', `/api/admin/flota/${id}/comprobar`, { token: admin })).data.clientes.find(c => c.id === id);
+      check('con otra versión esperada queda DESACTUALIZADO', des?.ultimoEstado === 'DESACTUALIZADO');
+      await http('PUT', `/api/admin/flota/${id}`, { token: admin, body: { urlApi: 'https://no-existe.invalid', versionEsperada: null } });
+      const caido = (await http('POST', `/api/admin/flota/${id}/comprobar`, { token: admin })).data.clientes.find(c => c.id === id);
+      check('un cliente que no responde queda CAÍDO con el motivo', caido?.ultimoEstado === 'CAIDO' && !!caido.ultimoError);
+      await http('PUT', `/api/admin/flota/${id}`, { token: admin, body: { urlApi: BASE } });
+      const todos = await http('POST', '/api/admin/flota/comprobar', { token: admin });
+      check('comprobar todos actualiza el estado de los activos', todos.status === 200 && todos.data.clientes.find(c => c.id === id)?.ultimoEstado === 'AL_DIA');
+      let salida = '', codigo = 0;
+      try { salida = execFileSync('node', ['scripts/flota.js', 'estado', '--json', '--sin-guardar', '--solo-anillo', 'PILOTO'], { encoding: 'utf8', env: process.env, cwd: require('path').join(__dirname, '..') }); } catch (e) { salida = e.stdout || ''; codigo = e.status; }
+      let j = null; try { j = JSON.parse(salida); } catch {}
+      check('el script de flota devuelve el estado en JSON y código 0 si todo está al día', codigo === 0 && j?.clientes?.some(c => c.nombre === nombre && c.estado === 'AL_DIA'));
+      const aud = (await http('GET', '/api/admin/auditoria?limit=200', { token: admin })).data || [];
+      check('el registro de actividad anota el alta de un cliente', aud.some(x => x.accion === 'flota.alta'));
+      check('baja del cliente de prueba', (await http('DELETE', `/api/admin/flota/${id}`, { token: admin })).status === 200 && (await http('POST', `/api/admin/flota/${id}/comprobar`, { token: admin })).status === 404);
+    }
+  }
+
   seccion('7. Limpieza');
   await http('POST', '/api/admin/clases/reabrir', { token: admin, body: { profesorId: me.id, mes: MES } });
   check('elimina la clase de prueba', (await http('DELETE', `/api/clases/${claseId}`, { token: prof })).status === 200);

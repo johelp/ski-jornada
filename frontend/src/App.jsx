@@ -6,6 +6,7 @@ import { generarPDFRegistro } from './pdfRegistro';
 import VistaMisClases from './VistaMisClases';
 import InformeClases from './InformeClases';
 import VistaIntegraciones from './VistaIntegraciones';
+import VistaFlota from './VistaFlota';
 import ImportarLista from './ImportarLista';
 import InstalarBanner from './InstalarBanner';
 import { filaCsv } from './csv';
@@ -956,6 +957,7 @@ function App() {
         { id: 'zonas',      icon: '📍', label: 'Zonas' },
         { id: 'avisos',     icon: '🔔', label: 'Avisos' },
         { id: 'integraciones', icon: '🔗', label: 'Integraciones' },
+        ...(user?.esPrincipal && configEscuela?.flotaOn ? [{ id: 'flota', icon: '🛰', label: 'Flota' }] : []),
         { id: 'config',     icon: '🏔', label: 'Config' },
         { id: 'perfil',     icon: '👤', label: 'Mi Perfil' },
       ]
@@ -976,7 +978,7 @@ function App() {
 
   const ICONO_NAV = {
     dashboard: 'inicio', presencia: 'presencia', gestionar: 'solicitudes', clases: 'clases', informes: 'informe', documentos: 'docs',
-    usuarios: 'usuarios', colaboradores: 'usuarios', zonas: 'zonas', avisos: 'avisos', integraciones: 'enlace', config: 'config', perfil: 'perfil', fichar: 'reloj', misclases: 'clases', solicitar: 'calendario',
+    usuarios: 'usuarios', colaboradores: 'usuarios', zonas: 'zonas', avisos: 'avisos', integraciones: 'enlace', flota: 'enlace', config: 'config', perfil: 'perfil', fichar: 'reloj', misclases: 'clases', solicitar: 'calendario',
   };
   const PRINCIPALES = esAdmin && !modoEmpleado ? ['dashboard', 'clases', 'usuarios', 'informes'] : ['dashboard', 'fichar', 'misclases', 'informes'];
   const navPrincipal = PRINCIPALES.map(id => navItems.find(i => i.id === id)).filter(Boolean);
@@ -2414,6 +2416,9 @@ function App() {
         )}
         {esAdmin && !modoEmpleado && vista === 'integraciones' && (
           <VistaIntegraciones api={api} h={h} toast$={toast$} />
+        )}
+        {esAdmin && !modoEmpleado && user?.esPrincipal && configEscuela?.flotaOn && vista === 'flota' && (
+          <VistaFlota api={api} h={h} toast$={toast$} />
         )}
         {esAdmin && !modoEmpleado && vista === 'clases' && (
           <VistaAdminClases api={api} h={h} toast$={toast$} config={configEscuela} />
