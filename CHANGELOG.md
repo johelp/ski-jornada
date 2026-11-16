@@ -4,7 +4,11 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Fechas AAA
 
 ## [Sin publicar]
 
+## [1.2.0] — 2026-11-16 · Notificaciones push, landing de venta y manual de despliegue
+
 ### Añadido
+- **Landing de venta:** botón **Pedir demo** por WhatsApp (menú, inicio y cierre; `VITE_CONTACTO_WHATSAPP` cambia el número y `no` lo oculta), sección **¿Para qué sirve?** (antes/con la app), **8 casos de uso**, preguntas frecuentes y aviso de que esta web es una demo. Con `VITE_MODO_CLIENTE=1` (despliegues de cliente) queda solo de acceso, sin venta ni demo. Menú completo solo en pantallas anchas.
+- **Manual de despliegue en producción para clientes nuevos** (`docs/MANUAL-DESPLIEGUE-CLIENTE.md`): paso a paso (secretos, Railway, DNS, Resend, Pages, comprobaciones, equipo, push, seguridad, copias), problemas frecuentes y anexos (hoja del cliente y acta). Plantillas de variables actualizadas.
 - **Notificaciones push (Web Push + VAPID):** opt-in por dispositivo desde *Mi perfil*, con guía visual para iPhone y Android, aviso de inicio, prueba y lista de dispositivos. Cada aviso interno se envía también como push; recordatorio de salida y de fin de mes desde el servidor aunque la app esté cerrada. El permiso ya no se pide al entrar. Al cerrar sesión se quita el dispositivo. Claves con `npm run vapid`; ver `docs/NOTIFICACIONES-PUSH.md`. Migración `push_suscripciones`; dependencia `web-push`.
 
 ## [1.1.0] — 2026-11-15 · Colaboradores, firma y registro de jornada

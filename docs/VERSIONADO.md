@@ -1,10 +1,10 @@
 # Versionado y versión visible
 
 ## Dónde se ve la versión
-- **En la app** (menú lateral en escritorio y «Más» en el móvil): `Versión 1.1.0 · abc1234 · servidor 1.1.0`.
+- **En la app** (menú lateral en escritorio y «Más» en el móvil): `Versión 1.2.0 · abc1234 · servidor 1.2.0`.
   - Si la versión de la app **no coincide** con la del servidor, aparece el botón **Actualizar**: borra la caché de la PWA y recarga. Sirve cuando un móvil se quedó con una versión vieja o cuando el servidor aún no terminó de desplegarse.
   - Al pasar el cursor (o mantener pulsado) sobre la versión se ve la fecha de compilación y el commit.
-- **En la landing**: pie de página, «Versión 1.1.0».
+- **En la landing**: pie de página, «Versión 1.2.0».
 - **En la API**: `GET /api/salud` → `{ ok, version, commit, … }` (`version` es la de `backend/package.json`; `commit` los 7 primeros caracteres del commit que despliega Railway, o `local`).
 
 ## De dónde sale
@@ -32,4 +32,5 @@
 
 ## Historial
 - **1.0.0** (30/10/2026): MVP listo para el piloto.
+- **1.2.0** (16/11/2026): notificaciones push con guía visual para iPhone y Android, landing de venta (pedir demo, para qué sirve, casos de uso, preguntas), modo cliente de la landing y manual de despliegue para clientes nuevos.
 - **1.1.0** (15/11/2026): registro de jornada con correcciones trazables, colaboradores y subcontratas, módulos apagables, carga de clases rediseñada, comprobación de firmas y firma en pantalla, edición de solicitudes, datos de demostración en instancia desplegada, indicador de versión y landing actualizada. Detalle en `CHANGELOG.md`.
