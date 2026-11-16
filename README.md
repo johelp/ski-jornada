@@ -80,6 +80,7 @@ npm run dev                     # http://localhost:5173
 - [docs/DATOS-DE-PRUEBA.md](docs/DATOS-DE-PRUEBA.md) — seed completo para probar todas las funciones
 - [docs/FUNCIONES.md](docs/FUNCIONES.md) — catálogo de funciones por rol y su estado
 - [docs/MULTI-DESPLIEGUE.md](docs/MULTI-DESPLIEGUE.md) — alta de un cliente nuevo (plantillas en `deploy/`)
+- [docs/MODELO-DE-VENTA.md](docs/MODELO-DE-VENTA.md) — modelo de venta, costes estimados y gestión centralizada de clientes (propuesta)
 - [docs/PILOTO-SNOWMOTION.md](docs/PILOTO-SNOWMOTION.md) — piloto, gestión documental e integración con Drive
 - [docs/PRUEBAS.md](docs/PRUEBAS.md) — prueba de humo automática y lista de comprobación
 - [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) — modelo de datos, flujos y decisiones
