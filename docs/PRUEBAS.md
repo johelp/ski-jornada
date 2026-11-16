@@ -44,6 +44,7 @@ Sale con código 1 si algo falla.
 - [ ] Documentos: subir una nómina a un profesor y ver su estado de firma; abrir original y firmado.
 - [ ] Informes de jornada, planilla, ausencias; aprobar días libres.
 - [ ] Zonas: alta, QR, regenerar secreto.
+- [ ] Flota (solo demo con `FLOTA_ON=true`, cuenta principal): añadir un cliente, «Comprobar» y ver «Al día»; cambiar la versión esperada y ver «Desactualizado»; poner una dirección que no existe y ver «Caído» con el motivo.
 
 ## Resultado de la última ejecución
 
