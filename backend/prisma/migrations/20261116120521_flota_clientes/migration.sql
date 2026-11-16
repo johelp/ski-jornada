@@ -1,0 +1,25 @@
+-- CreateTable
+CREATE TABLE "ClienteFlota" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "nombre" TEXT NOT NULL,
+    "tramo" TEXT NOT NULL DEFAULT 'MEDIA',
+    "urlApi" TEXT NOT NULL,
+    "urlApp" TEXT,
+    "railwayProyecto" TEXT,
+    "pagesProyecto" TEXT,
+    "versionEsperada" TEXT,
+    "anillo" TEXT NOT NULL DEFAULT 'CLIENTE',
+    "altaAt" DATETIME,
+    "renovacionAt" DATETIME,
+    "notas" TEXT,
+    "activo" BOOLEAN NOT NULL DEFAULT true,
+    "ultimaComprobacionAt" DATETIME,
+    "ultimoEstado" TEXT,
+    "ultimaVersion" TEXT,
+    "ultimoCommit" TEXT,
+    "ultimaLatenciaMs" INTEGER,
+    "ultimoPush" BOOLEAN,
+    "ultimoError" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);

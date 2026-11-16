@@ -131,6 +131,9 @@ Estado: ✅ disponible · 🟡 disponible con límites · 🗺 planificado (ver 
 | Portal del colaborador (opcional) | ✅ | Ve su cuenta, acepta o pide revisión, descarga su extracto; no accede a nada más |
 | Colaborador propone sus propias horas | ⬜ | Hoy solo acepta o revisa lo que carga administración |
 
+### Flota de clientes (solo proveedor)
+- Registro de instalaciones y comprobación de estado (versión, caída, push) desde la pantalla **Flota** y el script `scripts/flota.js`. Solo con `FLOTA_ON=true` y cuenta principal. Ver `FLOTA.md`.
+
 ### Configuración
 | Función | Estado | Detalle |
 |---------|--------|---------|

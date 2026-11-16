@@ -381,3 +381,30 @@ model Liquidacion {
 
   @@index([colaboradorId, fecha])
 }
+
+// Registro de clientes (flota de instalaciones). Solo se usa en la instalación del proveedor (FLOTA_ON=true).
+// NO guarda secretos: solo datos de contacto, direcciones públicas y el resultado de la última comprobación.
+model ClienteFlota {
+  id                    String    @id @default(uuid())
+  nombre                String
+  tramo                 String    @default("MEDIA")
+  urlApi                String
+  urlApp                String?
+  railwayProyecto       String?
+  pagesProyecto         String?
+  versionEsperada       String?
+  anillo                String    @default("CLIENTE")
+  altaAt                DateTime?
+  renovacionAt          DateTime?
+  notas                 String?
+  activo                Boolean   @default(true)
+  ultimaComprobacionAt  DateTime?
+  ultimoEstado          String?
+  ultimaVersion         String?
+  ultimoCommit          String?
+  ultimaLatenciaMs      Int?
+  ultimoPush            Boolean?
+  ultimoError           String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}

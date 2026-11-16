@@ -486,14 +486,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
-    res.json({
-      token,
-      user: {
-        id: u.id, nombre: u.nombre, apellidos: u.apellidos, email: u.email,
-        role: u.role, tipoJornada: u.tipoJornada, horasContrato: u.horasContrato,
-        telefono: u.telefono, horaRecordatorio: u.horaRecordatorio,
-      },
-    });
+    res.json({ token, user: perfilSesion(u) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error interno del servidor' });
@@ -2131,7 +2124,7 @@ async function getConfig() {
 }
 
 app.get('/api/config', async (req, res) => {
-  try { res.json({ ...(await getConfig()), modulos: modulosEstado(), documentosHabilitados: DOCUMENTOS_ON, firmaPantalla: FIRMA_PANTALLA_ON, pushDisponible: push.disponible(), vapidPublicKey: push.disponible() ? push.publica() : null, whatsappActivo: WHATSAPP_PERMITIDO && whatsapp.conectado() }); } catch (err) { res.status(500).json({ error: 'Error' }); }
+  try { res.json({ ...(await getConfig()), modulos: modulosEstado(), documentosHabilitados: DOCUMENTOS_ON, firmaPantalla: FIRMA_PANTALLA_ON, pushDisponible: push.disponible(), flotaOn: FLOTA_ON, vapidPublicKey: push.disponible() ? push.publica() : null, whatsappActivo: WHATSAPP_PERMITIDO && whatsapp.conectado() }); } catch (err) { res.status(500).json({ error: 'Error' }); }
 });
 
 // Apagar o encender módulos (cualquier administración). Cuerpo: { off: ['colaboradores', ...] }
@@ -2508,6 +2501,71 @@ app.post('/api/admin/clases/reabrir', auth, adminOnly, async (req, res) => {
   } catch { res.status(500).json({ error: 'Error reabriendo el mes' }); }
 });
 
+// ============ FLOTA DE CLIENTES (solo en la instalación del proveedor) ============
+// Registro de las instalaciones de cada cliente y comprobación de su estado (versión desplegada, caída, push).
+// Activa con FLOTA_ON=true y solo para la cuenta principal. No guarda secretos. Ver docs/FLOTA.md.
+const FLOTA_ON = process.env.FLOTA_ON === 'true';
+const flota = require('./flota');
+const flotaAcceso = [auth, adminOnly, (req, res, next) => {
+  if (!FLOTA_ON) return res.status(404).json({ error: 'No disponible' });
+  if (!req.user.esPrincipal) return res.status(403).json({ error: 'Solo la cuenta principal' });
+  next();
+}];
+const ORDEN_ANILLO = { DEMO: 0, PILOTO: 1, CLIENTE: 2 };
+const flotaOrdenada = l => l.sort((a, b) => (ORDEN_ANILLO[a.anillo] - ORDEN_ANILLO[b.anillo]) || a.nombre.localeCompare(b.nombre, 'es'));
+
+app.get('/api/admin/flota', flotaAcceso, async (req, res) => {
+  try {
+    const clientes = flotaOrdenada(await prisma.clienteFlota.findMany());
+    res.json({ versionReferencia: APP_VERSION, tramos: flota.TRAMOS, anillos: flota.ANILLOS, clientes });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error cargando la flota' }); }
+});
+
+app.post('/api/admin/flota', flotaAcceso, async (req, res) => {
+  try {
+    const { data, error } = flota.validarCliente(req.body);
+    if (error) return res.status(400).json({ error });
+    const c = await prisma.clienteFlota.create({ data });
+    await auditar(req, 'flota.alta', null, { cliente: c.nombre });
+    res.status(201).json(c);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error guardando el cliente' }); }
+});
+
+app.put('/api/admin/flota/:id', flotaAcceso, async (req, res) => {
+  try {
+    const { data, error } = flota.validarCliente(req.body, { parcial: true });
+    if (error) return res.status(400).json({ error });
+    const c = await prisma.clienteFlota.update({ where: { id: req.params.id }, data }).catch(() => null);
+    if (!c) return res.status(404).json({ error: 'Cliente no encontrado' });
+    await auditar(req, 'flota.editar', null, { cliente: c.nombre, campos: Object.keys(data) });
+    res.json(c);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error guardando el cliente' }); }
+});
+
+app.delete('/api/admin/flota/:id', flotaAcceso, async (req, res) => {
+  try {
+    const c = await prisma.clienteFlota.delete({ where: { id: req.params.id } }).catch(() => null);
+    if (!c) return res.status(404).json({ error: 'Cliente no encontrado' });
+    await auditar(req, 'flota.baja', null, { cliente: c.nombre });
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error' }); }
+});
+
+// Comprueba uno (:id) o todos los activos. Guarda el resultado y lo devuelve.
+const comprobarFlota = async (req, res) => {
+  try {
+    const where = req.params.id ? { id: req.params.id } : { activo: true };
+    const lista = await prisma.clienteFlota.findMany({ where });
+    if (req.params.id && !lista.length) return res.status(404).json({ error: 'Cliente no encontrado' });
+    const resultados = await flota.comprobarTodos(lista, { referencia: APP_VERSION });
+    await Promise.all(lista.map((c, i) => prisma.clienteFlota.update({ where: { id: c.id }, data: flota.comoCampos(resultados[i]) })));
+    res.json({ versionReferencia: APP_VERSION, clientes: flotaOrdenada(await prisma.clienteFlota.findMany()) });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error comprobando la flota' }); }
+};
+const limiteFlota = rateLimit({ windowMs: 60 * 1000, max: 12, message: { error: 'Demasiadas comprobaciones, espera un minuto' }, standardHeaders: true, legacyHeaders: false });
+app.post('/api/admin/flota/comprobar', limiteFlota, flotaAcceso, comprobarFlota);
+app.post('/api/admin/flota/:id/comprobar', limiteFlota, flotaAcceso, comprobarFlota);
+
 // ============ INTEGRACIONES (API keys, webhooks, planning) ============
 const SCOPES_API = ['lectura', 'economico', 'planning'];
 const hashKey = k => crypto.createHash('sha256').update(k).digest('hex');
@@ -2533,22 +2591,8 @@ app.use('/api/v1', rateLimit({ windowMs: 60 * 1000, max: 120, message: { error: 
 // Webhooks salientes firmados con HMAC-SHA256 (cabecera X-SkiJornada-Signature: sha256=<hex>)
 const EVENTOS_WEBHOOK = ['clases.mes_confirmado', 'clases.revision', 'clases.mes_reabierto', 'solicitud.creada', 'solicitud.modificada', 'solicitud.cancelada', 'solicitud.respondida', 'documento.firmado', 'planning.importado'];
 
-// Un webhook nunca debe poder llamar a la red interna (SSRF): se resuelve el host y se rechazan IP privadas
-const dns = require('dns').promises;
-const net = require('net');
-function ipPrivada(ip) {
-  if (net.isIPv6(ip)) { const l = ip.toLowerCase(); return l === '::1' || l.startsWith('fc') || l.startsWith('fd') || l.startsWith('fe80') || l.startsWith('::ffff:') && ipPrivada(l.slice(7)); }
-  const [a, b] = ip.split('.').map(Number);
-  return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
-}
-async function destinoPublico(url) {
-  const u = new URL(url);
-  if (process.env.NODE_ENV !== 'production' && ['localhost', '127.0.0.1'].includes(u.hostname)) return true;
-  const host = u.hostname.replace(/^\[|\]$/g, '');
-  if (net.isIP(host)) return !ipPrivada(host);
-  const dirs = await dns.lookup(host, { all: true });
-  return dirs.length > 0 && dirs.every(d => !ipPrivada(d.address));
-}
+// Un webhook nunca debe poder llamar a la red interna (SSRF): ver redSegura.js
+const { destinoPublico } = require('./redSegura');
 
 async function enviarWebhook(w, evento, datos) {
   const body = JSON.stringify({ evento, ocurridoAt: new Date().toISOString(), datos });
