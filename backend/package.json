@@ -1,6 +1,6 @@
 {
   "name": "ski-backend",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
@@ -9,6 +9,7 @@
     "seed:demo": "node prisma/seed.js",
     "smoke": "node scripts/smoke.js",
     "purgar": "node scripts/purgar.js",
+    "vapid": "node scripts/vapid-keys.js",
     "importar:profesores": "node prisma/import-profesores.js"
   },
   "prisma": {
@@ -27,7 +28,8 @@
     "nodemailer": "^10.3.1",
     "pdf-lib": "1.17.1",
     "prisma": "^5.22.0",
-    "uuid": "^14.0.0"
+    "uuid": "^14.0.0",
+    "web-push": "3.6.7"
   },
   "engines": {
     "node": ">=20"

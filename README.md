@@ -2,7 +2,7 @@
 
 Web app instalable (PWA) para escuelas de esquí: **fichaje de jornada**, **carga de clases con primas**, **informes mensuales y económicos** y **gestión de profesores**. El acceso es por **enlace mágico** (sin contraseñas) y la sesión queda abierta en el dispositivo. **La escuela crea su cuenta de administración (puede ser de empresa), carga la lista de profesores y los invita**: solo entra quien está en la lista.
 
-**Versión actual: 1.1.0** (se ve en la app, en la landing y en `/api/salud`; ver `docs/VERSIONADO.md` y `CHANGELOG.md`).
+**Versión actual: 1.2.0** (se ve en la app, en la landing y en `/api/salud`; ver `docs/VERSIONADO.md` y `CHANGELOG.md`). **Desplegar un cliente nuevo: `docs/MANUAL-DESPLIEGUE-CLIENTE.md`.**
 
 ## Qué hace
 

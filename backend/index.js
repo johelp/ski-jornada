@@ -16,6 +16,7 @@ const { PrismaClient } = require('@prisma/client');
 const legal = require('./legal');
 const APP_VERSION = require('./package.json').version;
 const firmaPdf = require('./firmaPdf');
+const push = require('./push');
 const firmaPantalla = require('./firmaPantalla');
 
 dotenv.config();
@@ -33,7 +34,27 @@ const ES_PROD = process.env.NODE_ENV === 'production';
   avisos.forEach(a => console.warn('⚠️ ', a));
   if (fallos.length) { fallos.forEach(f => console.error('❌', f)); console.error('Abortando: revisa las variables de entorno.'); process.exit(1); }
 })();
-const prisma = new PrismaClient();
+// Cada aviso interno (campana de la app) se envía además como push a los dispositivos que lo activaron.
+// Se engancha aquí, en un solo sitio, para no tocar los ~10 lugares donde se crean notificaciones.
+const prisma = new PrismaClient().$extends({
+  query: {
+    notificacion: {
+      async create({ args, query }) {
+        const r = await query(args);
+        avisarPush([r.profesorId], { title: r.titulo, body: r.mensaje, tag: `aviso-${r.id}` }).catch(() => {});
+        return r;
+      },
+      async createMany({ args, query }) {
+        const r = await query(args);
+        const filas = Array.isArray(args.data) ? args.data : [args.data];
+        const grupos = new Map(); // mismo aviso a varias personas → un solo envío
+        for (const f of filas) { const k = `${f.titulo}\u0000${f.mensaje}`; if (!grupos.has(k)) grupos.set(k, { titulo: f.titulo, mensaje: f.mensaje, ids: [] }); grupos.get(k).ids.push(f.profesorId); }
+        for (const g of grupos.values()) avisarPush(g.ids, { title: g.titulo, body: g.mensaje, tag: 'aviso' }).catch(() => {});
+        return r;
+      },
+    },
+  },
+});
 const app = express();
 app.set('trust proxy', 1); // detrás del proxy de Railway (IP real para el rate limit)
 
@@ -1556,6 +1577,53 @@ app.get('/api/admin/profesores/:id/documentos', auth, adminOnly, async (req, res
 });
 
 // ============ ADMIN — Presencia en tiempo real ============
+// ============ NOTIFICACIONES PUSH ============
+// Cada persona activa las notificaciones en su dispositivo desde su perfil. Una persona puede tener varios dispositivos.
+const ultimaPrueba = new Map(); // userId → ms (evita abusar del botón «enviar prueba»)
+
+app.get('/api/push/dispositivos', auth, async (req, res) => {
+  try {
+    const d = await prisma.suscripcionPush.findMany({ where: { profesorId: req.user.userId }, orderBy: { createdAt: 'desc' }, select: { id: true, endpoint: true, dispositivo: true, createdAt: true, ultimoEnvioAt: true } });
+    res.json({ disponible: push.disponible(), dispositivos: d });
+  } catch { res.status(500).json({ error: 'Error obteniendo los dispositivos' }); }
+});
+
+app.post('/api/push/suscribir', auth, async (req, res) => {
+  try {
+    if (!push.disponible()) return res.status(503).json({ error: 'Las notificaciones no están activadas en este servidor' });
+    const s = req.body?.subscription;
+    if (!s || !push.endpointValido(s.endpoint)) return res.status(400).json({ error: 'Dirección de notificaciones no válida' });
+    if (!push.clavesValidas(s.keys)) return res.status(400).json({ error: 'Claves de notificaciones no válidas' });
+    const datos = { profesorId: req.user.userId, p256dh: s.keys.p256dh, auth: s.keys.auth, dispositivo: push.etiquetaDispositivo(req.headers['user-agent']) };
+    // Si el mismo dispositivo pasa de una persona a otra (móvil compartido), pasa a la persona que acaba de entrar
+    const d = await prisma.suscripcionPush.upsert({ where: { endpoint: s.endpoint }, create: { endpoint: s.endpoint, ...datos }, update: datos });
+    await auditar(req, 'push.activar', { id: req.user.userId, email: req.user.email }, { dispositivo: d.dispositivo });
+    res.json({ success: true, id: d.id, dispositivo: d.dispositivo });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'No se pudieron activar las notificaciones' }); }
+});
+
+// Quitar un dispositivo: por su dirección (el propio navegador al desactivar o al cerrar sesión) o por su id (desde el listado)
+app.post('/api/push/baja', auth, async (req, res) => {
+  try {
+    const { endpoint, id } = req.body || {};
+    if (!endpoint && !id) return res.status(400).json({ error: 'Indica el dispositivo' });
+    const r = await prisma.suscripcionPush.deleteMany({ where: { profesorId: req.user.userId, ...(endpoint ? { endpoint: String(endpoint) } : { id: String(id) }) } });
+    if (r.count) await auditar(req, 'push.desactivar', { id: req.user.userId, email: req.user.email });
+    res.json({ success: true, quitados: r.count });
+  } catch { res.status(500).json({ error: 'No se pudo quitar el dispositivo' }); }
+});
+
+app.post('/api/push/probar', auth, async (req, res) => {
+  try {
+    if (!push.disponible()) return res.status(503).json({ error: 'Las notificaciones no están activadas en este servidor' });
+    const ahora = Date.now();
+    if (ahora - (ultimaPrueba.get(req.user.userId) || 0) < 10000) return res.status(429).json({ error: 'Espera unos segundos antes de enviar otra prueba' });
+    ultimaPrueba.set(req.user.userId, ahora);
+    const n = await avisarPush([req.user.userId], { title: '🔔 Notificaciones activadas', body: 'Así te llegarán los avisos de tu escuela.', tag: 'prueba' });
+    res.json({ success: true, enviadas: n });
+  } catch { res.status(500).json({ error: 'No se pudo enviar la prueba' }); }
+});
+
 // ============ COLABORADORES Y SUBCONTRATAS ============
 // Escuelas y autónomos con los que se intercambian horas. Administración lo gestiona todo; si el colaborador tiene correo
 // se le puede dar acceso (opcional) a un portal de solo lectura donde acepta o pide revisar las horas.
@@ -2063,7 +2131,7 @@ async function getConfig() {
 }
 
 app.get('/api/config', async (req, res) => {
-  try { res.json({ ...(await getConfig()), modulos: modulosEstado(), documentosHabilitados: DOCUMENTOS_ON, firmaPantalla: FIRMA_PANTALLA_ON, whatsappActivo: WHATSAPP_PERMITIDO && whatsapp.conectado() }); } catch (err) { res.status(500).json({ error: 'Error' }); }
+  try { res.json({ ...(await getConfig()), modulos: modulosEstado(), documentosHabilitados: DOCUMENTOS_ON, firmaPantalla: FIRMA_PANTALLA_ON, pushDisponible: push.disponible(), vapidPublicKey: push.disponible() ? push.publica() : null, whatsappActivo: WHATSAPP_PERMITIDO && whatsapp.conectado() }); } catch (err) { res.status(500).json({ error: 'Error' }); }
 });
 
 // Apagar o encender módulos (cualquier administración). Cuerpo: { off: ['colaboradores', ...] }
@@ -2679,7 +2747,7 @@ app.get('/api/v1/informe/:mes', apiAuth('lectura'), async (req, res) => {
 
 // ============ RGPD: exportación de datos personales ============
 async function exportarDatosProfesor(id) {
-  const [perfil, registros, libres, clases, revisiones, confirmaciones, documentos, firmas, notifs, planning, aceptaciones] = await Promise.all([
+  const [perfil, registros, libres, clases, revisiones, confirmaciones, documentos, firmas, notifs, planning, aceptaciones, dispositivosPush] = await Promise.all([
     prisma.profesor.findUnique({ where: { id }, select: { id: true, email: true, nombre: true, apellidos: true, telefono: true, role: true, tipoJornada: true, horasContrato: true, tarifaHora: true, horaRecordatorio: true, activo: true, createdAt: true } }),
     prisma.registroJornada.findMany({ where: { profesorId: id }, orderBy: { timestamp: 'asc' }, select: { tipo: true, timestamp: true, zonaNombre: true, lat: true, lng: true, distancia: true, esIncidencia: true, origen: true, anulado: true, correcciones: { select: { accion: true, anterior: true, nuevo: true, motivo: true, actorEmail: true, createdAt: true } } } }),
     prisma.solicitudLibre.findMany({ where: { profesorId: id } }),
@@ -2691,12 +2759,13 @@ async function exportarDatosProfesor(id) {
     prisma.notificacion.findMany({ where: { profesorId: id }, select: { titulo: true, mensaje: true, tipo: true, createdAt: true } }),
     prisma.planningClase.findMany({ where: { profesorId: id } }),
     prisma.aceptacionLegal.findMany({ where: { profesorId: id }, select: { documento: true, version: true, aceptadoAt: true } }),
+    prisma.suscripcionPush.findMany({ where: { profesorId: id }, select: { dispositivo: true, createdAt: true } }),
   ]);
   if (!perfil) return null;
   return {
     generadoEl: new Date().toISOString(), perfil, registrosJornada: registros, solicitudesLibres: libres,
     clases: clases.map(c => ({ fecha: c.fecha, horas: c.horas, disciplina: c.tipo.nombre, primas: c.primas.map(p => p.nombre), notas: c.notas, marca: c.marca, notaAdmin: c.notaAdmin })),
-    revisionesMensuales: revisiones, confirmacionesMensuales: confirmaciones, documentos, firmasRegistro: firmas, notificaciones: notifs, planning, aceptacionesLegales: aceptaciones,
+    revisionesMensuales: revisiones, confirmacionesMensuales: confirmaciones, documentos, firmasRegistro: firmas, notificaciones: notifs, planning, aceptacionesLegales: aceptaciones, dispositivosNotificaciones: dispositivosPush,
   };
 }
 app.get('/api/auth/me/exportar', auth, async (req, res) => {
@@ -2991,6 +3060,20 @@ app.post('/api/admin/whatsapp/probar', auth, adminOnly, whatsappOn, async (req, 
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
+// Envía una notificación push a los dispositivos de esas personas (si el despliegue las tiene activas). Nunca falla la operación principal.
+async function avisarPush(profesorIds, { title, body, tag, url }) {
+  try {
+    if (!push.disponible() || !profesorIds.length) return 0;
+    const subs = await prisma.suscripcionPush.findMany({ where: { profesorId: { in: [...new Set(profesorIds)] }, profesor: { activo: true } } });
+    if (!subs.length) return 0;
+    const r = await push.enviar(subs, { title: title || 'Aviso', body, tag, url });
+    if (r.caducadas.length) await prisma.suscripcionPush.deleteMany({ where: { id: { in: r.caducadas } } });
+    const ok = subs.filter(s => !r.caducadas.includes(s.id)).map(s => s.id);
+    if (r.enviadas && ok.length) await prisma.suscripcionPush.updateMany({ where: { id: { in: ok } }, data: { ultimoEnvioAt: new Date() } });
+    return r.enviadas;
+  } catch (e) { console.error('avisarPush:', e.message); return 0; }
+}
+
 // Avisa por WhatsApp a quien lo activó en su perfil (sin bloquear ni fallar la operación principal)
 async function avisarWhatsapp(profesorIds, texto) {
   try {
@@ -3010,17 +3093,22 @@ const claveMes = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,
 const recordadoMes = new Set();
 setInterval(async () => {
   try {
-    if (!WHATSAPP_PERMITIDO || !whatsapp.conectado()) return;
+    const waOk = WHATSAPP_PERMITIDO && whatsapp.conectado();
+    if (!waOk && !push.disponible()) return;
     const ahora = new Date();
     const hh = ahora.getHours(), mm = ahora.getMinutes();
     const inicioDia = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
 
-    const profesores = await prisma.profesor.findMany({ where: { activo: true, avisosWhatsapp: true, NOT: { telefono: null } } });
+    // Quien recibe recordatorios: por WhatsApp (si lo activó) o por push (si activó las notificaciones en algún dispositivo)
+    const profesores = await prisma.profesor.findMany({ where: { activo: true, OR: [{ avisosWhatsapp: true, NOT: { telefono: null } }, { suscripcionesPush: { some: {} } }] } });
     for (const p of profesores) {
       const [rh, rm] = (p.horaRecordatorio || '17:00').split(':').map(Number);
       if (hh !== rh || mm !== rm) continue;
       const ultReg = await prisma.registroJornada.findFirst({ where: { anulado: false, profesorId: p.id, timestamp: { gte: inicioDia } }, orderBy: { timestamp: 'desc' } });
-      if (ultReg?.tipo === 'ENTRADA') avisarWhatsapp([p.id], `son las ${p.horaRecordatorio} y sigues fichado. Recuerda fichar la salida.`);
+      if (ultReg?.tipo === 'ENTRADA') {
+        avisarWhatsapp([p.id], `son las ${p.horaRecordatorio} y sigues fichado. Recuerda fichar la salida.`);
+        avisarPush([p.id], { title: '⏰ Recuerda fichar la salida', body: `Son las ${p.horaRecordatorio} y sigues fichado.`, tag: 'recordatorio-salida' });
+      }
     }
 
     // Últimos 2 días del mes, a las 10:00: quien tiene clases cargadas y no confirmó
@@ -3031,7 +3119,9 @@ setInterval(async () => {
       const mes = claveMes(ahora);
       const conClases = await prisma.claseDada.findMany({ where: { fecha: { startsWith: mes } }, distinct: ['profesorId'], select: { profesorId: true } });
       const confirmados = new Set((await prisma.confirmacionClases.findMany({ where: { mes }, select: { profesorId: true } })).map(c => c.profesorId));
-      avisarWhatsapp(conClases.map(c => c.profesorId).filter(id => !confirmados.has(id)), `el mes termina: revisa y confirma tus horas de clases de ${mes}.`);
+      const sinConfirmar = conClases.map(c => c.profesorId).filter(id => !confirmados.has(id));
+      avisarWhatsapp(sinConfirmar, `el mes termina: revisa y confirma tus horas de clases de ${mes}.`);
+      avisarPush(sinConfirmar, { title: 'El mes termina', body: `Revisa y confirma tus horas de clases de ${mes}.`, tag: 'fin-de-mes' });
     }
   } catch {}
 }, 60 * 1000);
@@ -3056,6 +3146,7 @@ const servidor = app.listen(PORT, () => {
   console.log(`  Ski Jornada API — http://localhost:${PORT}`);
   if (process.env.PASSWORD_LOGIN === 'true') console.log('  Demo (PASSWORD_LOGIN): admin@escuela.com / profesor@escuela.com · ski123');
   console.log(RESEND_KEY ? '  📧 Email: Resend' : SMTP_OK ? '  📧 Email: SMTP' : '  📧 Email: modo consola');
+  console.log(`  🔔 Push: ${push.disponible() ? (push.simulado() ? 'activo (simulado)' : 'activo') : 'sin configurar (VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY)'}`);
   console.log(`  📱 WhatsApp: ${WHATSAPP_PERMITIDO ? 'disponible (se activa desde Integraciones)' : 'deshabilitado'}`);
   console.log('========================================');
 });

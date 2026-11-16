@@ -1,5 +1,7 @@
 # Deploy a producción
 
+> Esta es la guía de la instalación de demostración. **Para un cliente nuevo, sigue `MANUAL-DESPLIEGUE-CLIENTE.md`.**
+
 Dominios: app `https://skijornada.johelpastorino.com` · API `https://api.skijornada.johelpastorino.com`.
 
 ## 1. Backend — Railway

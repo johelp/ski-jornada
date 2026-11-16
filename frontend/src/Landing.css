@@ -141,7 +141,7 @@ body:has(.lp) { background: #fff; }
   .lp-dialog { border-radius: 20px; }
 }
 @media (min-width: 900px) {
-  .lp nav.lp-nav-links { display: flex; }
+  .lp nav.lp-nav-links { display: none; }
   .lp-hero { padding: 4.5rem 0 5rem; }
   .lp-hero-in { grid-template-columns: 1.15fr 0.85fr; }
   .lp-grid4 { grid-template-columns: repeat(4, 1fr); }
@@ -255,3 +255,44 @@ body:has(.lp) { background: #fff; }
 @media (max-width: 959px) { .lp .lp-nav { padding-top: calc(env(safe-area-inset-top, 0px) + 6px); } }
 
 .lp-version { font-variant-numeric: tabular-nums; }
+
+/* Pedir demo (WhatsApp) */
+.lp-btn-wa { background: #25d366; color: #052e16; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; gap: .55rem; text-decoration: none; }
+.lp-btn-wa:hover { background: #3be07a; }
+.lp-btn-wa svg { width: 22px; height: 22px; flex: none; }
+.lp-nav-act { display: flex; align-items: center; gap: .5rem; }
+.lp-nav-demo { min-height: 44px; padding: 0 1rem; }
+@media (max-width: 479px) { .lp-nav-demo span { display: none; } .lp-nav-demo { padding: 0 .7rem; } }
+.lp-demo-nota { margin-top: 1rem; }
+.lp-demo-nota .lp-link { text-decoration: underline; }
+.lp-demo-final { text-align: center; }
+.lp-demo-final .lp-btn { margin-top: 1rem; }
+
+/* Para qué sirve */
+.lp-cambio { display: grid; gap: 1rem; margin-top: 1.75rem; }
+.lp-cambio li { display: grid; gap: .5rem; }
+.lp-antes, .lp-ahora { border-radius: 14px; padding: 1rem 1.2rem; line-height: 1.5; }
+.lp-antes { background: #fef2f2; border: 1px solid #fecaca; color: #7f1d1d; }
+.lp-ahora { background: #f0fdf4; border: 1px solid #bbf7d0; color: #14532d; }
+.lp-antes span, .lp-ahora span { display: block; font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; opacity: .8; margin-bottom: .2rem; }
+@media (min-width: 760px) { .lp-cambio li { grid-template-columns: 1fr 1fr; gap: 1rem; } }
+
+/* Casos de uso */
+.lp-casos { display: grid; gap: 1rem; margin-top: 1.75rem; }
+@media (min-width: 640px) { .lp-casos { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1000px) { .lp-casos { grid-template-columns: repeat(3, 1fr); } }
+.lp-caso p { margin-top: .5rem; }
+.lp-caso-sit { color: var(--lp-muted); }
+.lp-caso strong { color: var(--lp-ink); }
+
+/* Preguntas */
+.lp-faq-wrap { max-width: 48rem; }
+.lp-faq { display: grid; gap: .6rem; }
+.lp-faq details { background: #fff; border: 1px solid var(--lp-line); border-radius: 12px; padding: 0 1.2rem; }
+.lp-faq summary { cursor: pointer; font-weight: 700; padding: 1rem 0; min-height: 48px; }
+.lp-faq details[open] summary { color: var(--lp-primary); }
+.lp-faq p { padding: 0 0 1rem; color: var(--lp-muted); }
+
+/* La navegación completa solo cabe en pantallas anchas; antes, solo marca, demo y entrar */
+.lp-nav-links a, .lp-brand { white-space: nowrap; }
+@media (min-width: 1100px) { .lp nav.lp-nav-links { display: flex; } .lp .lp-nav-links { gap: 1.25rem; } }

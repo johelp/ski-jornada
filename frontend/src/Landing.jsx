@@ -8,6 +8,13 @@ import { APP_VERSION, APP_COMMIT, APP_FECHA } from './Version';
 const APP_NAME = import.meta.env.VITE_APP_NAME || 'Ski Jornada';
 const LUGAR = import.meta.env.VITE_ESCUELA_LUGAR || '';
 const CONTACTO = /^\S+@\S+\.\S+$/.test(import.meta.env.VITE_CONTACTO_EMAIL || '') ? import.meta.env.VITE_CONTACTO_EMAIL : null;
+// «Pedir demo» por WhatsApp. Esta instalación es la demo de venta: por defecto usa el número comercial.
+// VITE_CONTACTO_WHATSAPP lo cambia (solo dígitos con prefijo, sin +) y el valor «no» oculta el botón (despliegues de cliente).
+const WA_RAW = (import.meta.env.VITE_CONTACTO_WHATSAPP ?? '543412824082').replace(/\D/g, '');
+// VITE_MODO_CLIENTE=1: despliegue de un cliente (landing solo de acceso, sin discurso de venta ni demo)
+const MODO_CLIENTE = import.meta.env.VITE_MODO_CLIENTE === '1';
+const WHATSAPP = MODO_CLIENTE || import.meta.env.VITE_CONTACTO_WHATSAPP === 'no' || WA_RAW.length < 8 ? null : WA_RAW;
+const WA_URL = WHATSAPP ? `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(`Hola, quiero pedir una demo de ${import.meta.env.VITE_APP_NAME || 'Ski Jornada'} para mi escuela de esquí.`)}` : null;
 const COLOR = /^#[0-9a-fA-F]{6}$/.test(import.meta.env.VITE_COLOR_PRIMARIO || '') ? import.meta.env.VITE_COLOR_PRIMARIO : null;
 
 const Icon = ({ d, children }) => (
@@ -30,6 +37,7 @@ const ICONOS = {
   colaboradores: <Icon><circle cx="9" cy="8" r="3" /><circle cx="17" cy="9" r="2.4" /><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M15 14.2c.6-.2 1.3-.3 2-.3 2.2 0 4 1.8 4 4" /></Icon>,
   documento: <Icon><path d="M7 3h8l4 4v14H7z" /><path d="M15 3v4h4M10 17c1-2 2-2 3 0s2 0 3-1" /></Icon>,
   modulos: <Icon><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><path d="M17.5 14v7M14 17.5h7" /></Icon>,
+  whatsapp: <Icon><path d="M3 21l1.6-4.6A8.5 8.5 0 1112 20.5a8.4 8.4 0 01-4-1z" /><path d="M9 8.5c.3 2.7 2.8 5.2 5.6 5.7l1.2-1.4-2-1-.8.6a4.5 4.5 0 01-2-2l.6-.8-1-2z" /></Icon>,
   enlace: <Icon><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1" /></Icon>,
 };
 
@@ -46,6 +54,34 @@ const FUNCIONES = [
   { icono: 'enlace', titulo: 'Se conecta con tus sistemas', texto: 'API con claves, webhooks firmados e importación del planning para reservas y nóminas.' },
   { icono: 'informe', titulo: 'Informe económico', texto: 'PDF mensual con horas, primas e importe estimado cuando hay tarifas cargadas.' },
   { icono: 'escudo', titulo: 'Datos protegidos', texto: 'Cada escuela con su propia instancia; cada profesor ve solo lo suyo, puede exportar sus datos y todo cambio queda en el registro de actividad.' },
+];
+
+const CAMBIO = [
+  { antes: 'Las horas viven en papeles, hojas de cálculo y mensajes de WhatsApp.', ahora: 'Cada profesor ficha y carga sus clases desde el móvil; todo queda en un solo sitio.' },
+  { antes: 'A fin de mes, perseguir a cada profesor y discutir las primas.', ahora: 'Cada profesor confirma su mes; administración revisa, aprueba o comenta, y el importe sale calculado.' },
+  { antes: 'No hay forma clara de demostrar la jornada si hay una inspección o una reclamación.', ahora: 'Registro de jornada con hora del servidor y correcciones trazables: nada se borra, todo queda anotado.' },
+  { antes: 'Las horas que se cubren con otras escuelas o autónomos se apuntan «de memoria».', ahora: 'Cuenta de horas dadas y recibidas con cada colaborador, con saldo y extracto en PDF.' },
+  { antes: 'Cruzar lo cargado con las reservas es una tarea manual y lenta.', ahora: 'Se compara con el resumen de tu sistema de reservas y se marcan las diferencias.' },
+];
+
+const CASOS = [
+  { icono: 'calendario', titulo: 'Cerrar el mes en una tarde', situacion: 'Hay 30 profesores y cada uno manda sus horas de una forma distinta.', ayuda: 'Cada uno carga y confirma en la app. Tú ves quién falta, revisas y descargas el informe del mes con importes.' },
+  { icono: 'clases', titulo: 'Primas sin discusiones', situacion: 'Idioma, disca, clase repetida… y cada profesor las cuenta a su manera.', ayuda: 'Las primas se marcan al cargar la clase y la tarifa queda congelada al confirmar el mes: lo que ves es lo que se paga.' },
+  { icono: 'reloj', titulo: 'Cumplir con el registro de jornada', situacion: 'La ley obliga a registrar la jornada y conservarla; el papel se pierde.', ayuda: 'Fichaje con QR, GPS o NFC, informe mensual y conservación. Si hay que corregir un fichaje, queda anotado quién, cuándo y por qué.' },
+  { icono: 'colaboradores', titulo: 'Cubrir clases con otras escuelas', situacion: 'Hoy les cubres 5 horas y la semana que viene te cubren 2; nadie lleva la cuenta.', ayuda: 'Cargas las horas del día en segundos. La app calcula el saldo y lo saldas por pago o compensación, con extracto en PDF.' },
+  { icono: 'comparar', titulo: 'Cuadrar con el sistema de reservas', situacion: 'Lo que dice el sistema de reservas no siempre coincide con lo que dieron los profesores.', ayuda: 'Importas el resumen de instructores y la app detecta diferencias de horas e importes antes de pagar.' },
+  { icono: 'documento', titulo: 'Documentos y firmas del equipo', situacion: 'Contratos y políticas que hay que entregar, firmar y archivar.', ayuda: 'Subes el documento a cada empleado; firma con certificado o en pantalla y queda constancia de la recepción.' },
+  { icono: 'correo', titulo: 'Avisos y recordatorios', situacion: 'Se olvidan de fichar la salida o de confirmar el mes.', ayuda: 'Recordatorios y avisos de la escuela llegan al móvil (notificaciones, correo y, si quieres, WhatsApp).' },
+  { icono: 'escudo', titulo: 'Altas y bajas de temporada', situacion: 'Cada temporada entra y sale gente, y no quieres dejar accesos abiertos.', ayuda: 'Invitas por correo, cargas la lista de golpe y, al dar de baja, el acceso se corta al instante.' },
+];
+
+const FAQ = [
+  ['¿Qué necesitan los profesores para usarla?', 'Un móvil y su correo. Se instala desde el navegador, sin tiendas de aplicaciones, y entran con un enlace o un código, sin contraseñas.'],
+  ['¿Y si no hay cobertura en la montaña?', 'Hoy la app necesita conexión para guardar los datos. El modo sin cobertura está previsto en la hoja de ruta.'],
+  ['¿Se conecta con nuestro sistema de reservas o de nóminas?', 'Se puede comparar con el resumen de instructores de tu sistema de reservas y tiene API, webhooks e importación del planning para conectarla con otros sistemas. Cada caso se estudia contigo.'],
+  ['¿Qué pasa con los datos personales?', 'Cada escuela tiene su propia instalación y cada persona ve solo lo suyo. Incluye exportación de datos, registro de actividad y documentación para el RGPD, que conviene revisar con tu asesor.'],
+  ['¿Cómo empezamos?', 'Pide una demo: te la enseñamos con tus casos reales. Si te encaja, preparamos tu instalación con tu administración y la lista de tu equipo.'],
+  ['¿Necesito la firma con certificado?', 'No. Se puede firmar con certificado digital (se comprueba que el documento no se tocó) o en pantalla, que deja constancia de recepción. Qué vale para cada documento lo decide tu asesor.'],
 ];
 
 const PASOS = [
@@ -108,12 +144,17 @@ export default function Landing({
             <span>{APP_NAME}</span>
           </a>
           <nav className="lp-nav-links" aria-label="Secciones">
+            {!MODO_CLIENTE && <a href="#para-que-sirve">Para qué sirve</a>}
+            {!MODO_CLIENTE && <a href="#casos">Casos de uso</a>}
             <a href="#pantallas">Pantallas</a>
             <a href="#funciones">Funciones</a>
             <a href="#como-funciona">Cómo funciona</a>
-            <a href="#instalar">Instalar</a>
+            {!MODO_CLIENTE && <a href="#preguntas">Preguntas</a>}
           </nav>
-          <button className="lp-btn lp-btn-ghost" onClick={e => abrir('profesor', e)}>Entrar</button>
+          <div className="lp-nav-act">
+            {WA_URL && <a className="lp-btn lp-btn-wa lp-nav-demo" href={WA_URL} target="_blank" rel="noopener noreferrer">{ICONOS.whatsapp}<span>Pedir demo</span></a>}
+            <button className="lp-btn lp-btn-ghost" onClick={e => abrir('profesor', e)}>Entrar</button>
+          </div>
         </div>
       </header>
 
@@ -121,16 +162,21 @@ export default function Landing({
         <section className="lp-hero" id="top">
           <div className="lp-wrap lp-hero-in">
             <div className="lp-hero-copy">
-              <p className="lp-eyebrow">Para escuelas de esquí</p>
+              <p className="lp-eyebrow">Gestión de horas para escuelas de esquí</p>
               <h1>Horas, clases y primas de tu equipo, listas para liquidar</h1>
               <p className="lp-lead">
                 La escuela da de alta su cuenta de administración y carga la lista de su equipo. Cada profesor recibe su
                 invitación, ficha y carga sus clases desde el móvil, y administración revisa, compara con reservas, lleva las cuentas con colaboradores y liquida.
               </p>
               <div className="lp-cta">
-                <button className="lp-btn lp-btn-primary" onClick={e => abrir('profesor', e)}>Acceso profesores</button>
-                <button className="lp-btn lp-btn-outline" onClick={e => abrir('admin', e)}>Acceso administración</button>
+                {WA_URL
+                  ? <a className="lp-btn lp-btn-wa" href={WA_URL} target="_blank" rel="noopener noreferrer">{ICONOS.whatsapp}<span>Pedir una demo por WhatsApp</span></a>
+                  : <button className="lp-btn lp-btn-primary" onClick={e => abrir('profesor', e)}>Acceso profesores</button>}
+                {WA_URL
+                  ? <a className="lp-btn lp-btn-outline" href="#pantallas">Ver la app por dentro</a>
+                  : <button className="lp-btn lp-btn-outline" onClick={e => abrir('admin', e)}>Acceso administración</button>}
               </div>
+              {!MODO_CLIENTE && <p className="lp-hint lp-demo-nota">Esta web es una <strong>demo con datos de ejemplo</strong>. <button className="lp-link" onClick={e => abrir('profesor', e)}>Entrar como profesor</button> · <button className="lp-link" onClick={e => abrir('admin', e)}>Entrar como administración</button></p>}
               <ul className="lp-trust">
                 <li>{ICONOS.escudo}<span>Solo entra quien está en la lista de la escuela</span></li>
                 <li>{ICONOS.correo}<span>Acceso por enlace al correo, sin contraseñas</span></li>
@@ -143,6 +189,21 @@ export default function Landing({
             </div>
           </div>
         </section>
+
+        {!MODO_CLIENTE && <section className="lp-sec" id="para-que-sirve" aria-labelledby="t-sirve">
+          <div className="lp-wrap">
+            <h2 id="t-sirve">¿Para qué sirve?</h2>
+            <p className="lp-lead">Para que la escuela sepa, sin perseguir a nadie, <strong>quién trabajó cuántas horas, qué clases dio, qué se le debe y qué debe a otras escuelas</strong>, y pueda demostrarlo.</p>
+            <ul className="lp-cambio">
+              {CAMBIO.map(c => (
+                <li key={c.antes}>
+                  <div className="lp-antes"><span>Antes</span>{c.antes}</div>
+                  <div className="lp-ahora"><span>Con la app</span>{c.ahora}</div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>}
 
         <section className="lp-sec lp-sec-alt" id="pantallas" aria-labelledby="t-pantallas">
           <div className="lp-wrap">
@@ -170,7 +231,24 @@ export default function Landing({
           </div>
         </section>
 
-        <section className="lp-sec" id="funciones" aria-labelledby="t-funciones">
+        {!MODO_CLIENTE && <section className="lp-sec" id="casos" aria-labelledby="t-casos">
+          <div className="lp-wrap">
+            <h2 id="t-casos">Casos de uso</h2>
+            <p className="lp-lead">Situaciones reales de una escuela y cómo se resuelven.</p>
+            <div className="lp-casos">
+              {CASOS.map(c => (
+                <article key={c.titulo} className="lp-card lp-caso">
+                  <div className="lp-ico">{ICONOS[c.icono]}</div>
+                  <h3>{c.titulo}</h3>
+                  <p className="lp-caso-sit"><strong>Situación:</strong> {c.situacion}</p>
+                  <p><strong>Con la app:</strong> {c.ayuda}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>}
+
+        <section className="lp-sec lp-sec-alt" id="funciones" aria-labelledby="t-funciones">
           <div className="lp-wrap">
             <h2 id="t-funciones">Todo lo que necesita una temporada</h2>
             <div className="lp-grid4">
@@ -242,6 +320,25 @@ export default function Landing({
           </section>
         )}
 
+        {!MODO_CLIENTE && <section className="lp-sec" id="preguntas" aria-labelledby="t-faq">
+          <div className="lp-wrap lp-faq-wrap">
+            <h2 id="t-faq">Preguntas frecuentes</h2>
+            <div className="lp-faq">
+              {FAQ.map(([q, a]) => <details key={q}><summary>{q}</summary><p>{a}</p></details>)}
+            </div>
+          </div>
+        </section>}
+
+        {WA_URL && (
+          <section className="lp-sec lp-sec-alt lp-demo-final" aria-labelledby="t-demo">
+            <div className="lp-wrap lp-center-block">
+              <h2 id="t-demo">¿La vemos con tu escuela?</h2>
+              <p className="lp-lead lp-center">Te la enseñamos con tus casos reales y te contamos cómo sería ponerla en marcha con tu equipo. Sin compromiso.</p>
+              <a className="lp-btn lp-btn-wa" href={WA_URL} target="_blank" rel="noopener noreferrer">{ICONOS.whatsapp}<span>Pedir una demo por WhatsApp</span></a>
+            </div>
+          </section>
+        )}
+
         <section className="lp-sec lp-sec-alt" id="instalar" aria-labelledby="t-instalar">
           <div className="lp-wrap lp-install">
             <div>
@@ -254,6 +351,7 @@ export default function Landing({
             <ul className="lp-install-list">
               <li><strong>Android (Chrome)</strong><span>Menú ⋮ → «Instalar aplicación».</span></li>
               <li><strong>iPhone (Safari)</strong><span>Botón Compartir → «Añadir a pantalla de inicio».</span></li>
+              <li><strong>Notificaciones</strong><span>Después, en «Mi perfil», actívalas con la guía paso a paso (en iPhone hace falta la app instalada).</span></li>
             </ul>
           </div>
         </section>
