@@ -72,6 +72,7 @@ La cuenta del colaborador **no puede** fichar, cargar clases ni entrar a adminis
 
 | Módulo | Qué oculta |
 |--------|-----------|
+| Fichaje horario | Reloj de entrada y salida (QR, GPS, NFC), presencia, zonas, correcciones de fichajes, recordatorio de salida y «dentro ahora» del panel. Para escuelas que solo gestionan clases y primas |
 | Clases y primas | Carga y revisión de clases, economía, informe de clases |
 | Días libres | Solicitudes de los profesores y su aprobación |
 | Documentos | Nóminas, contratos y firmas |
@@ -81,7 +82,7 @@ La cuenta del colaborador **no puede** fichar, cargar clases ni entrar a adminis
 | Colaboradores y subcontratas | Este módulo |
 
 - Un módulo apagado **desaparece del menú y del panel** y sus endpoints responden **404**. **No se borra ningún dato**: al volver a encenderlo está todo.
-- **Esenciales (no se apagan):** fichaje, usuarios, informes de jornada, configuración, perfil.
+- **Esenciales (no se apagan):** usuarios, informes, configuración, perfil. Con el **fichaje apagado** desaparecen el botón de fichar, Presencia y Zonas, y el panel del empleado no muestra el reloj ni las horas fichadas; los informes siguen disponibles (sin horas fichadas si no se usó). Los fichajes ya registrados se conservan.
 - **Documentos** también se puede apagar **por despliegue** (`DOCUMENTOS_HABILITADOS=false`); en ese caso no se puede activar desde la app (la pantalla lo indica).
 - Apagar *Integraciones* detiene también la API pública (`/api/v1/*`): quien la use dejará de recibir datos.
 - Cada cambio queda en el registro de actividad (`config.modulos`).

@@ -137,7 +137,7 @@ Estado: ✅ disponible · 🟡 disponible con límites · 🗺 planificado (ver 
 ### Configuración
 | Función | Estado | Detalle |
 |---------|--------|---------|
-| Módulos apagables por administración | ✅ | *Config → Módulos*: clases, días libres, documentos, comparativa, integraciones, avisos, colaboradores. Se oculta del menú y la API responde 404; los datos se conservan |
+| Módulos apagables por administración | ✅ | *Config → Módulos*: fichaje, clases, días libres, documentos, comparativa, integraciones, avisos, colaboradores. Se oculta del menú y la API responde 404; los datos se conservan |
 | Datos de la escuela y email de avisos | ✅ | Nombre, CIF, dirección, color |
 | Marca de la landing por despliegue | ✅ | Variables `VITE_*` (ver `MULTI-DESPLIEGUE.md`) |
 | WhatsApp (avisos y recordatorios) | ✅ | Opcional: «Generar QR» en Integraciones activa un número emisor; solo a quien lo pide en su perfil. No es la API oficial (ver `INTEGRACIONES.md`) |

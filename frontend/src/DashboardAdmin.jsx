@@ -28,7 +28,7 @@ export default function DashboardAdmin({ resumen, cargando, irA, aprobar, recarg
       <div className={`dash-resumen ${urgentes ? 'dash-resumen-aviso' : 'dash-resumen-ok'}`}>
         <div>
           <strong>{urgentes ? `${urgentes} cosa${urgentes > 1 ? 's' : ''} por atender` : 'Todo al día'}</strong>
-          <small>{mesLargo(resumen.mesActual)} · {equipo.dentroAhora} dentro ahora · {equipo.activos} en el equipo</small>
+          <small>{mesLargo(resumen.mesActual)}{on('fichaje') && equipo.dentroAhora != null ? ` · ${equipo.dentroAhora} dentro ahora` : ''} · {equipo.activos} en el equipo</small>
         </div>
         <button className="btn-sm" onClick={recargar} aria-label="Actualizar">↻ Actualizar</button>
       </div>
@@ -53,6 +53,16 @@ export default function DashboardAdmin({ resumen, cargando, irA, aprobar, recarg
           ))}
         </ul>
         {sol.pendientes > sol.listaPendientes.length && <p className="dash-nota">y {sol.pendientes - sol.listaPendientes.length} más…</p>}
+      </Tarjeta>}
+
+      {on('libres') && sol.sinPasarAPlanning > 0 && <Tarjeta titulo="Aprobadas por pasar a planning" cuenta={sol.sinPasarAPlanning} tono="blue" vacio="" onVer={() => irA('gestionar')}>
+        <ul className="dash-lista">
+          {sol.listaSinPlanning.map(s => (
+            <li key={s.id}><div><strong>{s.profesor}</strong><small>{rango(s)} · {motivo(s.motivo)}</small></div>
+              <button className="btn-sm" onClick={() => irA('gestionar')}>Ver</button></li>
+          ))}
+        </ul>
+        {sol.sinPasarAPlanning > sol.listaSinPlanning.length && <p className="dash-nota">y {sol.sinPasarAPlanning - sol.listaSinPlanning.length} más…</p>}
       </Tarjeta>}
 
       {on('clases') && <Tarjeta titulo="Horas por revisar" cuenta={clases.sinRevisar} tono="blue" vacio="No hay meses confirmados sin revisar" onVer={() => irA('clases')}>

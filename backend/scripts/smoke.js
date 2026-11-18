@@ -626,6 +626,58 @@ const pdf = nombre => {
     }
   }
 
+  seccion('6s. Módulo de fichaje apagable y «pasado a planning»');
+  {
+    const ponerModulos = off => http('PUT', '/api/admin/modulos', { token: admin, body: { off } });
+    const antes = (await http('GET', '/api/admin/modulos', { token: admin })).data;
+    const offAntes = antes.filter(m => !m.activo && !m.bloqueadoPorDespliegue).map(m => m.clave);
+    check('el catálogo de módulos incluye el fichaje, activo por defecto', antes.some(m => m.clave === 'fichaje') && antes.find(m => m.clave === 'fichaje').activo === true);
+    check('con fichaje activo, el historial de fichajes responde', (await http('GET', '/api/fichaje/historial', { token: prof })).status === 200);
+    await ponerModulos([...new Set([...offAntes, 'fichaje'])]);
+    const cfgOff = (await http('GET', '/api/config')).data;
+    check('apagar fichaje lo refleja en la configuración pública', cfgOff.modulos?.fichaje === false && cfgOff.modulos?.clases !== false);
+    for (const [m, r] of [['GET', '/api/fichaje/historial'], ['POST', '/api/fichaje/salida'], ['GET', '/api/zonas']]) {
+      const x = await http(m, r, { token: prof, body: m === 'POST' ? {} : undefined });
+      check(`con fichaje apagado ${m} ${r} → 404 y avisa del módulo`, x.status === 404 && x.data.modulo === 'fichaje');
+    }
+    for (const r of ['/api/admin/zonas', '/api/admin/fichajes', '/api/admin/fichajes-activos']) check(`con fichaje apagado ${r} → 404`, (await http('GET', r, { token: admin })).status === 404);
+    const resOff = (await http('GET', '/api/admin/resumen', { token: admin })).data;
+    check('el resumen no cuenta «dentro ahora» sin fichaje', resOff.equipo && resOff.equipo.dentroAhora === null);
+    check('el resto de módulos sigue funcionando', (await http('GET', '/api/libres/mis-solicitudes', { token: prof })).status === 200);
+    await ponerModulos(offAntes);
+    check('al volver a encender el fichaje todo responde de nuevo', (await http('GET', '/api/fichaje/historial', { token: prof })).status === 200 && (await http('GET', '/api/admin/zonas', { token: admin })).status === 200);
+    check('el resumen vuelve a contar «dentro ahora»', typeof (await http('GET', '/api/admin/resumen', { token: admin })).data.equipo.dentroAhora === 'number');
+
+    // Pasado a planning
+    const sol = await http('POST', '/api/libres/solicitar', { token: prof, body: { fechaInicio: '2027-03-01', fechaFin: '2027-03-03', motivo: 'VACACIONES' } });
+    const id = sol.data.solicitud?.id || sol.data.id;
+    check('crea una solicitud para la prueba de planning', sol.status < 300 && !!id);
+    check('una solicitud pendiente no se puede pasar a planning → 400', (await http('POST', `/api/admin/solicitudes/${id}/planning`, { token: admin, body: {} })).status === 400);
+    check('un profesor no puede marcar planning → 403', (await http('POST', `/api/admin/solicitudes/${id}/planning`, { token: prof, body: {} })).status === 403);
+    await http('POST', `/api/admin/solicitudes/${id}/responder`, { token: admin, body: { aprobado: true } });
+    const fila = async () => (await http('GET', '/api/admin/solicitudes', { token: admin })).data.find(x => x.id === id);
+    check('aprobada, aparece sin pasar a planning', (await fila())?.enPlanning === false);
+    const res1 = (await http('GET', '/api/admin/resumen', { token: admin })).data.solicitudes;
+    check('el resumen cuenta las aprobadas por pasar a planning', res1.sinPasarAPlanning >= 1 && res1.listaSinPlanning.some(x => x.id === id));
+    const marca = await http('POST', `/api/admin/solicitudes/${id}/planning`, { token: admin, body: { hecho: true } });
+    const f1 = await fila();
+    check('el admin la marca como pasada a planning (con fecha)', marca.status === 200 && f1.enPlanning === true && !!f1.enPlanningAt);
+    check('ya no figura en las pendientes de planning del resumen', !(await http('GET', '/api/admin/resumen', { token: admin })).data.solicitudes.listaSinPlanning.some(x => x.id === id));
+    await http('PUT', `/api/admin/solicitudes/${id}`, { token: admin, body: { comentario: 'solo un comentario' } });
+    check('cambiar solo el comentario no quita la marca', (await fila()).enPlanning === true);
+    await http('PUT', `/api/admin/solicitudes/${id}`, { token: admin, body: { fechaFin: '2027-03-05' } });
+    check('cambiar las fechas quita la marca (hay que volver a pasarla)', (await fila()).enPlanning === false);
+    await http('POST', `/api/admin/solicitudes/${id}/planning`, { token: admin, body: {} });
+    check('se puede quitar la marca a mano', (await http('POST', `/api/admin/solicitudes/${id}/planning`, { token: admin, body: { hecho: false } })).status === 200 && (await fila()).enPlanning === false);
+    await http('POST', `/api/admin/solicitudes/${id}/planning`, { token: admin, body: {} });
+    await http('POST', `/api/admin/solicitudes/${id}/responder`, { token: admin, body: { aprobado: false, observacion: 'prueba' } });
+    check('rechazar una solicitud marcada deja la marca limpia', (await fila()).enPlanning === false);
+    check('una solicitud rechazada no se puede pasar a planning → 400', (await http('POST', `/api/admin/solicitudes/${id}/planning`, { token: admin, body: {} })).status === 400);
+    check('solicitud inexistente → 404', (await http('POST', '/api/admin/solicitudes/no-existe/planning', { token: admin, body: {} })).status === 404);
+    const audP = (await http('GET', '/api/admin/auditoria?limit=200', { token: admin })).data || [];
+    check('el registro de actividad anota pasar a planning y quitar la marca', audP.some(x => x.accion === 'solicitud.planning') && audP.some(x => x.accion === 'solicitud.planning_quitar'));
+  }
+
   seccion('7. Limpieza');
   await http('POST', '/api/admin/clases/reabrir', { token: admin, body: { profesorId: me.id, mes: MES } });
   check('elimina la clase de prueba', (await http('DELETE', `/api/clases/${claseId}`, { token: prof })).status === 200);

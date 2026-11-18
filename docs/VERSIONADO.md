@@ -32,6 +32,7 @@
 
 ## Historial
 - **1.0.0** (30/10/2026): MVP listo para el piloto.
+- **1.4.0** (18/11/2026): módulo de fichaje apagable y marca «pasado a planning» en las solicitudes aprobadas.
 - **1.3.0** (16/11/2026): flota de clientes (registro y estado de cada instalación; solo proveedor).
 - **1.2.0** (16/11/2026): notificaciones push con guía visual para iPhone y Android, landing de venta (pedir demo, para qué sirve, casos de uso, preguntas), modo cliente de la landing y manual de despliegue para clientes nuevos.
 - **1.1.0** (15/11/2026): registro de jornada con correcciones trazables, colaboradores y subcontratas, módulos apagables, carga de clases rediseñada, comprobación de firmas y firma en pantalla, edición de solicitudes, datos de demostración en instancia desplegada, indicador de versión y landing actualizada. Detalle en `CHANGELOG.md`.
