@@ -412,3 +412,43 @@ model ClienteFlota {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 }
+
+// Bonos y giftcards: valor prepagado (en euros o en horas de clase) con código de seguimiento y vencimiento opcional.
+// Se «consumen» desde la app cuando la reserva ya está cargada en el software de reservas.
+model Bono {
+  id              String          @id @default(uuid())
+  codigo          String          @unique
+  tipo            String          // BONO (abonado/contratado por el cliente, p. ej. cierre de temporada) · GIFTCARD (regalo)
+  unidad          String          // EUROS · HORAS
+  valorInicial    Float
+  saldo           Float
+  titularNombre   String?
+  titularEmail    String?
+  titularTelefono String?
+  concepto        String?
+  notas           String?
+  emitidoAt       DateTime        @default(now())
+  venceAt         DateTime?       // null = sin vencimiento
+  anulado         Boolean         @default(false)
+  anuladoAt       DateTime?
+  anuladoMotivo   String?
+  creadoPorId     String?
+  movimientos     MovimientoBono[]
+
+  @@index([venceAt])
+}
+
+model MovimientoBono {
+  id            String   @id @default(uuid())
+  bonoId        String
+  bono          Bono     @relation(fields: [bonoId], references: [id], onDelete: Cascade)
+  tipo          String   // EMISION · CONSUMO · DEVOLUCION · AJUSTE · ANULACION · REACTIVACION · VENCIMIENTO
+  cantidad      Float    // con signo: negativo al consumir
+  saldoDespues  Float
+  referencia    String?  // reserva en el software de reservas (n.º, nombre del cliente…)
+  nota          String?
+  porId         String?
+  createdAt     DateTime @default(now())
+
+  @@index([bonoId, createdAt])
+}

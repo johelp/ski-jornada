@@ -54,6 +54,14 @@ Cada cliente tiene su **propio despliegue y base de datos** (ver `MULTI-DESPLIEG
 - Conservación: durante la colaboración y los plazos contables y fiscales (`[plazo]`). Los colaboradores no se borran desde la app, se dejan inactivos.
 - Información: entregar a cada autónomo y a las personas con acceso al portal la información del art. 13.
 
+**Tratamiento 7 (si se usa el módulo) — Bonos y giftcards**
+- Finalidad: gestionar bonos y tarjetas regalo (saldo, vencimiento y consumo contra reservas).
+- Interesados: clientes de la escuela (titulares) o quien recibe la tarjeta.
+- Datos: **opcionales** nombre, correo y teléfono del titular; código, valor, saldo, vencimiento y movimientos con la referencia de la reserva.
+- Base jurídica: ejecución del contrato (6.1.b); obligaciones contables y fiscales (6.1.c).
+- Conservación: mientras el bono esté vigente y los plazos contables y fiscales (`[plazo]`). No se borran desde la app: se anulan o se agotan y quedan en el historial.
+- Minimización: se puede emitir un bono sin datos del titular (solo código y concepto). Información (art. 13) al cliente al emitirlo.
+
 **Tratamiento 5 (opcional) — Documentos laborales** *(solo si se activa el módulo)*: nóminas, contratos y certificados. Base: contrato/obligación legal. Conservación: `[plazo]`.
 - Al subir un PDF firmado, el servidor lee la firma electrónica y guarda **nombre y emisor del certificado, fechas de validez, huella SHA-256 y el resultado de la comprobación**. **No guarda el NIF/NIE** que lleve el certificado (se descarta del nombre). El PDF firmado sí puede contener esos datos en su interior: se trata como el resto del legajo.
 - **Firma en pantalla:** se estampa la **imagen** de la firma, el nombre, la fecha y hora y la huella del original en el PDF. No se guardan datos biométricos de la firma (velocidad, presión) ni la IP o la ubicación. Se apaga con `FIRMA_PANTALLA_HABILITADA=false`.

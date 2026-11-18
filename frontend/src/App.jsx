@@ -7,6 +7,7 @@ import VistaMisClases from './VistaMisClases';
 import InformeClases from './InformeClases';
 import VistaIntegraciones from './VistaIntegraciones';
 import VistaFlota from './VistaFlota';
+import VistaBonos from './VistaBonos';
 import ImportarLista from './ImportarLista';
 import InstalarBanner from './InstalarBanner';
 import { filaCsv } from './csv';
@@ -969,6 +970,7 @@ function App() {
         { id: 'colaboradores', icon: '🤝', label: 'Colaboradores', badge: resumenAdmin?.colaboradores?.enRevision || 0 },
         { id: 'zonas',      icon: '📍', label: 'Zonas' },
         { id: 'avisos',     icon: '🔔', label: 'Avisos' },
+        { id: 'bonos',      icon: '🎟', label: 'Bonos' },
         { id: 'integraciones', icon: '🔗', label: 'Integraciones' },
         ...(user?.esPrincipal && configEscuela?.flotaOn ? [{ id: 'flota', icon: '🛰', label: 'Flota' }] : []),
         { id: 'config',     icon: '🏔', label: 'Config' },
@@ -985,13 +987,13 @@ function App() {
       ];
 
   // Módulos que administración apagó (y el de documentos, que además se puede apagar por despliegue)
-  const MODULO_DE = { documentos: 'documentos', clases: 'clases', misclases: 'clases', gestionar: 'libres', solicitar: 'libres', integraciones: 'integraciones', fichar: 'fichaje', presencia: 'fichaje', zonas: 'fichaje', avisos: 'avisos', colaboradores: 'colaboradores' };
+  const MODULO_DE = { bonos: 'bonos', documentos: 'documentos', clases: 'clases', misclases: 'clases', gestionar: 'libres', solicitar: 'libres', integraciones: 'integraciones', fichar: 'fichaje', presencia: 'fichaje', zonas: 'fichaje', avisos: 'avisos', colaboradores: 'colaboradores' };
   const modulos = configEscuela?.modulos;
   const navItems = navItemsTodos.filter(i => (i.id !== 'documentos' || docsOn) && modulos?.[MODULO_DE[i.id]] !== false);
 
   const ICONO_NAV = {
     dashboard: 'inicio', presencia: 'presencia', gestionar: 'solicitudes', clases: 'clases', informes: 'informe', documentos: 'docs',
-    usuarios: 'usuarios', colaboradores: 'usuarios', zonas: 'zonas', avisos: 'avisos', integraciones: 'enlace', flota: 'enlace', config: 'config', perfil: 'perfil', fichar: 'reloj', misclases: 'clases', solicitar: 'calendario',
+    usuarios: 'usuarios', colaboradores: 'usuarios', zonas: 'zonas', avisos: 'avisos', integraciones: 'enlace', bonos: 'bonos', flota: 'enlace', config: 'config', perfil: 'perfil', fichar: 'reloj', misclases: 'clases', solicitar: 'calendario',
   };
   const PRINCIPALES = esAdmin && !modoEmpleado ? ['dashboard', 'clases', 'usuarios', 'informes'] : ['dashboard', 'fichar', 'misclases', 'informes'];
   const navPrincipal = PRINCIPALES.map(id => navItems.find(i => i.id === id)).filter(Boolean);
@@ -2444,6 +2446,9 @@ function App() {
         )}
         {esAdmin && !modoEmpleado && vista === 'colaboradores' && (
           <VistaColaboradores api={api} h={h} toast$={toast$} config={configEscuela} />
+        )}
+        {esAdmin && !modoEmpleado && vista === 'bonos' && (
+          <VistaBonos api={api} h={h} toast$={toast$} config={configEscuela} />
         )}
         {esAdmin && !modoEmpleado && vista === 'integraciones' && (
           <VistaIntegraciones api={api} h={h} toast$={toast$} />

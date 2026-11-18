@@ -26,6 +26,7 @@ const RUTAS = {
   alerta: <><path d="M12 3l10 18H2z" /><path d="M12 10v5M12 18v.5" /></>,
   descargar: <><path d="M12 4v11M7 11l5 5 5-5" /><path d="M5 20h14" /></>,
   enlace: <><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1" /></>,
+  bonos: <><path d="M3 9a2 2 0 002-2h14a2 2 0 002 2v0a2 2 0 000 4v0a2 2 0 00-2 2H5a2 2 0 00-2-2v0a2 2 0 000-4z" /><path d="M14 7v10" strokeDasharray="2 2" /></>,
   mas1: <path d="M12 5v14M5 12h14" />,
   nfc: <><path d="M8 6c3 3 3 9 0 12M12 4c4.5 4 4.5 12 0 16M16 2c6 5.5 6 14.5 0 20" /></>,
   qr: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><path d="M14 14h3v3M21 14v.5M14 21h3M21 17v4" /></>,

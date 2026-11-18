@@ -38,6 +38,7 @@ const ICONOS = {
   documento: <Icon><path d="M7 3h8l4 4v14H7z" /><path d="M15 3v4h4M10 17c1-2 2-2 3 0s2 0 3-1" /></Icon>,
   modulos: <Icon><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><path d="M17.5 14v7M14 17.5h7" /></Icon>,
   whatsapp: <Icon><path d="M3 21l1.6-4.6A8.5 8.5 0 1112 20.5a8.4 8.4 0 01-4-1z" /><path d="M9 8.5c.3 2.7 2.8 5.2 5.6 5.7l1.2-1.4-2-1-.8.6a4.5 4.5 0 01-2-2l.6-.8-1-2z" /></Icon>,
+  bono: <Icon><path d="M3 9a2 2 0 002-2h14a2 2 0 002 2 2 2 0 000 4 2 2 0 00-2 2H5a2 2 0 00-2-2 2 2 0 000-4z" /><path d="M14 7v10" /></Icon>,
   enlace: <Icon><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1" /></Icon>,
 };
 
@@ -50,7 +51,8 @@ const FUNCIONES = [
   { icono: 'comparar', titulo: 'Compara con tus reservas', texto: 'Cruza el resumen de instructores de tu sistema de reservas con lo cargado y detecta diferencias.' },
   { icono: 'colaboradores', titulo: 'Colaboradores y subcontratas', texto: 'Lleva la cuenta de horas dadas y recibidas con otras escuelas y autónomos: saldo, extracto en PDF y saldar por pago o compensación.' },
   { icono: 'documento', titulo: 'Documentos y firma', texto: 'Contratos y documentos por empleado. Firma con certificado (se comprueba que no se modificó) o en pantalla, como constancia de recepción.' },
-  { icono: 'modulos', titulo: 'A tu medida', texto: 'Cada escuela enciende solo lo que usa: clases, días libres, documentos, colaboradores, integraciones…' },
+  { icono: 'bono', titulo: 'Bonos y giftcards', texto: 'Emite un bono con código de seguimiento (cierre de temporada, clases contratadas) o una giftcard, en euros o en horas, con vencimiento opcional. Se consume cuando la reserva ya está en tu sistema.' },
+  { icono: 'modulos', titulo: 'A tu medida', texto: 'Cada escuela enciende solo lo que usa: fichaje, clases, días libres, bonos, documentos, colaboradores, integraciones… ¿Solo clases y primas, sin fichar? También se puede.' },
   { icono: 'enlace', titulo: 'Se conecta con tus sistemas', texto: 'API con claves, webhooks firmados e importación del planning para reservas y nóminas.' },
   { icono: 'informe', titulo: 'Informe económico', texto: 'PDF mensual con horas, primas e importe estimado cuando hay tarifas cargadas.' },
   { icono: 'escudo', titulo: 'Datos protegidos', texto: 'Cada escuela con su propia instancia; cada profesor ve solo lo suyo, puede exportar sus datos y todo cambio queda en el registro de actividad.' },
@@ -61,6 +63,7 @@ const CAMBIO = [
   { antes: 'A fin de mes, perseguir a cada profesor y discutir las primas.', ahora: 'Cada profesor confirma su mes; administración revisa, aprueba o comenta, y el importe sale calculado.' },
   { antes: 'No hay forma clara de demostrar la jornada si hay una inspección o una reclamación.', ahora: 'Registro de jornada con hora del servidor y correcciones trazables: nada se borra, todo queda anotado.' },
   { antes: 'Las horas que se cubren con otras escuelas o autónomos se apuntan «de memoria».', ahora: 'Cuenta de horas dadas y recibidas con cada colaborador, con saldo y extracto en PDF.' },
+  { antes: 'Los bonos y las tarjetas regalo viven en un papel o en un correo, y nadie sabe cuánto queda ni cuándo vencen.', ahora: 'Cada bono tiene su código, su saldo y su vencimiento; se consume contra la reserva y queda el historial.' },
   { antes: 'Cruzar lo cargado con las reservas es una tarea manual y lenta.', ahora: 'Se compara con el resumen de tu sistema de reservas y se marcan las diferencias.' },
 ];
 
@@ -71,6 +74,8 @@ const CASOS = [
   { icono: 'colaboradores', titulo: 'Cubrir clases con otras escuelas', situacion: 'Hoy les cubres 5 horas y la semana que viene te cubren 2; nadie lleva la cuenta.', ayuda: 'Cargas las horas del día en segundos. La app calcula el saldo y lo saldas por pago o compensación, con extracto en PDF.' },
   { icono: 'comparar', titulo: 'Cuadrar con el sistema de reservas', situacion: 'Lo que dice el sistema de reservas no siempre coincide con lo que dieron los profesores.', ayuda: 'Importas el resumen de instructores y la app detecta diferencias de horas e importes antes de pagar.' },
   { icono: 'documento', titulo: 'Documentos y firmas del equipo', situacion: 'Contratos y políticas que hay que entregar, firmar y archivar.', ayuda: 'Subes el documento a cada empleado; firma con certificado o en pantalla y queda constancia de la recepción.' },
+  { icono: 'bono', titulo: 'Bonos de cierre de temporada y giftcards', situacion: 'Cierras la estación con clases ya cobradas, o te piden una tarjeta regalo para Navidad.', ayuda: 'Emites un bono con código (por horas o por importe) y vencimiento en meses o días; cuando la reserva está cargada en tu sistema lo consumes aquí y el saldo queda al día.' },
+  { icono: 'calendario', titulo: 'Días libres sin olvidos en el cuadrante', situacion: 'Apruebas vacaciones y asuntos propios, pero a veces no llegan al planning.', ayuda: 'Cada solicitud aprobada se marca como «pasada a planning» y el panel te muestra las que aún faltan.' },
   { icono: 'correo', titulo: 'Avisos y recordatorios', situacion: 'Se olvidan de fichar la salida o de confirmar el mes.', ayuda: 'Recordatorios y avisos de la escuela llegan al móvil (notificaciones, correo y, si quieres, WhatsApp).' },
   { icono: 'escudo', titulo: 'Altas y bajas de temporada', situacion: 'Cada temporada entra y sale gente, y no quieres dejar accesos abiertos.', ayuda: 'Invitas por correo, cargas la lista de golpe y, al dar de baja, el acceso se corta al instante.' },
 ];
@@ -81,6 +86,8 @@ const FAQ = [
   ['¿Se conecta con nuestro sistema de reservas o de nóminas?', 'Se puede comparar con el resumen de instructores de tu sistema de reservas y tiene API, webhooks e importación del planning para conectarla con otros sistemas. Cada caso se estudia contigo.'],
   ['¿Qué pasa con los datos personales?', 'Cada escuela tiene su propia instalación y cada persona ve solo lo suyo. Incluye exportación de datos, registro de actividad y documentación para el RGPD, que conviene revisar con tu asesor.'],
   ['¿Cómo empezamos?', 'Pide una demo: te la enseñamos con tus casos reales. Si te encaja, preparamos tu instalación con tu administración y la lista de tu equipo.'],
+  ['¿Y si solo necesito clases y primas, sin fichaje?', 'Cada escuela enciende solo lo que usa: el fichaje horario, las clases, los días libres, los bonos o los documentos se pueden apagar. No se borra nada y se puede volver a encender.'],
+  ['¿Se pueden gestionar bonos y tarjetas regalo?', 'Sí: bonos (por ejemplo, clases ya abonadas al cerrar la estación) y giftcards, en euros o en horas, con código de seguimiento y vencimiento opcional. Se consumen desde la app cuando la reserva ya está en tu sistema de reservas.'],
   ['¿Necesito la firma con certificado?', 'No. Se puede firmar con certificado digital (se comprueba que el documento no se tocó) o en pantalla, que deja constancia de recepción. Qué vale para cada documento lo decide tu asesor.'],
 ];
 

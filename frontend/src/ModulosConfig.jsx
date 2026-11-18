@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 
 // Administración enciende o apaga módulos. Un módulo apagado desaparece del menú y deja de responder; no se borra ningún dato.
 const DESC = {
+  bonos: 'Bonos (cierre de temporada, clases contratadas) y giftcards en euros u horas, con código de seguimiento, vencimiento y consumo contra la reserva.',
   fichaje: 'Reloj de entrada y salida (QR, GPS, NFC), presencia en tiempo real, zonas, correcciones de fichajes y recordatorio de salida. Apágalo si tu escuela solo gestiona clases y primas.',
   clases: 'Carga de clases con disciplinas y primas, revisión de horas y economía.',
   libres: 'Solicitudes de días libres y su aprobación.',

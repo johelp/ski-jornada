@@ -131,13 +131,16 @@ Estado: ✅ disponible · 🟡 disponible con límites · 🗺 planificado (ver 
 | Portal del colaborador (opcional) | ✅ | Ve su cuenta, acepta o pide revisión, descarga su extracto; no accede a nada más |
 | Colaborador propone sus propias horas | ⬜ | Hoy solo acepta o revisa lo que carga administración |
 
+### Bonos y giftcards
+- Emisión de bonos y giftcards en euros u horas, con código de seguimiento y vencimiento opcional; consumo contra la reserva del software de reservas, devolución, anulación, historial, búsqueda por código, ficha imprimible, CSV y aviso de vencimientos en el panel. Módulo apagable. Ver `BONOS.md`.
+
 ### Flota de clientes (solo proveedor)
 - Registro de instalaciones y comprobación de estado (versión, caída, push) desde la pantalla **Flota** y el script `scripts/flota.js`. Solo con `FLOTA_ON=true` y cuenta principal. Ver `FLOTA.md`.
 
 ### Configuración
 | Función | Estado | Detalle |
 |---------|--------|---------|
-| Módulos apagables por administración | ✅ | *Config → Módulos*: fichaje, clases, días libres, documentos, comparativa, integraciones, avisos, colaboradores. Se oculta del menú y la API responde 404; los datos se conservan |
+| Módulos apagables por administración | ✅ | *Config → Módulos*: fichaje, bonos, clases, días libres, documentos, comparativa, integraciones, avisos, colaboradores. Se oculta del menú y la API responde 404; los datos se conservan |
 | Datos de la escuela y email de avisos | ✅ | Nombre, CIF, dirección, color |
 | Marca de la landing por despliegue | ✅ | Variables `VITE_*` (ver `MULTI-DESPLIEGUE.md`) |
 | WhatsApp (avisos y recordatorios) | ✅ | Opcional: «Generar QR» en Integraciones activa un número emisor; solo a quien lo pide en su perfil. No es la API oficial (ver `INTEGRACIONES.md`) |

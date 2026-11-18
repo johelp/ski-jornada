@@ -14,6 +14,7 @@ export const PANTALLAS = {
     { id: 'equipo', titulo: 'Equipo e invitaciones', texto: 'Importa la lista, invita a los pendientes y ve quién ya entró.' },
     { id: 'comparativa', titulo: 'Comparar con reservas', texto: 'Cruza el resumen de tu sistema de reservas con las horas cargadas.' },
     { id: 'colaboradores', titulo: 'Colaboradores', texto: 'Horas dadas y recibidas con otras escuelas y autónomos, con su saldo.' },
+    { id: 'bonos', titulo: 'Bonos y giftcards', texto: 'Código de seguimiento, saldo, vencimiento y consumo contra la reserva.' },
   ],
 };
 
@@ -105,6 +106,18 @@ export function Pantalla({ id }) {
           <div className="mk-class"><b>ES</b><span>Escuela Sierra Norte <i>escuela</i></span><em className="ok">+3 h · 90 €</em></div>
           <div className="mk-class warn"><b>MR</b><span>Marcos Ruiz <i>autónomo</i></span><em className="wa">−2 h · en revisión</em></div>
           <div className="mk-class"><b>EV</b><span>Escuela Valle Sur <i>escuela</i></span><em className="ok">Saldado</em></div>
+        </Escritorio>
+      );
+    case 'bonos':
+      return (
+        <Escritorio ruta="Bonos y giftcards" activo="Bonos">
+          <p className="mk-h">Bonos y giftcards</p>
+          <div className="mk-tiles four">
+            <Tile n="14" l="Activos" /><Tile n="1.250 €" l="Saldo vivo" c="g" /><Tile n="36 h" l="Horas vivas" c="a" /><Tile n="3" l="Vencen en 30 días" />
+          </div>
+          <div className="mk-class"><b>BN</b><span>BONO-K3M9-X2AB <i>10 h · cierre de temporada</i></span><em className="ok">8 h · vence 8 dic</em></div>
+          <div className="mk-class warn"><b>GC</b><span>GIFT-7QWR-M4TP <i>giftcard 150 €</i></span><em className="wa">Vence en 12 días</em></div>
+          <div className="mk-class"><b>BN</b><span>BONO-C2VH-P9ND <i>5 h · clases particulares</i></span><em className="ok">Agotado</em></div>
         </Escritorio>
       );
     case 'resumen':

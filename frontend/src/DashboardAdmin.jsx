@@ -65,6 +65,15 @@ export default function DashboardAdmin({ resumen, cargando, irA, aprobar, recarg
         {sol.sinPasarAPlanning > sol.listaSinPlanning.length && <p className="dash-nota">y {sol.sinPasarAPlanning - sol.listaSinPlanning.length} más…</p>}
       </Tarjeta>}
 
+      {on('bonos') && resumen.bonos && resumen.bonos.porVencer > 0 && <Tarjeta titulo="Bonos que vencen en 30 días" cuenta={resumen.bonos.porVencer} tono="amber" vacio="" onVer={() => irA('bonos')}>
+        <ul className="dash-lista">
+          {resumen.bonos.listaPorVencer.map(b => (
+            <li key={b.id}><div><strong>{b.codigo}{b.titular ? ` · ${b.titular}` : ''}</strong><small>Saldo {b.unidad === 'HORAS' ? `${b.saldo} h` : `${b.saldo} €`} · vence {fecha(b.venceAt)}{b.dias != null ? ` (${b.dias === 0 ? 'hoy' : `en ${b.dias} d`})` : ''}</small></div>
+              <button className="btn-sm" onClick={() => irA('bonos')}>Ver</button></li>
+          ))}
+        </ul>
+      </Tarjeta>}
+
       {on('clases') && <Tarjeta titulo="Horas por revisar" cuenta={clases.sinRevisar} tono="blue" vacio="No hay meses confirmados sin revisar" onVer={() => irA('clases')}>
         <ul className="dash-lista">
           {clases.listaSinRevisar.map(c => (

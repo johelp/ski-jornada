@@ -17,6 +17,9 @@ Ver `ALCANCE-MVP.md` (estado al 29/10/2026, riesgos y decisiones).
 ## Piloto Snowmotion
 Ver `PILOTO-SNOWMOTION.md`: carga masiva de nóminas, archivado en Drive (cuenta de servicio), backup a Drive, importación del planning de reservas.
 
+## Pendiente en bonos y giftcards (v1.5.0 hecha, ver `BONOS.md`)
+Consulta pública del saldo por el cliente con su código (con límite de intentos), envío del bono por correo o WhatsApp, PDF con QR, consumo automático desde el software de reservas (hoy manual) y aviso al titular cuando le quede poco para vencer.
+
 ## Próximo (prioridad alta)
 1. **Revisión UX/UI** de toda la app (mobile first): jerarquía visual, contraste de inputs, formulario de carga de clases con 1 mano, estados vacíos, accesibilidad. Probar la PWA en iOS y Android reales.
 2. **Doble verificación para administración** y cambio de email desde la interfaz; caducidad de invitaciones sin usar.
