@@ -51,6 +51,8 @@ Alta: `POST /api/admin/integraciones/webhooks {url, eventos[]}` (URL **https**; 
 | `clases.revision` | Administración revisa | `email, mes, estado, nota` |
 | `clases.mes_reabierto` | Se reabre un mes | `profesorId, mes` |
 | `documento.firmado` | El profesor sube un documento firmado | `documentoId, tipo, mes, profesorId` |
+| `bono.emitido` | Administración emite un bono o giftcard | `id, codigo, tipo, unidad, valor, venceAt` |
+| `bono.consumido` | Se consume saldo de un bono | `id, codigo, cantidad, saldo, referencia` |
 | `solicitud.creada` | Un profesor pide días libres | `id, profesorId, fechaInicio, fechaFin, motivo` |
 | `solicitud.modificada` | El empleado o administración cambian una solicitud | `id, profesorId, fechaInicio, fechaFin, motivo` |
 | `solicitud.cancelada` | El empleado retira una solicitud pendiente | `id, profesorId` |

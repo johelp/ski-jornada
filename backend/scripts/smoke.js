@@ -678,6 +678,82 @@ const pdf = nombre => {
     check('el registro de actividad anota pasar a planning y quitar la marca', audP.some(x => x.accion === 'solicitud.planning') && audP.some(x => x.accion === 'solicitud.planning_quitar'));
   }
 
+  seccion('6t. Bonos y giftcards');
+  {
+    const B = '/api/admin/bonos';
+    const lib = require('../bonos');
+    check('(lógica) el código evita caracteres ambiguos y se normaliza al teclearlo', /^BONO-[A-HJ-NP-TV-Z2-9]{4}-[A-HJ-NP-TV-Z2-9]{4}$/.test(lib.generarCodigo('BONO')) && lib.normalizarCodigo(' gift ab2c d3ef ') === 'GIFT-AB2C-D3EF');
+    check('(lógica) 31 ene + 1 mes = 28 feb, no 3 mar', lib.calcularVencimiento({ vencimiento: { cantidad: 1, unidad: 'MESES' } }, new Date(2027, 0, 31)).valor.getMonth() === 1);
+    check('un profesor no accede a los bonos → 403', (await http('GET', B, { token: prof })).status === 403);
+    check('rechaza sin unidad', (await http('POST', B, { token: admin, body: { valor: 50 } })).status === 400);
+    check('rechaza un valor 0 o negativo', (await http('POST', B, { token: admin, body: { unidad: 'EUROS', valor: 0 } })).status === 400 && (await http('POST', B, { token: admin, body: { unidad: 'EUROS', valor: -5 } })).status === 400);
+    check('rechaza más de 2 decimales', (await http('POST', B, { token: admin, body: { unidad: 'EUROS', valor: 10.555 } })).status === 400);
+    check('rechaza un vencimiento en el pasado y una fecha imposible', (await http('POST', B, { token: admin, body: { unidad: 'HORAS', valor: 2, venceAt: '2020-01-01' } })).status === 400 && (await http('POST', B, { token: admin, body: { unidad: 'HORAS', valor: 2, venceAt: '2030-02-30' } })).status === 400);
+    check('rechaza una duración mal expresada', (await http('POST', B, { token: admin, body: { unidad: 'HORAS', valor: 2, vencimiento: { cantidad: 3, unidad: 'AÑOS' } } })).status === 400);
+
+    const bono = await http('POST', B, { token: admin, body: { tipo: 'BONO', unidad: 'HORAS', valor: 10, titularNombre: 'Cliente Prueba', titularEmail: 'cliente.prueba@example.com', concepto: 'Cierre de temporada: clases particulares', vencimiento: { cantidad: 6, unidad: 'MESES' } } });
+    check('emite un bono en horas con vencimiento a 6 meses y código de seguimiento', bono.status === 201 && /^BONO-/.test(bono.data.codigo) && bono.data.saldo === 10 && bono.data.estado === 'ACTIVO' && bono.data.diasParaVencer > 150);
+    const id = bono.data.id, cod = bono.data.codigo;
+    const gift = await http('POST', B, { token: admin, body: { tipo: 'GIFTCARD', unidad: 'EUROS', valor: 100.5, venceAt: '2030-12-31' } });
+    check('emite una giftcard en euros con fecha de vencimiento fija', gift.status === 201 && /^GIFT-/.test(gift.data.codigo) && gift.data.valorInicial === 100.5);
+    const sin = await http('POST', B, { token: admin, body: { unidad: 'EUROS', valor: 20 } });
+    check('un bono sin vencimiento no vence nunca', sin.status === 201 && sin.data.venceAt === null && sin.data.diasParaVencer === null);
+
+    const porCodigo = await http('GET', `${B}/codigo/${cod.toLowerCase().replace(/-/g, ' ')}`, { token: admin });
+    check('se busca por código tecleado en minúsculas y con espacios', porCodigo.status === 200 && porCodigo.data.id === id && porCodigo.data.movimientos.length === 1 && porCodigo.data.movimientos[0].tipo === 'EMISION');
+    check('un código inexistente → 404', (await http('GET', `${B}/codigo/BONO-ZZZZ-ZZZZ`, { token: admin })).status === 404);
+    check('la lista filtra por texto del titular y por tipo', (await http('GET', `${B}?q=Cliente%20Prueba`, { token: admin })).data.some(b => b.id === id) && !(await http('GET', `${B}?tipo=GIFTCARD&q=Cliente%20Prueba`, { token: admin })).data.some(b => b.id === id));
+
+    const cons = (b, extra) => http('POST', `${B}/${id}/consumir`, { token: admin, body: b, ...extra });
+    check('consumir exige la reserva del software de reservas → 400', (await cons({ cantidad: 2 })).status === 400);
+    check('consumir una cantidad inválida → 400', (await cons({ cantidad: 0, referencia: 'R-1' })).status === 400);
+    const c1 = await cons({ cantidad: 2.5, referencia: 'Reserva R-1001', nota: 'Clase del sábado' });
+    check('consume 2,5 h: queda saldo 7,5 y un movimiento con la reserva', c1.status === 200 && c1.data.saldo === 7.5 && c1.data.movimientos[0].tipo === 'CONSUMO' && c1.data.movimientos[0].cantidad === -2.5 && c1.data.movimientos[0].referencia === 'Reserva R-1001');
+    check('no se puede consumir más que el saldo → 409', (await cons({ cantidad: 8, referencia: 'R-2' })).status === 409);
+    const [p1, p2] = await Promise.all([cons({ cantidad: 5, referencia: 'R-A' }), cons({ cantidad: 5, referencia: 'R-B' })]);
+    check('dos consumos a la vez que no caben juntos: solo uno se aplica (sin saldo negativo)', [p1.status, p2.status].sort().join() === '200,409' || ((await http('GET', `${B}/${id}`, { token: admin })).data.saldo >= 0 && [p1.status, p2.status].includes(200)));
+    const tras = (await http('GET', `${B}/${id}`, { token: admin })).data;
+    check('el saldo coincide con la suma de los movimientos', Math.abs(tras.movimientos.reduce((a, m) => a + m.cantidad, 0) - tras.saldo) < 1e-9);
+    const dev = await http('POST', `${B}/${id}/devolver`, { token: admin, body: { cantidad: 2.5, referencia: 'R-1001', nota: 'Reserva cancelada' } });
+    check('devolver suma saldo (reserva cancelada)', dev.status === 200 && Math.abs(dev.data.saldo - (tras.saldo + 2.5)) < 1e-9 && dev.data.movimientos[0].tipo === 'DEVOLUCION');
+    check('no se devuelve más de lo consumido → 409', (await http('POST', `${B}/${id}/devolver`, { token: admin, body: { cantidad: 100 } })).status === 409);
+
+    const restante = (await http('GET', `${B}/${id}`, { token: admin })).data.saldo;
+    if (restante > 0) await cons({ cantidad: restante, referencia: 'R-final' });
+    const ag = (await http('GET', `${B}/${id}`, { token: admin })).data;
+    check('al gastar todo el saldo queda AGOTADO y no se puede consumir más → 409', ag.estado === 'AGOTADO' && (await cons({ cantidad: 1, referencia: 'R-x' })).status === 409);
+
+    const g = gift.data.id;
+    const anul = await http('POST', `${B}/${g}/anular`, { token: admin, body: { motivo: 'Emitida por error' } });
+    check('anular exige motivo y deja el bono ANULADO', (await http('POST', `${B}/${g}/anular`, { token: admin, body: {} })).status === 400 && anul.status === 200 && anul.data.estado === 'ANULADO');
+    check('un bono anulado no se consume ni se devuelve → 409', (await http('POST', `${B}/${g}/consumir`, { token: admin, body: { cantidad: 1, referencia: 'R' } })).status === 409 && (await http('POST', `${B}/${g}/devolver`, { token: admin, body: { cantidad: 1 } })).status === 409);
+    check('se reactiva un bono anulado', (await http('POST', `${B}/${g}/reactivar`, { token: admin, body: {} })).data.estado === 'ACTIVO' && (await http('POST', `${B}/${g}/reactivar`, { token: admin, body: {} })).status === 409);
+
+    const ed = await http('PUT', `${B}/${sin.data.id}`, { token: admin, body: { titularNombre: 'Otro titular', vencimiento: { cantidad: 30, unidad: 'DIAS' } } });
+    check('se edita el titular y se pone un vencimiento a 30 días', ed.status === 200 && ed.data.titularNombre === 'Otro titular' && ed.data.diasParaVencer === 30);
+    check('se quita el vencimiento con sinVencimiento', (await http('PUT', `${B}/${sin.data.id}`, { token: admin, body: { sinVencimiento: true } })).data.venceAt === null);
+    check('el valor no se puede editar (se ignora)', (await http('PUT', `${B}/${sin.data.id}`, { token: admin, body: { valorInicial: 9999, saldo: 9999 } })).data.saldo === 20);
+
+    // Vencido: se emite con vencimiento hoy y se fuerza la fecha en la base a ayer a través de la edición no permitida → se comprueba con la lógica
+    check('(lógica) un bono con la fecha pasada figura VENCIDO y uno agotado no vence', lib.estadoDe({ saldo: 5, venceAt: new Date(Date.now() - 864e5) }) === 'VENCIDO' && lib.estadoDe({ saldo: 0, venceAt: new Date(Date.now() - 864e5) }) === 'AGOTADO');
+
+    const rs = (await http('GET', '/api/admin/resumen', { token: admin })).data.bonos;
+    check('el resumen del panel cuenta los bonos vivos y su saldo', rs && rs.activos >= 2 && rs.saldoEuros >= 100.5 && Array.isArray(rs.listaPorVencer));
+    const csv = await fetch(BASE + `${B}/exportar.csv`, { headers: { Authorization: `Bearer ${admin}` } });
+    const txtCsv = await csv.text();
+    check('la exportación CSV incluye los bonos', csv.status === 200 && txtCsv.includes(cod) && txtCsv.replace(/^\uFEFF/, '').startsWith('Código;'));
+    const aud = (await http('GET', '/api/admin/auditoria?limit=300', { token: admin })).data || [];
+    check('el registro de actividad anota emitir, consumir, devolver y anular', ['bono.emitir', 'bono.consumir', 'bono.devolver', 'bono.anular'].every(a => aud.some(x => x.accion === a)));
+
+    const off = (await http('GET', '/api/admin/modulos', { token: admin })).data;
+    const offAntes = off.filter(m => !m.activo && !m.bloqueadoPorDespliegue).map(m => m.clave);
+    check('el catálogo de módulos incluye bonos, activo por defecto', off.find(m => m.clave === 'bonos')?.activo === true);
+    await http('PUT', '/api/admin/modulos', { token: admin, body: { off: [...new Set([...offAntes, 'bonos'])] } });
+    check('con el módulo apagado los bonos responden 404 y el resumen no los cuenta', (await http('GET', B, { token: admin })).status === 404 && (await http('GET', '/api/admin/resumen', { token: admin })).data.bonos === null);
+    await http('PUT', '/api/admin/modulos', { token: admin, body: { off: offAntes } });
+    check('al encenderlo vuelve a funcionar', (await http('GET', B, { token: admin })).status === 200);
+  }
+
   seccion('7. Limpieza');
   await http('POST', '/api/admin/clases/reabrir', { token: admin, body: { profesorId: me.id, mes: MES } });
   check('elimina la clase de prueba', (await http('DELETE', `/api/clases/${claseId}`, { token: prof })).status === 200);

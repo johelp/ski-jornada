@@ -4,6 +4,12 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Fechas AAA
 
 ## [Sin publicar]
 
+## [1.5.0] — 2026-11-18 · Bonos y giftcards
+
+### Añadido
+- **Bonos y giftcards** (módulo apagable): valor prepagado en **euros u horas de clase**, con **código de seguimiento** (`BONO-XXXX-XXXX` / `GIFT-XXXX-XXXX`), titular opcional y **vencimiento opcional** (en meses, en días o en una fecha). Se **consumen** desde la app indicando la reserva ya cargada en el software de reservas; devolución de saldo, edición, anulación y reactivación, con historial por bono, búsqueda por código, filtros por estado, ficha imprimible y CSV. El consumo es atómico (nunca saldo negativo). Tarjeta «Bonos que vencen en 30 días» en el panel, eventos de webhook `bono.emitido` y `bono.consumido` y registro de actividad. Migración `bonos`; sin dependencias nuevas. Ver `docs/BONOS.md`.
+- **Landing y documentación actualizadas:** bonos y giftcards, fichaje apagable y marca «pasado a planning» (funciones, casos de uso, preguntas frecuentes, pantalla de ejemplo de bonos).
+
 ## [1.4.0] — 2026-11-18 · Fichaje apagable y «pasado a planning»
 
 ### Añadido

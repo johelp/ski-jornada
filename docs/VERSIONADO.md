@@ -32,6 +32,7 @@
 
 ## Historial
 - **1.0.0** (30/10/2026): MVP listo para el piloto.
+- **1.5.0** (18/11/2026): bonos y giftcards (módulo apagable), landing y documentación actualizadas.
 - **1.4.0** (18/11/2026): módulo de fichaje apagable y marca «pasado a planning» en las solicitudes aprobadas.
 - **1.3.0** (16/11/2026): flota de clientes (registro y estado de cada instalación; solo proveedor).
 - **1.2.0** (16/11/2026): notificaciones push con guía visual para iPhone y Android, landing de venta (pedir demo, para qué sirve, casos de uso, preguntas), modo cliente de la landing y manual de despliegue para clientes nuevos.

@@ -52,6 +52,10 @@ Para la persona o el equipo que administra la plataforma en la escuela. Una guí
 - **Avisos:** a una persona o a todo el equipo (campana + correo).
 - **Documentos** (si el módulo está activo): sube nóminas, contratos y certificados por profesor; ve quién firmó y **si la firma es fiable**: *Firma electrónica íntegra* (certificado emitido por una autoridad; el PDF no se tocó), *Firmado, sin certificado reconocido* (firma digital con certificado propio), *Firmado, sin certificado* (p. ej. firma manuscrita escaneada), *Con cambios tras firmar* o *Firma sin comprobar*. También verás *Firmado en pantalla (recepción)*: el empleado dibujó su firma y se estampó en una página final del PDF; sirve como constancia de recepción y lectura, **no** como firma con certificado (revisa con tu asesor para qué documentos basta). Todos estos cuentan como firmados; solo el primero tiene respaldo de certificado. *Ver comprobación* muestra el firmante, el emisor y la vigencia del certificado. «Íntegra» **no** acredita que el certificado esté validado ante un prestador de confianza. Un PDF modificado después de firmarse se rechaza al subirlo. Solo tú y la persona dueña los veis.
 
+## 6a. Bonos y giftcards (opcional)
+
+*Bonos → + Emitir.* Para clases ya cobradas (p. ej. al cerrar la estación) o tarjetas regalo, en **euros** o en **horas**, con código de seguimiento y vencimiento opcional (meses, días o fecha). Cuando la reserva ya está cargada en tu software de reservas, abre el bono y pulsa **Consumir** indicando la reserva. Puedes devolver saldo (reserva cancelada), editar el titular o el vencimiento, anular con motivo, copiar el código, imprimirlo y exportar todo a CSV. El panel avisa de los que vencen en 30 días. Guía completa: `BONOS.md`.
+
 ## 6b. Colaboradores y subcontratas (opcional)
 
 Cuenta de horas con escuelas y autónomos que cubren horas o a los que prestamos profesores. Guía completa: `COLABORADORES.md`.
@@ -65,7 +69,7 @@ Cuenta de horas con escuelas y autónomos que cubren horas o a los que prestamos
 
 ## 6c. Apagar módulos que no usas
 
-*Config → Módulos:* desactiva fichaje, clases, días libres, documentos, comparativa, integraciones, avisos o colaboradores. Desaparecen del menú y del panel; los datos se conservan y puedes reactivarlos.
+*Config → Módulos:* desactiva fichaje, bonos, clases, días libres, documentos, comparativa, integraciones, avisos o colaboradores. Desaparecen del menú y del panel; los datos se conservan y puedes reactivarlos.
 
 ## 7. Integraciones (opcional)
 

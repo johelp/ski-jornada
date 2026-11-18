@@ -72,6 +72,7 @@ La cuenta del colaborador **no puede** fichar, cargar clases ni entrar a adminis
 
 | Módulo | Qué oculta |
 |--------|-----------|
+| Bonos y giftcards | Emisión y consumo de bonos y tarjetas regalo (euros u horas), con código y vencimiento |
 | Fichaje horario | Reloj de entrada y salida (QR, GPS, NFC), presencia, zonas, correcciones de fichajes, recordatorio de salida y «dentro ahora» del panel. Para escuelas que solo gestionan clases y primas |
 | Clases y primas | Carga y revisión de clases, economía, informe de clases |
 | Días libres | Solicitudes de los profesores y su aprobación |

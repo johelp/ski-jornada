@@ -291,6 +291,7 @@ const DOCUMENTOS_ON = process.env.DOCUMENTOS_HABILITADOS !== 'false';
 // Firma dibujada en pantalla (firma electrónica simple, sin certificado); se puede apagar por despliegue
 const FIRMA_PANTALLA_ON = process.env.FIRMA_PANTALLA_HABILITADA !== 'false';
 const MODULOS = {
+  bonos:         { nombre: 'Bonos y giftcards', rutas: [/^\/api\/admin\/bonos(\/|$)/] },
   fichaje:       { nombre: 'Fichaje horario', rutas: [/^\/api\/fichaje(\/|$)/, /^\/api\/zonas(\/|$)/, /^\/api\/admin\/(zonas|fichajes|fichajes-activos)(\/|$)/] },
   clases:        { nombre: 'Clases y primas', rutas: [/^\/api\/(admin\/)?clases(\/|$)/] },
   libres:        { nombre: 'Días libres', rutas: [/^\/api\/libres(\/|$)/, /^\/api\/admin\/(solicitudes|informe-libres)(\/|$)/] },
@@ -873,6 +874,14 @@ async function resumenColaboradores() {
     listaRevision: filas.filter(c => c.enRevision > 0).slice(0, 5).map(c => ({ id: c.id, nombre: c.nombre, enRevision: c.enRevision })),
   };
 }
+// Bonos vivos y los que vencen en los próximos 30 días (solo con saldo)
+async function resumenBonos() {
+  const ahora = new Date(), limite = new Date(ahora.getTime() + 30 * 864e5);
+  const vivos = (await prisma.bono.findMany({ where: { anulado: false, saldo: { gt: 0 }, OR: [{ venceAt: null }, { venceAt: { gte: ahora } }] } })).map(b => vistaBono(b, ahora));
+  const porVencer = vivos.filter(b => b.venceAt && new Date(b.venceAt) <= limite).sort((a, b) => new Date(a.venceAt) - new Date(b.venceAt));
+  const suma = u => bonosLib.r2(vivos.filter(b => b.unidad === u).reduce((a, b) => a + b.saldo, 0));
+  return { activos: vivos.length, saldoEuros: suma('EUROS'), saldoHoras: suma('HORAS'), porVencer: porVencer.length, listaPorVencer: porVencer.slice(0, 5).map(b => ({ id: b.id, codigo: b.codigo, titular: b.titularNombre, saldo: b.saldo, unidad: b.unidad, venceAt: b.venceAt, dias: b.diasParaVencer })) };
+}
 app.get('/api/admin/resumen', auth, adminOnly, async (req, res) => {
   try {
     const ahora = new Date();
@@ -931,6 +940,7 @@ app.get('/api/admin/resumen', auth, adminOnly, async (req, res) => {
       documentos: { pendientesFirma: docs.length, lista: docs.slice(0, 5).map(d => ({ id: d.id, profesor: nombre(d.profesor), nombre: d.nombre, mes: d.mes })) },
       incidenciasSemana: incidencias,
       colaboradores: moduloActivo('colaboradores') ? await resumenColaboradores() : null,
+      bonos: moduloActivo('bonos') ? await resumenBonos() : null,
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Error obteniendo el resumen' }); }
 });
@@ -2523,6 +2533,176 @@ app.post('/api/admin/clases/reabrir', auth, adminOnly, async (req, res) => {
   } catch { res.status(500).json({ error: 'Error reabriendo el mes' }); }
 });
 
+// ============ BONOS Y GIFTCARDS ============
+// Valor prepagado (euros u horas de clase) con código de seguimiento y vencimiento opcional. Se emiten desde administración
+// y se «consumen» cuando la reserva ya está cargada en el software de reservas (la referencia es obligatoria). Ver docs/BONOS.md.
+const bonosLib = require('./bonos');
+const vistaBono = (b, ahora = new Date()) => ({ ...b, estado: bonosLib.estadoDe(b, ahora), diasParaVencer: bonosLib.diasParaVencer(b, ahora) });
+const movimiento = (bonoId, tipo, cantidad, saldoDespues, req, extra = {}) => ({ bonoId, tipo, cantidad, saldoDespues, porId: req.user.userId, ...extra });
+
+async function bonoPorId(id) { return prisma.bono.findUnique({ where: { id } }); }
+
+app.get('/api/admin/bonos', auth, adminOnly, async (req, res) => {
+  try {
+    const ahora = new Date();
+    const q = String(req.query.q || '').trim();
+    const where = {};
+    if (req.query.tipo && bonosLib.TIPOS.includes(String(req.query.tipo).toUpperCase())) where.tipo = String(req.query.tipo).toUpperCase();
+    if (q) where.OR = [{ codigo: { contains: bonosLib.normalizarCodigo(q) } }, { codigo: { contains: q.toUpperCase() } }, { titularNombre: { contains: q } }, { titularEmail: { contains: q } }, { concepto: { contains: q } }];
+    let lista = (await prisma.bono.findMany({ where, orderBy: { emitidoAt: 'desc' }, take: 1000 })).map(b => vistaBono(b, ahora));
+    const est = String(req.query.estado || '').toUpperCase();
+    if (bonosLib.ESTADOS.includes(est)) lista = lista.filter(b => b.estado === est);
+    res.json(lista);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error cargando los bonos' }); }
+});
+
+app.get('/api/admin/bonos/exportar.csv', auth, adminOnly, async (req, res) => {
+  try {
+    const ahora = new Date();
+    const f = d => (d ? new Date(d).toISOString().slice(0, 10) : '');
+    const celda = v => { const t = String(v ?? ''); const seguro = /^[=+\-@\t\r]/.test(t) ? `'${t}` : t; return /[;"\n]/.test(seguro) ? `"${seguro.replace(/"/g, '""')}"` : seguro; };
+    const filas = (await prisma.bono.findMany({ orderBy: { emitidoAt: 'desc' } })).map(b => vistaBono(b, ahora));
+    const csv = ['Código;Tipo;Unidad;Valor inicial;Saldo;Estado;Emitido;Vence;Titular;Email;Teléfono;Concepto'].concat(
+      filas.map(b => [b.codigo, b.tipo, b.unidad, b.valorInicial, b.saldo, b.estado, f(b.emitidoAt), f(b.venceAt), b.titularNombre, b.titularEmail, b.titularTelefono, b.concepto].map(celda).join(';'))).join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="bonos.csv"');
+    res.send('﻿' + csv);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error exportando' }); }
+});
+
+// Búsqueda por código tal como lo dicta o teclea la persona (mayúsculas, con o sin guiones)
+app.get('/api/admin/bonos/codigo/:codigo', auth, adminOnly, async (req, res) => {
+  try {
+    const b = await prisma.bono.findUnique({ where: { codigo: bonosLib.normalizarCodigo(req.params.codigo) }, include: { movimientos: { orderBy: { createdAt: 'desc' } } } });
+    if (!b) return res.status(404).json({ error: 'No existe ningún bono con ese código' });
+    res.json(vistaBono(b));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error buscando el bono' }); }
+});
+
+app.post('/api/admin/bonos', auth, adminOnly, async (req, res) => {
+  try {
+    const { data, error } = bonosLib.validarEmision(req.body);
+    if (error) return res.status(400).json({ error });
+    let creado = null;
+    for (let i = 0; i < 5 && !creado; i++) {
+      try {
+        creado = await prisma.bono.create({ data: { ...data, codigo: bonosLib.generarCodigo(data.tipo), creadoPorId: req.user.userId, movimientos: { create: { tipo: 'EMISION', cantidad: data.valorInicial, saldoDespues: data.valorInicial, porId: req.user.userId, nota: data.concepto } } }, include: { movimientos: true } });
+      } catch (e) { if (e.code !== 'P2002') throw e; } // código repetido: se reintenta con otro
+    }
+    if (!creado) return res.status(500).json({ error: 'No se pudo generar un código único, inténtalo de nuevo' });
+    emitirEvento('bono.emitido', { id: creado.id, codigo: creado.codigo, tipo: creado.tipo, unidad: creado.unidad, valor: creado.valorInicial, venceAt: creado.venceAt });
+    await auditar(req, 'bono.emitir', null, { codigo: creado.codigo, tipo: creado.tipo, valor: `${creado.valorInicial} ${creado.unidad}` });
+    res.status(201).json(vistaBono(creado));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error emitiendo el bono' }); }
+});
+
+app.get('/api/admin/bonos/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const b = await prisma.bono.findUnique({ where: { id: req.params.id }, include: { movimientos: { orderBy: { createdAt: 'desc' } } } });
+    if (!b) return res.status(404).json({ error: 'Bono no encontrado' });
+    res.json(vistaBono(b));
+  } catch (e) { res.status(500).json({ error: 'Error' }); }
+});
+
+// Datos del titular, concepto, notas y vencimiento (ampliarlo, acortarlo o quitarlo con sinVencimiento:true). El valor no se edita: se consume o se devuelve.
+app.put('/api/admin/bonos/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const b = await bonoPorId(req.params.id);
+    if (!b) return res.status(404).json({ error: 'Bono no encontrado' });
+    const d = {};
+    for (const [k, max] of [['titularNombre', 120], ['titularTelefono', 30], ['concepto', 200], ['notas', 1000]]) if (req.body[k] !== undefined) d[k] = bonosLib.txt(req.body[k], max);
+    if (req.body.titularEmail !== undefined) {
+      const e = bonosLib.txt(req.body.titularEmail, 200);
+      if (e && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return res.status(400).json({ error: 'El email del titular no es válido' });
+      d.titularEmail = e;
+    }
+    if (req.body.sinVencimiento === true) d.venceAt = null;
+    else if (req.body.venceAt || req.body.vencimiento) { const v = bonosLib.calcularVencimiento(req.body); if (v.error) return res.status(400).json({ error: v.error }); d.venceAt = v.valor; }
+    const n = await prisma.bono.update({ where: { id: b.id }, data: d });
+    await auditar(req, 'bono.editar', null, { codigo: b.codigo, campos: Object.keys(d) });
+    res.json(vistaBono(n));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error guardando el bono' }); }
+});
+
+// Consumo: descuenta saldo si el bono está vigente y alcanza. La comprobación y el descuento van juntos (sin carreras entre dos consumos a la vez).
+app.post('/api/admin/bonos/:id/consumir', auth, adminOnly, async (req, res) => {
+  try {
+    const c = bonosLib.cantidadValida(req.body?.cantidad);
+    if (c.error) return res.status(400).json({ error: c.error });
+    const referencia = bonosLib.txt(req.body?.referencia, 200);
+    if (!referencia) return res.status(400).json({ error: 'Indica la reserva en el software de reservas (n.º o nombre) para dejar constancia' });
+    const ahora = new Date();
+    const r = await prisma.$transaction(async tx => {
+      const b = await tx.bono.findUnique({ where: { id: req.params.id } });
+      if (!b) return { status: 404, error: 'Bono no encontrado' };
+      const est = bonosLib.estadoDe(b, ahora);
+      if (est !== 'ACTIVO') return { status: 409, error: { ANULADO: 'El bono está anulado', AGOTADO: 'El bono no tiene saldo', VENCIDO: 'El bono está vencido' }[est] };
+      if (c.valor > b.saldo + 1e-9) return { status: 409, error: `Saldo insuficiente: quedan ${b.saldo} ${b.unidad === 'HORAS' ? 'h' : '€'}` };
+      const saldo = bonosLib.r2(b.saldo - c.valor);
+      const act = await tx.bono.updateMany({ where: { id: b.id, saldo: b.saldo, anulado: false }, data: { saldo } });
+      if (act.count !== 1) return { status: 409, error: 'El bono cambió mientras se consumía, inténtalo de nuevo' };
+      await tx.movimientoBono.create({ data: movimiento(b.id, 'CONSUMO', -c.valor, saldo, req, { referencia, nota: bonosLib.txt(req.body?.nota, 500) }) });
+      return { bono: await tx.bono.findUnique({ where: { id: b.id }, include: { movimientos: { orderBy: { createdAt: 'desc' } } } }) };
+    });
+    if (r.error) return res.status(r.status).json({ error: r.error });
+    emitirEvento('bono.consumido', { id: r.bono.id, codigo: r.bono.codigo, cantidad: c.valor, saldo: r.bono.saldo, referencia });
+    await auditar(req, 'bono.consumir', null, { codigo: r.bono.codigo, cantidad: `${c.valor} ${r.bono.unidad}`, referencia });
+    res.json(vistaBono(r.bono));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error consumiendo el bono' }); }
+});
+
+// Devolución (p. ej. se canceló la reserva): suma saldo, sin pasar nunca del valor inicial
+app.post('/api/admin/bonos/:id/devolver', auth, adminOnly, async (req, res) => {
+  try {
+    const c = bonosLib.cantidadValida(req.body?.cantidad);
+    if (c.error) return res.status(400).json({ error: c.error });
+    const r = await prisma.$transaction(async tx => {
+      const b = await tx.bono.findUnique({ where: { id: req.params.id } });
+      if (!b) return { status: 404, error: 'Bono no encontrado' };
+      if (b.anulado) return { status: 409, error: 'El bono está anulado' };
+      if (b.saldo + c.valor > b.valorInicial + 1e-9) return { status: 409, error: `No se puede devolver más de lo consumido (máximo ${bonosLib.r2(b.valorInicial - b.saldo)})` };
+      const saldo = bonosLib.r2(b.saldo + c.valor);
+      const act = await tx.bono.updateMany({ where: { id: b.id, saldo: b.saldo }, data: { saldo } });
+      if (act.count !== 1) return { status: 409, error: 'El bono cambió mientras se actualizaba, inténtalo de nuevo' };
+      await tx.movimientoBono.create({ data: movimiento(b.id, 'DEVOLUCION', c.valor, saldo, req, { referencia: bonosLib.txt(req.body?.referencia, 200), nota: bonosLib.txt(req.body?.nota, 500) }) });
+      return { bono: await tx.bono.findUnique({ where: { id: b.id }, include: { movimientos: { orderBy: { createdAt: 'desc' } } } }) };
+    });
+    if (r.error) return res.status(r.status).json({ error: r.error });
+    await auditar(req, 'bono.devolver', null, { codigo: r.bono.codigo, cantidad: `${c.valor} ${r.bono.unidad}` });
+    res.json(vistaBono(r.bono));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error devolviendo saldo' }); }
+});
+
+app.post('/api/admin/bonos/:id/anular', auth, adminOnly, async (req, res) => {
+  try {
+    const motivo = bonosLib.txt(req.body?.motivo, 300);
+    if (!motivo) return res.status(400).json({ error: 'Indica el motivo de la anulación' });
+    const b = await bonoPorId(req.params.id);
+    if (!b) return res.status(404).json({ error: 'Bono no encontrado' });
+    if (b.anulado) return res.status(409).json({ error: 'Ya está anulado' });
+    const [n] = await prisma.$transaction([
+      prisma.bono.update({ where: { id: b.id }, data: { anulado: true, anuladoAt: new Date(), anuladoMotivo: motivo }, include: { movimientos: { orderBy: { createdAt: 'desc' } } } }),
+      prisma.movimientoBono.create({ data: movimiento(b.id, 'ANULACION', 0, b.saldo, req, { nota: motivo }) }),
+    ]);
+    await auditar(req, 'bono.anular', null, { codigo: b.codigo, motivo });
+    res.json(vistaBono(await prisma.bono.findUnique({ where: { id: n.id }, include: { movimientos: { orderBy: { createdAt: 'desc' } } } })));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error anulando el bono' }); }
+});
+
+app.post('/api/admin/bonos/:id/reactivar', auth, adminOnly, async (req, res) => {
+  try {
+    const b = await bonoPorId(req.params.id);
+    if (!b) return res.status(404).json({ error: 'Bono no encontrado' });
+    if (!b.anulado) return res.status(409).json({ error: 'El bono no está anulado' });
+    await prisma.$transaction([
+      prisma.bono.update({ where: { id: b.id }, data: { anulado: false, anuladoAt: null, anuladoMotivo: null } }),
+      prisma.movimientoBono.create({ data: movimiento(b.id, 'REACTIVACION', 0, b.saldo, req, { nota: bonosLib.txt(req.body?.nota, 300) }) }),
+    ]);
+    await auditar(req, 'bono.reactivar', null, { codigo: b.codigo });
+    res.json(vistaBono(await prisma.bono.findUnique({ where: { id: b.id }, include: { movimientos: { orderBy: { createdAt: 'desc' } } } })));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error reactivando el bono' }); }
+});
+
 // ============ FLOTA DE CLIENTES (solo en la instalación del proveedor) ============
 // Registro de las instalaciones de cada cliente y comprobación de su estado (versión desplegada, caída, push).
 // Activa con FLOTA_ON=true y solo para la cuenta principal. No guarda secretos. Ver docs/FLOTA.md.
@@ -2611,7 +2791,7 @@ function apiAuth(scope) {
 app.use('/api/v1', rateLimit({ windowMs: 60 * 1000, max: 120, message: { error: 'Demasiadas peticiones' }, standardHeaders: true, legacyHeaders: false }));
 
 // Webhooks salientes firmados con HMAC-SHA256 (cabecera X-SkiJornada-Signature: sha256=<hex>)
-const EVENTOS_WEBHOOK = ['clases.mes_confirmado', 'clases.revision', 'clases.mes_reabierto', 'solicitud.creada', 'solicitud.modificada', 'solicitud.cancelada', 'solicitud.respondida', 'documento.firmado', 'planning.importado'];
+const EVENTOS_WEBHOOK = ['clases.mes_confirmado', 'clases.revision', 'clases.mes_reabierto', 'solicitud.creada', 'solicitud.modificada', 'solicitud.cancelada', 'solicitud.respondida', 'documento.firmado', 'planning.importado', 'bono.emitido', 'bono.consumido'];
 
 // Un webhook nunca debe poder llamar a la red interna (SSRF): ver redSegura.js
 const { destinoPublico } = require('./redSegura');
