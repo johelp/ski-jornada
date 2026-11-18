@@ -24,6 +24,14 @@ Ver `PILOTO-SNOWMOTION.md`: carga masiva de nóminas, archivado en Drive (cuenta
 3. **Verificar el envío de correos en producción** (Resend + DNS) y plantilla visual de los correos.
 4. **Backups automáticos** de `prod.db` y `uploads`.
 
+## Pendiente de diseñar: quién activa los módulos (decisión del 18/11/2026)
+Hoy cualquier administración de la escuela apaga o enciende los módulos (*Config → Módulos*). Para vender por funciones, **la activación debe depender del proveedor**, no del cliente:
+- **Idea:** dos niveles. Lo **contratado** lo fija el proveedor; el cliente solo puede apagar, dentro de lo contratado, lo que no use (nunca encender lo que no contrató).
+- **Opción A, por despliegue (la más simple):** variable de entorno por cliente con los módulos contratados (como ya existe `DOCUMENTOS_HABILITADOS`), p. ej. `MODULOS_CONTRATADOS=fichaje,clases,libres`. Sin cambios en el panel del cliente más allá de ocultar lo no contratado.
+- **Opción B, desde el panel del proveedor:** activar o desactivar módulos de cada cliente desde la pantalla **Flota** (`docs/FLOTA.md`). Exige un canal seguro hacia cada instalación (token por cliente o petición firmada, guardado en el gestor de secretos) y un registro de cambios; encaja con el despliegue por anillos pendiente.
+- **Opción C, rol de superadministrador** dentro de cada instalación (cuenta del proveedor, distinta de la principal del cliente) que es la única que ve la gestión de módulos contratados.
+- A decidir: qué módulos son «de pago» y cuáles base, cómo se refleja en los tramos de `MODELO-DE-VENTA.md`, y qué ve el cliente de un módulo no contratado (oculto o «consúltanos»).
+
 ## Deuda técnica
 - `frontend/src/App.jsx` (~2.300 líneas): partir en vistas (`VistaFichar`, `VistaInformes`, `VistaUsuarios`, `VistaZonas`, `VistaDocumentos`, `VistaPerfil`…) y mover estado a hooks. Considerar `react-router` para URLs reales y botón “atrás”.
 - `backend/index.js` (~1.500 líneas): separar en routers (`auth`, `fichaje`, `clases`, `admin`, `documentos`) y servicios (`email`, `informes`).
