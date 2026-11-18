@@ -48,6 +48,7 @@ Para la persona o el equipo que administra la plataforma en la escuela. Una guí
 ## 6. Días libres, avisos y documentos
 
 - **Solicitudes:** aprueba o rechaza con observación. Con **Editar** corriges las fechas, el motivo o el comentario de cualquier solicitud, **aunque ya esté respondida** (p. ej. un cambio de fechas ya aprobado) y, si hace falta, **Guardar y volver a pendiente**. El empleado recibe un aviso y queda en el registro de actividad. Si el empleado cambia o retira una solicitud pendiente, recibes un aviso.
+- **Pasado a planning:** en una solicitud **aprobada**, pulsa **Marcar pasado a planning** cuando ya la reflejaste en el cuadrante; queda la fecha y el panel muestra «Aprobadas por pasar a planning» con lo que falta (solo vigentes o futuras). En *Solicitudes* puedes filtrar por las que faltan. Si cambias las fechas, reabres o rechazas la solicitud, la marca se quita y hay que volver a pasarla. Es una marca interna: el empleado no la ve.
 - **Avisos:** a una persona o a todo el equipo (campana + correo).
 - **Documentos** (si el módulo está activo): sube nóminas, contratos y certificados por profesor; ve quién firmó y **si la firma es fiable**: *Firma electrónica íntegra* (certificado emitido por una autoridad; el PDF no se tocó), *Firmado, sin certificado reconocido* (firma digital con certificado propio), *Firmado, sin certificado* (p. ej. firma manuscrita escaneada), *Con cambios tras firmar* o *Firma sin comprobar*. También verás *Firmado en pantalla (recepción)*: el empleado dibujó su firma y se estampó en una página final del PDF; sirve como constancia de recepción y lectura, **no** como firma con certificado (revisa con tu asesor para qué documentos basta). Todos estos cuentan como firmados; solo el primero tiene respaldo de certificado. *Ver comprobación* muestra el firmante, el emisor y la vigencia del certificado. «Íntegra» **no** acredita que el certificado esté validado ante un prestador de confianza. Un PDF modificado después de firmarse se rechaza al subirlo. Solo tú y la persona dueña los veis.
 
@@ -64,7 +65,7 @@ Cuenta de horas con escuelas y autónomos que cubren horas o a los que prestamos
 
 ## 6c. Apagar módulos que no usas
 
-*Config → Módulos:* desactiva clases, días libres, documentos, comparativa, integraciones, avisos o colaboradores. Desaparecen del menú y del panel; los datos se conservan y puedes reactivarlos.
+*Config → Módulos:* desactiva fichaje, clases, días libres, documentos, comparativa, integraciones, avisos o colaboradores. Desaparecen del menú y del panel; los datos se conservan y puedes reactivarlos.
 
 ## 7. Integraciones (opcional)
 

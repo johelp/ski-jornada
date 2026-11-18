@@ -4,6 +4,12 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Fechas AAA
 
 ## [Sin publicar]
 
+## [1.4.0] — 2026-11-18 · Fichaje apagable y «pasado a planning»
+
+### Añadido
+- **Módulo de fichaje apagable** (*Config → Módulos*): una escuela que solo gestiona clases y primas puede quitar el reloj de fichar, Presencia, Zonas, las correcciones de fichajes y el recordatorio de salida. Desaparecen del menú, del panel y del panel del empleado; los endpoints responden 404 y **no se borra ningún dato**. Los informes siguen disponibles.
+- **«Pasado a planning»** en las solicitudes de días libres aprobadas: botón para marcar (y quitar la marca), con fecha, filtro «solo las que faltan» y tarjeta «Aprobadas por pasar a planning» en el panel. La marca se limpia si se cambian las fechas, se reabre o se vuelve a responder. Endpoint `POST /api/admin/solicitudes/:id/planning`; queda en el registro de actividad. Migración `solicitud_en_planning`.
+
 ## [1.3.0] — 2026-11-16 · Flota de clientes
 
 ### Añadido

@@ -278,6 +278,7 @@ function App() {
   const [observacion, setObservacion]         = useState('');
   const [solicitudSeleccionada, setSolicitudSeleccionada] = useState(null);
   const [editSolId, setEditSolId]             = useState(null);   // solicitud propia que se está editando
+  const [soloSinPlanning, setSoloSinPlanning]  = useState(false); // solicitudes: solo las aprobadas que faltan pasar a planning
   const [editAdminSol, setEditAdminSol]       = useState(null);   // solicitud (de cualquiera) que administración está editando
   const [mesInforme, setMesInforme] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; });
   const [nuevoUsuario, setNuevoUsuario] = useState({ nombre: '', apellidos: '', email: '', tipoJornada: 'COMPLETA', horasContrato: 35, role: 'PROFESOR', telefono: '' });
@@ -725,6 +726,15 @@ function App() {
     finally { setCargando(false); }
   };
 
+  const marcarPlanning = async (id, hecho) => {
+    setCargando(true);
+    try {
+      await api.post(`/api/admin/solicitudes/${id}/planning`, { hecho }, { headers: h() });
+      toast$(hecho ? 'Marcada como pasada a planning ✓' : 'Marca de planning quitada', 'success');
+      cargarAdminSolicitudes(); cargarResumenAdmin();
+    } catch (e) { toast$(e.response?.data?.error || 'No se pudo actualizar', 'error'); }
+    finally { setCargando(false); }
+  };
   const responderSolicitud = async (id, aprobado) => {
     if (!aprobado && !observacion) { toast$('Escribe una observación para rechazar', 'warning'); return; }
     setCargando(true);
@@ -944,6 +954,9 @@ function App() {
 
   // ===== NAVEGACIÓN =====
   const docsOn = configEscuela?.documentosHabilitados !== false;
+  const fichajeOn = configEscuela?.modulos?.fichaje !== false;
+  // Si fichaje se apaga (o se entra por un atajo antiguo /?vista=fichar), no se deja la pantalla en blanco
+  useEffect(() => { if (configEscuela && !fichajeOn && ['fichar', 'presencia', 'zonas'].includes(vista)) setVista('dashboard'); }, [configEscuela, fichajeOn, vista]);
   const navItemsTodos = esAdmin && !modoEmpleado
     ? [
         { id: 'dashboard',  icon: '📊', label: 'Panel' },
@@ -972,7 +985,7 @@ function App() {
       ];
 
   // Módulos que administración apagó (y el de documentos, que además se puede apagar por despliegue)
-  const MODULO_DE = { documentos: 'documentos', clases: 'clases', misclases: 'clases', gestionar: 'libres', solicitar: 'libres', integraciones: 'integraciones', avisos: 'avisos', colaboradores: 'colaboradores' };
+  const MODULO_DE = { documentos: 'documentos', clases: 'clases', misclases: 'clases', gestionar: 'libres', solicitar: 'libres', integraciones: 'integraciones', fichar: 'fichaje', presencia: 'fichaje', zonas: 'fichaje', avisos: 'avisos', colaboradores: 'colaboradores' };
   const modulos = configEscuela?.modulos;
   const navItems = navItemsTodos.filter(i => (i.id !== 'documentos' || docsOn) && modulos?.[MODULO_DE[i.id]] !== false);
 
@@ -1105,7 +1118,7 @@ function App() {
             )}
             {esAdmin && (
               <button className={`chip-modo${modoEmpleado ? ' activo' : ''}`}
-                onClick={() => { setModoEmpleado(m => !m); setVista(modoEmpleado ? 'dashboard' : 'fichar'); }}
+                onClick={() => { setModoEmpleado(m => !m); setVista(modoEmpleado || configEscuela?.modulos?.fichaje === false ? 'dashboard' : 'fichar'); }}
                 aria-pressed={modoEmpleado}>
                 {modoEmpleado ? 'Vista admin' : 'Modo empleado'}
               </button>
@@ -1223,6 +1236,7 @@ function App() {
         {/* ===== DASHBOARD EMPLEADO ===== */}
         {(!esAdmin || modoEmpleado) && vista === 'dashboard' && (
           <div>
+            {fichajeOn && (<>
             {/* Estado actual prominente */}
             <div className={`card fichar-clock-card ${estadoFichaje === 'ENTRADA' ? 'estado-dentro' : 'estado-fuera'}`}>
               <div className="fichar-hora-actual">
@@ -1250,6 +1264,7 @@ function App() {
                 {estadoFichaje === 'ENTRADA' ? 'Fichar salida' : 'Fichar entrada'}
               </button>
             </div>
+            </>)}
 
             <div className="periodo-bar">
               <div className="segmentado" role="tablist" aria-label="Período de los totales">
@@ -1259,10 +1274,12 @@ function App() {
               <span className="periodo-etiqueta">{rango.etiqueta}</span>
             </div>
             <div className="stats-grid stats-2x2">
+              {fichajeOn && <>
               <div className="stat-card stat-blue"><div>
                 <p className="stat-label">Horas fichadas</p><p className="stat-number">{horasPeriodo}h</p></div></div>
               <div className="stat-card stat-green"><div>
                 <p className="stat-label">Días trabajados</p><p className="stat-number">{diasPeriodo.length}</p></div></div>
+              </>}
               <div className="stat-card stat-blue"><div>
                 <p className="stat-label">Horas de clase</p><p className="stat-number">{clasesPeriodo ? `${clasesPeriodo.totalHoras}h` : '…'}</p></div></div>
               {clasesPeriodo?.totalImporte != null ? (
@@ -1304,6 +1321,7 @@ function App() {
                 </div>
               </div>
             )}
+            {fichajeOn && (
             <div className="card">
               <div className="card-header"><h2>Resumen últimos días</h2>
                 <button className="btn-sm" onClick={cargarHistorial}>↻ Actualizar</button></div>
@@ -1322,11 +1340,12 @@ function App() {
                   </div>
               }
             </div>
+            )}
           </div>
         )}
 
         {/* ===== FICHAR ===== */}
-        {vista === 'fichar' && (
+        {fichajeOn && vista === 'fichar' && (
           <div>
             {/* Reloj y estado principal */}
             <div className={`card fichar-clock-card ${estadoFichaje === 'ENTRADA' ? 'estado-dentro' : 'estado-fuera'}`}>
@@ -1598,8 +1617,14 @@ function App() {
               <h2>Solicitudes</h2>
               {adminPendientes > 0 && <span className="count-badge">{adminPendientes} pendientes</span>}
             </div>
+            {adminSolicitudes.some(s => s.estado === 'APROBADO') && (
+              <label className="check-planning" style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '0 0 12px' }}>
+                <input type="checkbox" checked={soloSinPlanning} onChange={e => setSoloSinPlanning(e.target.checked)} />
+                Solo aprobadas por pasar a planning ({adminSolicitudes.filter(s => s.estado === 'APROBADO' && !s.enPlanning).length})
+              </label>
+            )}
             {!adminSolicitudes.length ? <div className="empty-state card"><p>✅ Sin solicitudes</p></div> : (
-              adminSolicitudes.map(sol => (
+              adminSolicitudes.filter(s => !soloSinPlanning || (s.estado === 'APROBADO' && !s.enPlanning)).map(sol => (
                 <div key={sol.id} className="admin-card">
                   <div className="admin-card-header">
                     <div>
@@ -1609,6 +1634,12 @@ function App() {
                     </div>
                     <span className={`estado-badge ${sol.estado.toLowerCase()}`}>{sol.estado}</span>
                   </div>
+                  {sol.estado === 'APROBADO' && (
+                    <div className="action-buttons" style={{ alignItems: 'center', margin: '6px 0' }}>
+                      <span className={`estado-badge ${sol.enPlanning ? 'aprobado' : 'pendiente'}`}>{sol.enPlanning ? `En planning${sol.enPlanningAt ? ` · ${new Date(sol.enPlanningAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}` : ''}` : 'Falta pasar a planning'}</span>
+                      <button className="btn-sm" disabled={cargando} onClick={() => marcarPlanning(sol.id, !sol.enPlanning)}>{sol.enPlanning ? 'Quitar marca' : 'Marcar pasado a planning'}</button>
+                    </div>
+                  )}
                   {sol.comentario && <p className="admin-comentario">"{sol.comentario}"</p>}
                   {editAdminSol?.id === sol.id && (
                     <div className="observacion-box">

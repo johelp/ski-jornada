@@ -291,6 +291,7 @@ const DOCUMENTOS_ON = process.env.DOCUMENTOS_HABILITADOS !== 'false';
 // Firma dibujada en pantalla (firma electrónica simple, sin certificado); se puede apagar por despliegue
 const FIRMA_PANTALLA_ON = process.env.FIRMA_PANTALLA_HABILITADA !== 'false';
 const MODULOS = {
+  fichaje:       { nombre: 'Fichaje horario', rutas: [/^\/api\/fichaje(\/|$)/, /^\/api\/zonas(\/|$)/, /^\/api\/admin\/(zonas|fichajes|fichajes-activos)(\/|$)/] },
   clases:        { nombre: 'Clases y primas', rutas: [/^\/api\/(admin\/)?clases(\/|$)/] },
   libres:        { nombre: 'Días libres', rutas: [/^\/api\/libres(\/|$)/, /^\/api\/admin\/(solicitudes|informe-libres)(\/|$)/] },
   documentos:    { nombre: 'Documentos', rutas: [/^\/api\/(admin\/)?documentos(\/|$)/, /^\/api\/admin\/profesores\/[^/]+\/documentos$/, /^\/uploads\/documentos\//] },
@@ -813,6 +814,8 @@ app.put('/api/admin/solicitudes/:id', auth, adminOnly, async (req, res) => {
     const v = validarSolicitud(req.body, sol); if (v.error) return res.status(400).json({ error: v.error });
     const data = { ...v.d };
     if (req.body.reabrir === true) Object.assign(data, { estado: 'PENDIENTE', observacion: null, aprobadoPor: null, fechaRespuesta: null });
+    // Si cambian las fechas o se reabre, lo que ya se pasó al planning deja de ser válido y hay que volver a pasarlo
+    if (sol.enPlanning && (req.body.reabrir === true || +data.fechaInicio !== +sol.fechaInicio || +data.fechaFin !== +sol.fechaFin)) Object.assign(data, { enPlanning: false, enPlanningAt: null, enPlanningPorId: null });
     const n = await prisma.solicitudLibre.update({ where: { id: sol.id }, data });
     const cambio = req.body.reabrir === true ? 'Se reabrió tu solicitud y volverá a revisarse' : `Administración modificó tu solicitud (${sol.estado.toLowerCase()}): ahora ${rangoTxt(n)}`;
     await prisma.notificacion.create({ data: { titulo: 'Tu solicitud de días libres cambió', mensaje: `${cambio}.`, tipo: 'AVISO', profesorId: sol.profesorId, enviadaPorId: req.user.userId } });
@@ -832,12 +835,28 @@ app.post('/api/admin/solicitudes/:id/responder', auth, adminOnly, async (req, re
         observacion: req.body.observacion || '',
         aprobadoPor: req.user.userId,
         fechaRespuesta: new Date(),
+        // Al (re)responder se anula la marca de planning: solo tiene sentido en una solicitud aprobada y ya revisada
+        enPlanning: false, enPlanningAt: null, enPlanningPorId: null,
       },
     });
     emitirEvento('solicitud.respondida', { id: sol.id, profesorId: sol.profesorId, estado: sol.estado, observacion: sol.observacion });
     avisarWhatsapp([sol.profesorId], `tu solicitud de días libres fue ${req.body.aprobado ? 'APROBADA ✅' : 'RECHAZADA ❌'}.${req.body.observacion ? ` ${req.body.observacion}` : ''}`);
     res.json({ success: true, solicitud: sol });
   } catch (err) { res.status(500).json({ error: 'Error respondiendo solicitud' }); }
+});
+
+// Marca (o desmarca) una solicitud aprobada como «pasada a planning»: administración ya la reflejó en el cuadrante.
+// Cuerpo: { hecho: true|false } (por defecto true). Solo solicitudes APROBADAS.
+app.post('/api/admin/solicitudes/:id/planning', auth, adminOnly, async (req, res) => {
+  try {
+    const sol = await prisma.solicitudLibre.findUnique({ where: { id: req.params.id }, include: { profesor: { select: { id: true, email: true } } } });
+    if (!sol) return res.status(404).json({ error: 'Solicitud no encontrada' });
+    if (sol.estado !== 'APROBADO') return res.status(400).json({ error: 'Solo se pasan a planning las solicitudes aprobadas' });
+    const hecho = req.body?.hecho !== false;
+    const n = await prisma.solicitudLibre.update({ where: { id: sol.id }, data: hecho ? { enPlanning: true, enPlanningAt: new Date(), enPlanningPorId: req.user.userId } : { enPlanning: false, enPlanningAt: null, enPlanningPorId: null } });
+    await auditar(req, hecho ? 'solicitud.planning' : 'solicitud.planning_quitar', sol.profesor, { id: sol.id, rango: rangoTxt(sol) });
+    res.json({ success: true, solicitud: n });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Error actualizando la solicitud' }); }
 });
 
 // ============ ADMIN — Resumen del dashboard ============
@@ -892,11 +911,14 @@ app.get('/api/admin/resumen', auth, adminOnly, async (req, res) => {
 
     res.json({
       mesActual: meses[0],
-      equipo: { activos: equipo.length, invitadosSinEntrar: equipo.filter(p => !p.adheridoAt).map(p => ({ id: p.id, nombre: nombre(p) })), dentroAhora: dentro },
+      equipo: { activos: equipo.length, invitadosSinEntrar: equipo.filter(p => !p.adheridoAt).map(p => ({ id: p.id, nombre: nombre(p) })), dentroAhora: moduloActivo('fichaje') ? dentro : null },
       solicitudes: {
         pendientes: pend.length,
         aprobadas: porEstado('APROBADO').filter(x => x.createdAt >= hace60).length,
         rechazadas: porEstado('RECHAZADO').filter(x => x.createdAt >= hace60).length,
+        // Aprobadas que aún no están en el cuadrante (solo las vigentes o futuras)
+        sinPasarAPlanning: porEstado('APROBADO').filter(x => !x.enPlanning && x.fechaFin >= hoy0).length,
+        listaSinPlanning: porEstado('APROBADO').filter(x => !x.enPlanning && x.fechaFin >= hoy0).sort((a, b) => a.fechaInicio - b.fechaInicio).slice(0, 5).map(fila),
         listaPendientes: pend.slice(0, 5).map(fila),
         proximas: proximas.slice(0, 5).map(fila),
         ausentesHoy: proximas.filter(x => x.fechaInicio <= ahora).length,
@@ -3148,6 +3170,7 @@ setInterval(async () => {
     for (const p of profesores) {
       const [rh, rm] = (p.horaRecordatorio || '17:00').split(':').map(Number);
       if (hh !== rh || mm !== rm) continue;
+      if (!moduloActivo('fichaje')) continue;
       const ultReg = await prisma.registroJornada.findFirst({ where: { anulado: false, profesorId: p.id, timestamp: { gte: inicioDia } }, orderBy: { timestamp: 'desc' } });
       if (ultReg?.tipo === 'ENTRADA') {
         avisarWhatsapp([p.id], `son las ${p.horaRecordatorio} y sigues fichado. Recuerda fichar la salida.`);

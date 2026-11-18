@@ -105,6 +105,10 @@ model SolicitudLibre {
   observacion    String?
   aprobadoPor    String?
   fechaRespuesta DateTime?
+  // «Pasado a planning»: administración ya reflejó la solicitud aprobada en el cuadrante
+  enPlanning     Boolean   @default(false)
+  enPlanningAt   DateTime?
+  enPlanningPorId String?
   createdAt      DateTime  @default(now())
 }
 

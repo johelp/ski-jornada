@@ -83,6 +83,12 @@ El informe incluye `revision` (`{estado, nota, revisadoAt}` o `null`) y, por cla
 Requiere `FLOTA_ON=true` (si no, 404) y la cuenta **principal** (403 a otros). Ver `FLOTA.md`.
 🛡 `GET /api/admin/flota` (lista, versión de referencia, tramos y anillos) · 🛡 `POST /api/admin/flota` · 🛡 `PUT /api/admin/flota/:id` · 🛡 `DELETE /api/admin/flota/:id` · 🛡 `POST /api/admin/flota/comprobar` (todos los activos) · 🛡 `POST /api/admin/flota/:id/comprobar` (límite 12/min). Cuerpo de alta: `nombre`, `urlApi` (https), `urlApp`, `tramo`, `anillo`, `versionEsperada` (`1.2.0`), `railwayProyecto`, `pagesProyecto`, `altaAt`, `renovacionAt`, `notas`, `activo`. `GET /api/config` añade `flotaOn`.
 
+## Planning de las solicitudes de días libres 🛡
+`POST /api/admin/solicitudes/:id/planning` con `{ "hecho": true|false }` (por defecto `true`): marca o desmarca una solicitud **aprobada** como pasada a planning (`enPlanning`, `enPlanningAt`, `enPlanningPorId` en la solicitud). 400 si no está aprobada, 404 si no existe. Editar las fechas, reabrir o responder de nuevo limpia la marca. `GET /api/admin/resumen` añade en `solicitudes`: `sinPasarAPlanning` y `listaSinPlanning`. Queda en el registro de actividad (`solicitud.planning`, `solicitud.planning_quitar`).
+
+## Módulo de fichaje
+El módulo `fichaje` (clave en `/api/admin/modulos`) agrupa `/api/fichaje/*`, `/api/zonas`, `/api/admin/zonas`, `/api/admin/fichajes` y `/api/admin/fichajes-activos`. Apagado, responden 404 con `modulo: "fichaje"`; `GET /api/admin/resumen` devuelve `equipo.dentroAhora: null` y el servidor deja de enviar el recordatorio de salida.
+
 ## Archivos (protegidos)
 `GET /uploads/documentos/:file` y `GET /uploads/firmas/:file` requieren `Authorization: Bearer`. Admin: todo. Profesor: solo los suyos (403 si no). Ver `ARQUITECTURA.md`.
 

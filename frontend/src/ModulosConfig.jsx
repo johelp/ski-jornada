@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 
 // Administración enciende o apaga módulos. Un módulo apagado desaparece del menú y deja de responder; no se borra ningún dato.
 const DESC = {
+  fichaje: 'Reloj de entrada y salida (QR, GPS, NFC), presencia en tiempo real, zonas, correcciones de fichajes y recordatorio de salida. Apágalo si tu escuela solo gestiona clases y primas.',
   clases: 'Carga de clases con disciplinas y primas, revisión de horas y economía.',
   libres: 'Solicitudes de días libres y su aprobación.',
   documentos: 'Nóminas, contratos y certificados por profesor, con firma.',
@@ -28,7 +29,7 @@ export default function ModulosConfig({ api, h, toast$, onCambio }) {
   return (
     <div className="card">
       <h2>Módulos</h2>
-      <p className="form-hint">Apaga lo que tu escuela no use: desaparece del menú y del panel. Los datos no se borran y puedes volver a encenderlo cuando quieras. Fichaje, usuarios e informes de jornada son esenciales y no se apagan.</p>
+      <p className="form-hint">Apaga lo que tu escuela no use: desaparece del menú y del panel. Los datos no se borran y puedes volver a encenderlo cuando quieras. Usuarios e informes son esenciales y no se apagan.</p>
       <div className="mod-lista">
         {mods.map(m => (
           <label key={m.clave} className={`mod-fila${m.activo ? '' : ' mod-off'}`}>
