@@ -4,6 +4,21 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Fechas AAA
 
 ## [Sin publicar]
 
+## [1.6.0] — 2026-11-24 · Prácticas de formación y control de horas
+
+### Añadido
+- **Prácticas de formación** (módulo apagable): marca «Persona en prácticas» en *Usuarios*. La persona registra fecha, inicio, fin (las **horas se calculan solas**), tipo de clase (Particular, Grupal, Club, Campamento, Chikimotion, Colegio) y profesor/coordinador; administración también puede registrar o corregir. Administración añade titulación, entidad, **horas requeridas** y una **observación**, y descarga la **planilla de control en PDF** (con bloque de firma y sello) para entregarla a la entidad certificadora. Se puede **cerrar la planilla** para que la persona ya no cambie nada. Sin solapes el mismo día. Migración `practicas`; sin dependencias nuevas. Ver `docs/PRACTICAS.md`.
+- **Control de horas (Clases → Horas por profesor)** rediseñado: **lista compacta** en lugar de tarjetas, con la fila **desplegable** (el detalle y la revisión se abren justo debajo de cada profesor), opción **«Ocultar sin horas cargadas»** (activa por defecto), buscador y totales del mes.
+
+- **Cargar clase sin hacer scroll:** el formulario del profesor se compactó para verse entero en la pantalla del móvil (día, horas, disciplina y primas en una vista; la nota va plegada) y la lista de clases queda debajo. Las horas rápidas son **2, 3, 4 y 6** (lo habitual); 1 h, media hora y otras cantidades se piden con **Otra**. Al cargar, **confirmación visible**: el botón se pone en verde con «¡Clase cargada!» y arriba aparece «Cargada: … · Deshacer»; el móvil vibra un instante.
+
+### Corregido
+- **«No se pudieron cargar las clases» intermitente:** los informes de todo el equipo (y los totales de temporada) lanzaban cientos de consultas a la vez contra SQLite y agotaban las conexiones; ahora se hacen de pocas en pocas. Además, la pantalla de clases del profesor **reintenta sola** ante un fallo de red o del servidor y, si no lo consigue, muestra un aviso fijo con **Reintentar** en lugar de un mensaje que desaparece.
+- «Cargando…» en el control de horas antes de recibir los datos (antes decía «sin profesores» un instante).
+
+### Pendiente
+- **Bucle en el Inicio de una cuenta de administración al añadir la app a la pantalla de inicio:** no se ha podido reproducir; ver `docs/ROADMAP.md`.
+
 ## [1.5.0] — 2026-11-18 · Bonos y giftcards
 
 ### Añadido

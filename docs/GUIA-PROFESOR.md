@@ -26,7 +26,7 @@ La sesión **se mantiene abierta** en tu móvil (90 días).
 |-------------------|------|
 | **Fichar entrada** | *Inicio* → **Fichar entrada** → escanea el QR de la zona (o NFC) |
 | **Fichar salida** | *Inicio* → **Fichar salida** (o *Fichar → Salida rápida*) |
-| **Cargar una clase** | Pestaña **Clases** → **Hoy** / **Ayer** / *Otro día* → horas (0,5 · 1 · 1,5 · 2 · 3 · 4, o *Otra cantidad*) → disciplina (se recuerda la última) → **primas** si corresponden → **Cargar clase**. Si te equivocas, **Deshacer** (aparece unos segundos) |
+| **Cargar una clase** | Pestaña **Clases** → **Hoy** / **Ayer** / *Otro día* → horas (2 · 3 · 4 · 6; para 1 h, media hora u otra cantidad, **Otra**) → disciplina (se recuerda la última) → **primas** si corresponden → **Cargar clase**. Si te equivocas, **Deshacer** (aparece unos segundos) |
 | **Corregir una clase** | *Clases* → lápiz **Editar** (solo si el mes no está confirmado) |
 | **Ver cuánto llevas** | *Inicio*: **Este mes** o **Temporada** (horas, días e importe estimado) |
 

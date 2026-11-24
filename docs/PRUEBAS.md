@@ -44,6 +44,8 @@ Sale con código 1 si algo falla.
 - [ ] Documentos: subir una nómina a un profesor y ver su estado de firma; abrir original y firmado.
 - [ ] Informes de jornada, planilla, ausencias; aprobar días libres.
 - [ ] Zonas: alta, QR, regenerar secreto.
+- [ ] Prácticas: marcar a una cuenta «en prácticas» en Usuarios; con esa cuenta registrar una práctica (09:30–12:00 = 2,5 h) y ver el total; como administración escribir la observación, descargar la planilla en PDF y comprobar el bloque de firma y sello; cerrar la planilla y ver que la persona ya no puede cambiar nada.
+- [ ] Clases → Horas por profesor: lista con fila desplegable; «Ocultar sin horas cargadas» y buscador.
 - [ ] Bonos: emitir un bono en horas con vencimiento a 6 meses y una giftcard en euros; buscar por código; consumir con referencia de reserva; devolver; anular y reactivar; imprimir la ficha y exportar el CSV; ver «Bonos que vencen en 30 días» en el panel.
 - [ ] Solicitudes aprobadas: «Marcar pasado a planning» y «Quitar marca»; el panel muestra las que faltan.
 - [ ] Config → Módulos → apagar «Fichaje horario»: desaparecen Fichar, Presencia y Zonas y el reloj del empleado; al encenderlo vuelve todo.

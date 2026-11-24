@@ -23,6 +23,7 @@ model Profesor {
   tarifaHora       Float?
   adheridoAt       DateTime?
   esPrincipal      Boolean  @default(false)
+  enPracticas      Boolean  @default(false) // persona que acumula horas de prácticas para obtener su titulación
   colaboradorId    String?  // solo cuentas con role COLABORADOR: la entidad a la que representan
   colaborador      Colaborador? @relation(fields: [colaboradorId], references: [id])
   createdAt        DateTime @default(now())
@@ -39,6 +40,8 @@ model Profesor {
   aceptaciones             AceptacionLegal[]
   notificacionesRecibidas  Notificacion[] @relation("NotifRecibidas")
   suscripcionesPush        SuscripcionPush[]
+  practicas                PracticaRegistro[]
+  planillaPracticas        PlanillaPracticas?
   notificacionesEnviadas   Notificacion[] @relation("NotifEnviadas")
 }
 
@@ -451,4 +454,36 @@ model MovimientoBono {
   createdAt     DateTime @default(now())
 
   @@index([bonoId, createdAt])
+}
+
+// Prácticas de formación: horas que una persona recién titulada debe sumar para acreditar su título.
+// La escuela firma y sella la planilla (PDF) para entregarla a la entidad que emite la titulación.
+model PracticaRegistro {
+  id          String   @id @default(uuid())
+  profesorId  String
+  profesor    Profesor @relation(fields: [profesorId], references: [id], onDelete: Cascade)
+  fecha       String   // AAAA-MM-DD
+  inicio      String   // HH:MM
+  fin         String   // HH:MM
+  horas       Float    // calculadas: fin − inicio
+  tipo        String   // PARTICULAR · GRUPAL · CLUB · CAMPAMENTO · CHIKIMOTION · COLEGIO
+  supervisor  String   // profesor o coordinador con quien hizo la práctica
+  notas       String?
+  creadoPorId String?  // quién lo registró (la propia persona o administración)
+  createdAt   DateTime @default(now())
+
+  @@index([profesorId, fecha])
+}
+
+model PlanillaPracticas {
+  id             String   @id @default(uuid())
+  profesorId     String   @unique
+  profesor       Profesor @relation(fields: [profesorId], references: [id], onDelete: Cascade)
+  titulacion     String?  // título que se está acreditando
+  entidad        String?  // autoridad o entidad que emite la titulación
+  horasRequeridas Float?
+  observacion    String?  // la añade administración y sale en el PDF
+  cerrada        Boolean  @default(false) // con la planilla cerrada la persona ya no puede modificar sus registros
+  cerradaAt      DateTime?
+  updatedAt      DateTime @updatedAt
 }

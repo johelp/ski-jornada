@@ -739,3 +739,70 @@ header.topbar { padding-left: max(12px, env(safe-area-inset-left)); padding-righ
 .guia-num { flex: none; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--primary); color: #fff; display: inline-grid; place-items: center; font-size: .8rem; }
 .guia-consejos { margin: .75rem 0 0; padding-left: 1.1rem; font-size: .82rem; color: var(--text-muted); line-height: 1.45; }
 @media (max-width: 420px) { .guia-paso { grid-template-columns: 5.5rem 1fr; gap: .6rem; } }
+
+/* ===== Control de horas: lista compacta con fila desplegable ===== */
+.horas-barra { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin: 4px 0 8px; }
+.horas-barra input[type="search"] { flex: 1 1 180px; min-width: 0; }
+.horas-filtro { display: inline-flex; gap: 8px; align-items: center; font-size: 0.92rem; cursor: pointer; }
+.horas-totales { margin: 0 0 8px; }
+.lista-horas { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border, #e2e8f0); border-radius: 12px; overflow: hidden; background: var(--surface, #fff); }
+.lista-horas-cab, .fila-horas-cab { display: grid; grid-template-columns: minmax(0, 1fr) 64px 110px 24px; gap: 8px; align-items: center; padding: 0 12px; }
+.lista-horas-cab { min-height: 34px; font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted, #64748b); background: #f8fafc; border-bottom: 1px solid var(--border, #e2e8f0); }
+.lista-horas .col-ext { display: none; }
+.fila-horas { border-bottom: 1px solid var(--border, #e2e8f0); }
+.fila-horas:last-child { border-bottom: 0; }
+.fila-horas-cab { width: 100%; min-height: 52px; border: 0; background: transparent; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.fila-horas-cab:hover { background: #f8fafc; }
+.fila-horas.abierta { background: #f8fafc; }
+.fila-horas.abierta .fila-horas-cab { border-bottom: 1px solid var(--border, #e2e8f0); }
+.fh-nombre { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fh-horas { font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
+.fh-estado { justify-self: start; }
+.fh-sin { font-size: 0.8rem; color: var(--text-muted, #64748b); }
+.fh-flecha { font-size: 0.7rem; color: var(--text-muted, #64748b); text-align: center; }
+.fila-horas.vacia .fh-nombre { font-weight: 500; color: var(--text-muted, #64748b); }
+.fila-horas-cuerpo { padding: 12px; }
+.fila-horas-cuerpo .detalle-prof { margin-top: 0; border-top: 0; padding-top: 0; }
+.fh-resumen { margin: 0 0 10px; }
+@media (min-width: 760px) {
+  .lista-horas-cab, .fila-horas-cab { grid-template-columns: minmax(0, 1fr) 80px 70px 110px 150px 24px; }
+  .lista-horas .col-ext { display: block; text-align: right; font-variant-numeric: tabular-nums; }
+}
+
+/* ===== Prácticas de formación ===== */
+.practicas-horas { margin: 2px 0 10px; font-size: 1.05rem; }
+.practicas-barra { height: 10px; border-radius: 99px; background: #e2e8f0; overflow: hidden; margin: 12px 0 6px; }
+.practicas-barra span { display: block; height: 100%; background: var(--success, #15803d); border-radius: 99px; transition: width .3s; }
+.practicas-cab { grid-template-columns: minmax(0, 1fr) 96px 64px; }
+.practicas-cab .practicas-acc { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; padding-bottom: 8px; }
+.practicas-fila .practicas-extra { margin: -4px 12px 8px; }
+.lista-horas-cab.practicas-cab > span:last-child { display: none; }
+@media (min-width: 760px) {
+  .practicas-cab { grid-template-columns: minmax(0, 1.2fr) 110px 70px 110px minmax(0, 1fr) 150px; }
+  .practicas-cab .practicas-acc { grid-column: auto; padding: 0; }
+  .lista-horas-cab.practicas-cab > span:last-child { display: block; }
+  .practicas-fila .practicas-extra { display: none; }
+}
+@media (max-width: 759px) { .practicas-fila .practicas-cab .col-ext { display: none; } }
+
+/* ===== Cargar clase: formulario compacto (cabe en una pantalla de móvil sin hacer scroll) ===== */
+.form-clase { padding: 12px 14px 14px; }
+.form-clase h2 { font-size: 1rem; margin: 0 0 6px; min-height: 34px; display: flex; align-items: center; }
+.form-clase .chip { min-height: 40px; padding: 0 12px; font-size: 0.9rem; }
+.form-clase .form-group { margin-bottom: 10px; }
+.form-clase label { font-size: 0.8rem; margin-bottom: 4px; }
+.form-clase .seg button { min-height: 40px; }
+.form-clase .horas-grid { grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.form-clase .horas-grid .chip-btn { min-height: 42px; font-size: 0.95rem; }
+.form-clase select, .form-clase input[type=text], .form-clase input[type=number], .form-clase input[type=date] { min-height: 44px; }
+.chips-fila { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.chips-fila::-webkit-scrollbar { display: none; }
+.chips-fila .chip { flex: none; min-height: 40px; }
+.form-clase .nota-mas { min-height: 32px; font-size: 0.9rem; margin: 0 0 6px; }
+.form-clase .ultima-carga { margin: 0 0 6px; padding: 0 10px; min-height: 34px; }
+.form-clase .ultima-carga .enlace-sutil { min-height: 34px; }
+.form-clase .action-buttons { margin-top: 4px; }
+.form-clase .btn-primary { width: 100%; min-height: 48px; }
+.btn-primary.btn-exito, .btn-primary.btn-exito:disabled { background: var(--success, #15803d); border-color: var(--success, #15803d); color: #fff; opacity: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; animation: exito-pop .25s ease-out; }
+@keyframes exito-pop { from { transform: scale(.97); } to { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .btn-primary.btn-exito { animation: none; } }

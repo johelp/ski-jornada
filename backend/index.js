@@ -229,7 +229,7 @@ const _cacheUsuarios = new Map();
 async function usuarioVigente(id) {
   const c = _cacheUsuarios.get(id);
   if (c && Date.now() - c.at < 10000) return c.u;
-  const u = await prisma.profesor.findUnique({ where: { id }, select: { id: true, email: true, role: true, activo: true, esPrincipal: true } });
+  const u = await prisma.profesor.findUnique({ where: { id }, select: { id: true, email: true, role: true, activo: true, esPrincipal: true, enPracticas: true } });
   _cacheUsuarios.set(id, { at: Date.now(), u });
   return u;
 }
@@ -244,7 +244,7 @@ const auth = async (req, res, next) => {
   try {
     const u = await usuarioVigente(payload.userId);
     if (!u || !u.activo) return res.status(401).json({ error: 'Cuenta desactivada o inexistente' });
-    req.user = { userId: u.id, email: u.email, role: u.role, esPrincipal: u.esPrincipal };
+    req.user = { userId: u.id, email: u.email, role: u.role, esPrincipal: u.esPrincipal, enPracticas: u.enPracticas };
     // Una cuenta de colaborador solo llega a su propio portal, a sus avisos y a lo básico de la sesión
     if (u.role === 'COLABORADOR' && !/^\/api\/(auth|colaborador|notificaciones|config|legal)(\/|$)/.test(req.originalUrl.split('?')[0]))
       return res.status(403).json({ error: 'No autorizado para esta cuenta' });
@@ -291,6 +291,7 @@ const DOCUMENTOS_ON = process.env.DOCUMENTOS_HABILITADOS !== 'false';
 // Firma dibujada en pantalla (firma electrónica simple, sin certificado); se puede apagar por despliegue
 const FIRMA_PANTALLA_ON = process.env.FIRMA_PANTALLA_HABILITADA !== 'false';
 const MODULOS = {
+  practicas:     { nombre: 'Prácticas de formación', rutas: [/^\/api\/practicas(\/|$)/, /^\/api\/admin\/practicas(\/|$)/] },
   bonos:         { nombre: 'Bonos y giftcards', rutas: [/^\/api\/admin\/bonos(\/|$)/] },
   fichaje:       { nombre: 'Fichaje horario', rutas: [/^\/api\/fichaje(\/|$)/, /^\/api\/zonas(\/|$)/, /^\/api\/admin\/(zonas|fichajes|fichajes-activos)(\/|$)/] },
   clases:        { nombre: 'Clases y primas', rutas: [/^\/api\/(admin\/)?clases(\/|$)/] },
@@ -342,7 +343,7 @@ const firmarSesion = u => jwt.sign(
 const perfilSesion = u => ({
   id: u.id, nombre: u.nombre, apellidos: u.apellidos, email: u.email,
   role: u.role, tipoJornada: u.tipoJornada, horasContrato: u.horasContrato,
-  telefono: u.telefono, horaRecordatorio: u.horaRecordatorio, tarifaHora: u.tarifaHora, esPrincipal: u.esPrincipal, avisosWhatsapp: u.avisosWhatsapp,
+  telefono: u.telefono, horaRecordatorio: u.horaRecordatorio, tarifaHora: u.tarifaHora, esPrincipal: u.esPrincipal, enPracticas: u.enPracticas, avisosWhatsapp: u.avisosWhatsapp,
 });
 
 // Crea el enlace y lo envía por email. `invitacion` cambia el texto para altas nuevas.
@@ -989,7 +990,7 @@ app.get('/api/admin/profesores', auth, adminOnly, async (req, res) => {
       select: {
         id: true, nombre: true, apellidos: true, email: true,
         tipoJornada: true, horasContrato: true, role: true, activo: true,
-        createdAt: true, telefono: true, horaRecordatorio: true, tarifaHora: true, adheridoAt: true, esPrincipal: true,
+        createdAt: true, telefono: true, horaRecordatorio: true, tarifaHora: true, adheridoAt: true, esPrincipal: true, enPracticas: true,
       },
       orderBy: { apellidos: 'asc' },
     });
@@ -999,7 +1000,7 @@ app.get('/api/admin/profesores', auth, adminOnly, async (req, res) => {
 
 app.post('/api/admin/profesores', auth, adminOnly, async (req, res) => {
   try {
-    const { nombre, apellidos, email, tipoJornada, horasContrato, role, telefono } = req.body;
+    const { nombre, apellidos, email, tipoJornada, horasContrato, role, telefono, enPracticas } = req.body;
     const esAdminNuevo = role === 'ADMIN';
     if (esAdminNuevo && !req.user.esPrincipal) return res.status(403).json({ error: 'Solo la cuenta principal puede crear administradores' });
     // Una cuenta de administración puede ser de empresa (sin apellidos); un profesor necesita nombre y apellidos
@@ -1017,6 +1018,7 @@ app.post('/api/admin/profesores', auth, adminOnly, async (req, res) => {
         horasContrato: parseInt(horasContrato) || 35,
         role: role === 'ADMIN' ? 'ADMIN' : 'PROFESOR',
         telefono: telefono || null,
+        enPracticas: role !== 'ADMIN' && enPracticas === true,
       },
     });
     enviarMagicLink(nuevo, { invitacion: true }).catch(console.error);
@@ -1026,7 +1028,7 @@ app.post('/api/admin/profesores', auth, adminOnly, async (req, res) => {
       usuario: {
         id: nuevo.id, nombre, apellidos, email: nuevo.email,
         tipoJornada: nuevo.tipoJornada, horasContrato: nuevo.horasContrato,
-        role: nuevo.role, telefono: nuevo.telefono,
+        role: nuevo.role, telefono: nuevo.telefono, enPracticas: nuevo.enPracticas,
       },
     });
   } catch (err) {
@@ -1037,7 +1039,7 @@ app.post('/api/admin/profesores', auth, adminOnly, async (req, res) => {
 
 app.put('/api/admin/profesores/:id', auth, adminOnly, async (req, res) => {
   try {
-    const { nombre, apellidos, tipoJornada, horasContrato, activo, telefono, horaRecordatorio, tarifaHora } = req.body;
+    const { nombre, apellidos, tipoJornada, horasContrato, activo, telefono, horaRecordatorio, tarifaHora, enPracticas } = req.body;
     const data = {};
     if (nombre           !== undefined) data.nombre           = nombre;
     if (apellidos        !== undefined) data.apellidos        = apellidos;
@@ -1053,6 +1055,7 @@ app.put('/api/admin/profesores/:id', auth, adminOnly, async (req, res) => {
       }
     }
     if (telefono         !== undefined) data.telefono         = telefono || null;
+    if (enPracticas      !== undefined) data.enPracticas      = enPracticas === true;
     if (horaRecordatorio !== undefined) data.horaRecordatorio = horaRecordatorio;
     if (tarifaHora       !== undefined) data.tarifaHora       = (tarifaHora === '' || tarifaHora === null || isNaN(parseFloat(tarifaHora))) ? null : Math.max(0, parseFloat(tarifaHora));
     const prof = await prisma.profesor.update({ where: { id: req.params.id }, data });
@@ -1063,7 +1066,7 @@ app.put('/api/admin/profesores/:id', auth, adminOnly, async (req, res) => {
       profesor: {
         id: prof.id, nombre: prof.nombre, apellidos: prof.apellidos, email: prof.email,
         tipoJornada: prof.tipoJornada, horasContrato: prof.horasContrato,
-        role: prof.role, activo: prof.activo, telefono: prof.telefono, horaRecordatorio: prof.horaRecordatorio,
+        role: prof.role, activo: prof.activo, telefono: prof.telefono, horaRecordatorio: prof.horaRecordatorio, enPracticas: prof.enPracticas,
       },
     });
   } catch (err) { res.status(500).json({ error: 'Error actualizando profesor' }); }
@@ -2314,6 +2317,17 @@ app.delete('/api/clases/:id', auth, async (req, res) => {
 });
 
 // Informe del mes de un profesor (propio; el admin puede pedir ?profesorId=)
+// Ejecuta fn sobre cada elemento con un máximo de `n` a la vez. Con SQLite y el pool de Prisma, lanzar cientos de consultas a la vez
+// (un informe por profesor × 5 consultas) agota las conexiones y algunas peticiones fallan de forma intermitente.
+async function enLotes(items, n, fn) {
+  const out = new Array(items.length);
+  let i = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+    while (i < items.length) { const k = i++; out[k] = await fn(items[k], k); }
+  }));
+  return out;
+}
+
 async function construirInformeClases(profesorId, mes) {
   const [profesor, clases, conf, primasCat, revision] = await Promise.all([
     prisma.profesor.findUnique({ where: { id: profesorId }, select: { id: true, nombre: true, apellidos: true, email: true, tarifaHora: true } }),
@@ -2388,7 +2402,7 @@ app.get('/api/clases/periodo', auth, async (req, res) => {
     const meses = [];
     for (let [y, m] = desde.split('-').map(Number); `${y}-${String(m).padStart(2, '0')}` <= hasta && meses.length < 24; m === 12 ? (y++, m = 1) : m++)
       meses.push(`${y}-${String(m).padStart(2, '0')}`);
-    const informes = await Promise.all(meses.map(mes => construirInformeClases(pid, mes)));
+    const informes = await enLotes(meses, 3, mes => construirInformeClases(pid, mes));
     if (!informes[0]) return res.status(404).json({ error: 'Profesor no encontrado' });
     const filas = informes.map((i, k) => ({ mes: meses[k], horas: i.totalHoras, clases: i.detalle.length, importe: i.importeTotal, confirmado: i.confirmado }));
     const conImporte = filas.some(f => f.importe != null);
@@ -2453,7 +2467,7 @@ app.get('/api/admin/clases/resumen/:mes', auth, adminOnly, async (req, res) => {
     const profesores = await prisma.profesor.findMany({
       where: { activo: true, role: 'PROFESOR' }, orderBy: { apellidos: 'asc' }, select: { id: true },
     });
-    const informes = await Promise.all(profesores.map(p => construirInformeClases(p.id, mes)));
+    const informes = await enLotes(profesores, 4, p => construirInformeClases(p.id, mes));
     res.json(informes.map(i => ({
       id: i.profesor.id, nombre: i.profesor.nombre, apellidos: i.profesor.apellidos,
       totalHoras: i.totalHoras, cantidadClases: i.detalle.length, diasConClases: i.diasConClases,
@@ -2531,6 +2545,122 @@ app.post('/api/admin/clases/reabrir', auth, adminOnly, async (req, res) => {
     emitirEvento('clases.mes_reabierto', { profesorId, mes });
     res.json({ success: true });
   } catch { res.status(500).json({ error: 'Error reabriendo el mes' }); }
+});
+
+// ============ PRÁCTICAS DE FORMACIÓN ============
+// Personas recién tituladas que suman horas de práctica para acreditar su título. Registran fecha, inicio, fin (las horas se calculan),
+// tipo de clase y profesor/coordinador; administración añade una observación y descarga la planilla (PDF) para firmarla y sellarla.
+// Ver docs/PRACTICAS.md.
+const practicasLib = require('./practicas');
+const practicasTipos = Object.entries(practicasLib.TIPOS).map(([id, nombre]) => ({ id, nombre }));
+const soloEnPracticas = (req, res, next) => (req.user.enPracticas ? next() : res.status(403).json({ error: 'Tu cuenta no está en modo prácticas' }));
+
+async function datosPracticas(profesorId, { conObservacion }) {
+  const [profesor, registros, planilla] = await Promise.all([
+    prisma.profesor.findUnique({ where: { id: profesorId }, select: { id: true, nombre: true, apellidos: true, email: true, enPracticas: true, activo: true } }),
+    prisma.practicaRegistro.findMany({ where: { profesorId }, orderBy: [{ fecha: 'asc' }, { inicio: 'asc' }] }),
+    prisma.planillaPracticas.findUnique({ where: { profesorId } }),
+  ]);
+  if (!profesor) return null;
+  const pl = planilla || { titulacion: null, entidad: null, horasRequeridas: null, observacion: null, cerrada: false, cerradaAt: null };
+  return {
+    profesor, tipos: practicasTipos, registros,
+    planilla: conObservacion ? pl : { titulacion: pl.titulacion, entidad: pl.entidad, horasRequeridas: pl.horasRequeridas, cerrada: pl.cerrada },
+    resumen: practicasLib.resumen(registros, pl.horasRequeridas),
+  };
+}
+
+// Crea o edita un registro de `profesorId`. `porAdmin` permite tocar una planilla cerrada.
+async function guardarPractica(req, res, { profesorId, id, porAdmin }) {
+  const previo = id ? await prisma.practicaRegistro.findUnique({ where: { id } }) : null;
+  if (id && (!previo || previo.profesorId !== profesorId)) return res.status(404).json({ error: 'Registro no encontrado' });
+  const pl = await prisma.planillaPracticas.findUnique({ where: { profesorId } });
+  if (pl?.cerrada && !porAdmin) return res.status(409).json({ error: 'La planilla está cerrada: pídele a administración que la reabra para cambiar registros' });
+  const v = practicasLib.validarRegistro(req.body, { base: previo || {} });
+  if (v.error) return res.status(400).json({ error: v.error });
+  const mismos = await prisma.practicaRegistro.findMany({ where: { profesorId, fecha: v.data.fecha } });
+  const choque = practicasLib.solapa(mismos, v.data, id);
+  if (choque) return res.status(409).json({ error: `Se solapa con otra práctica de ese día (${choque.inicio}–${choque.fin})` });
+  const reg = id
+    ? await prisma.practicaRegistro.update({ where: { id }, data: v.data })
+    : await prisma.practicaRegistro.create({ data: { ...v.data, profesorId, creadoPorId: req.user.userId } });
+  if (porAdmin) await auditar(req, id ? 'practicas.editar' : 'practicas.registrar', { id: profesorId }, { fecha: reg.fecha, horas: reg.horas });
+  return res.status(id ? 200 : 201).json(reg);
+}
+async function borrarPractica(req, res, { profesorId, id, porAdmin }) {
+  const previo = await prisma.practicaRegistro.findUnique({ where: { id } });
+  if (!previo || previo.profesorId !== profesorId) return res.status(404).json({ error: 'Registro no encontrado' });
+  const pl = await prisma.planillaPracticas.findUnique({ where: { profesorId } });
+  if (pl?.cerrada && !porAdmin) return res.status(409).json({ error: 'La planilla está cerrada: pídele a administración que la reabra para cambiar registros' });
+  await prisma.practicaRegistro.delete({ where: { id } });
+  if (porAdmin) await auditar(req, 'practicas.borrar', { id: profesorId }, { fecha: previo.fecha, horas: previo.horas });
+  return res.json({ success: true });
+}
+
+// --- La propia persona en prácticas ---
+app.get('/api/practicas/mis', auth, soloEnPracticas, async (req, res) => {
+  try { res.json(await datosPracticas(req.user.userId, { conObservacion: false })); }
+  catch (e) { console.error(e); res.status(500).json({ error: 'Error cargando tus prácticas' }); }
+});
+app.post('/api/practicas', auth, soloEnPracticas, async (req, res) => {
+  try { await guardarPractica(req, res, { profesorId: req.user.userId, porAdmin: false }); }
+  catch (e) { console.error(e); res.status(500).json({ error: 'Error guardando la práctica' }); }
+});
+app.put('/api/practicas/:id', auth, soloEnPracticas, async (req, res) => {
+  try { await guardarPractica(req, res, { profesorId: req.user.userId, id: req.params.id, porAdmin: false }); }
+  catch (e) { console.error(e); res.status(500).json({ error: 'Error guardando la práctica' }); }
+});
+app.delete('/api/practicas/:id', auth, soloEnPracticas, async (req, res) => {
+  try { await borrarPractica(req, res, { profesorId: req.user.userId, id: req.params.id, porAdmin: false }); }
+  catch (e) { console.error(e); res.status(500).json({ error: 'Error borrando la práctica' }); }
+});
+
+// --- Administración ---
+app.get('/api/admin/practicas', auth, adminOnly, async (req, res) => {
+  try {
+    const personas = await prisma.profesor.findMany({
+      where: { activo: true, role: 'PROFESOR', OR: [{ enPracticas: true }, { practicas: { some: {} } }] },
+      select: { id: true, nombre: true, apellidos: true, email: true, enPracticas: true, practicas: { select: { horas: true, tipo: true, fecha: true } }, planillaPracticas: true },
+      orderBy: { apellidos: 'asc' },
+    });
+    res.json({ tipos: practicasTipos, personas: personas.map(p => {
+      const r = practicasLib.resumen(p.practicas, p.planillaPracticas?.horasRequeridas ?? null);
+      return { id: p.id, nombre: p.nombre, apellidos: p.apellidos, email: p.email, enPracticas: p.enPracticas, titulacion: p.planillaPracticas?.titulacion || null, cerrada: !!p.planillaPracticas?.cerrada, totalHoras: r.totalHoras, registros: r.registros, requeridas: r.requeridas, restantes: r.restantes, completa: r.completa, ultima: p.practicas.map(x => x.fecha).sort().pop() || null };
+    }) });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error cargando las prácticas' }); }
+});
+app.get('/api/admin/practicas/:profesorId', auth, adminOnly, async (req, res) => {
+  try {
+    const d = await datosPracticas(req.params.profesorId, { conObservacion: true });
+    if (!d) return res.status(404).json({ error: 'Persona no encontrada' });
+    res.json(d);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error cargando las prácticas' }); }
+});
+app.post('/api/admin/practicas/:profesorId', auth, adminOnly, async (req, res) => {
+  try {
+    if (!(await prisma.profesor.findUnique({ where: { id: req.params.profesorId }, select: { id: true } }))) return res.status(404).json({ error: 'Persona no encontrada' });
+    await guardarPractica(req, res, { profesorId: req.params.profesorId, porAdmin: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error guardando la práctica' }); }
+});
+app.put('/api/admin/practicas/:profesorId/registro/:id', auth, adminOnly, async (req, res) => {
+  try { await guardarPractica(req, res, { profesorId: req.params.profesorId, id: req.params.id, porAdmin: true }); }
+  catch (e) { console.error(e); res.status(500).json({ error: 'Error guardando la práctica' }); }
+});
+app.delete('/api/admin/practicas/:profesorId/registro/:id', auth, adminOnly, async (req, res) => {
+  try { await borrarPractica(req, res, { profesorId: req.params.profesorId, id: req.params.id, porAdmin: true }); }
+  catch (e) { console.error(e); res.status(500).json({ error: 'Error borrando la práctica' }); }
+});
+// Datos de la planilla: titulación, entidad, horas requeridas, observación (sale en el PDF) y cierre (bloquea los cambios de la persona)
+app.put('/api/admin/practicas/:profesorId/planilla', auth, adminOnly, async (req, res) => {
+  try {
+    const { data, error } = practicasLib.validarPlanilla(req.body);
+    if (error) return res.status(400).json({ error });
+    if (!(await prisma.profesor.findUnique({ where: { id: req.params.profesorId }, select: { id: true } }))) return res.status(404).json({ error: 'Persona no encontrada' });
+    if (data.cerrada !== undefined) data.cerradaAt = data.cerrada ? new Date() : null;
+    const pl = await prisma.planillaPracticas.upsert({ where: { profesorId: req.params.profesorId }, create: { profesorId: req.params.profesorId, ...data }, update: data });
+    await auditar(req, data.cerrada === true ? 'practicas.cerrar' : data.cerrada === false ? 'practicas.reabrir' : 'practicas.planilla', { id: req.params.profesorId }, { campos: Object.keys(data) });
+    res.json(pl);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error guardando la planilla' }); }
 });
 
 // ============ BONOS Y GIFTCARDS ============
@@ -2983,7 +3113,7 @@ app.get('/api/v1/informe/:mes', apiAuth('lectura'), async (req, res) => {
     if (req.query.email) where.email = String(req.query.email).toLowerCase();
     const profs = await prisma.profesor.findMany({ where, select: { id: true } });
     const eco = req.apiKey.scopes.includes('economico');
-    const informes = await Promise.all(profs.map(p => construirInformeClases(p.id, req.params.mes)));
+    const informes = await enLotes(profs, 4, p => construirInformeClases(p.id, req.params.mes));
     res.json(informes.filter(i => i.detalle.length || i.confirmado).map(i => {
       const r = eco ? i : sinEconomico(i);
       return { ...r, porDia: undefined };
