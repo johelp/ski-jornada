@@ -54,6 +54,15 @@ Cada cliente tiene su **propio despliegue y base de datos** (ver `MULTI-DESPLIEG
 - Conservación: durante la colaboración y los plazos contables y fiscales (`[plazo]`). Los colaboradores no se borran desde la app, se dejan inactivos.
 - Información: entregar a cada autónomo y a las personas con acceso al portal la información del art. 13.
 
+**Tratamiento 8 (si se usa el módulo) — Prácticas de formación**
+- Finalidad: registrar las horas de prácticas de personas en formación y emitir la planilla que acredita ante la entidad certificadora que las realizaron.
+- Interesados: personas en prácticas.
+- Datos: nombre, correo, titulación y entidad, fecha, horario, tipo de clase, profesor/coordinador, observación de la escuela y horas.
+- Base jurídica: ejecución del contrato o convenio de prácticas (6.1.b) y, en su caso, obligaciones frente a la entidad que emite la titulación (6.1.c).
+- Comunicación: la planilla se entrega a la entidad certificadora a petición de la persona o según el convenio.
+- Conservación: durante las prácticas y el plazo que exija la entidad (`[plazo]`). Los registros no se borran desde la app salvo por administración.
+- Información (art. 13) al empezar las prácticas.
+
 **Tratamiento 7 (si se usa el módulo) — Bonos y giftcards**
 - Finalidad: gestionar bonos y tarjetas regalo (saldo, vencimiento y consumo contra reservas).
 - Interesados: clientes de la escuela (titulares) o quien recibe la tarjeta.

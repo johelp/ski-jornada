@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { generarPDFClases } from './pdfClases';
 import Icono from './Iconos';
+import { conReintentos } from './red';
 
 const eur = n => (n == null ? '—' : `${n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`);
 const nh = n => String(Math.round(Number(n) * 100) / 100).replace('.', ','); // 19.5 → «19,5»
@@ -20,10 +21,11 @@ export const REVISION = {
   COMENTARIO: { label: 'Comentario de administración', clase: 'pendiente' },
   PENDIENTE: { label: 'En revisión', clase: 'pendiente' },
 };
-const HORAS_RAPIDAS = ['0.5', '1', '1.5', '2', '3', '4'];
+// Lo habitual son clases de 2, 3, 4 o 6 h; 1 h y media hora son ajustes o casos especiales y se piden con «Otra»
+const HORAS_RAPIDAS = ['2', '3', '4', '6'];
 const CLAVE_DISC = 'sj-clase-disciplina';
 const recordada = () => { try { return localStorage.getItem(CLAVE_DISC) || ''; } catch { return ''; } };
-const formVacio = () => ({ fecha: hoyISO(), horas: '1', tipoId: '', primaIds: [], notas: '' });
+const formVacio = () => ({ fecha: hoyISO(), horas: '2', tipoId: '', primaIds: [], notas: '' });
 
 // Vista del profesor: cargar clases dadas, consultarlas, confirmar el mes y bajar el informe.
 // Pensada para cargar en segundos desde el móvil: hoy/ayer de un toque, horas con botones, la última disciplina recordada.
@@ -31,20 +33,25 @@ export default function VistaMisClases({ api, h, toast$, config }) {
   const [catalogo, setCatalogo] = useState({ tipos: [], primas: [] });
   const [mes, setMes] = useState(mesActual());
   const [informe, setInforme] = useState(null);
+  const [errorMes, setErrorMes] = useState(false);   // no se pudo cargar el mes (se muestra «Reintentar» en vez de un aviso que desaparece)
   const [form, setForm] = useState(formVacio());
   const [editId, setEditId] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [otroDia, setOtroDia] = useState(false);
   const [otraHora, setOtraHora] = useState(false);
+  const [verNotas, setVerNotas] = useState(false);   // las notas van plegadas para que el formulario quepa sin hacer scroll
+  const [exito, setExito] = useState(false);          // confirmación visible de «clase cargada» (el botón se pone en verde un momento)
   const [ultima, setUltima] = useState(null);          // { id, texto }: última clase cargada, con «Deshacer»
   const [mesPrevio, setMesPrevio] = useState(null);    // mes anterior con clases sin confirmar
   const [confirmando, setConfirmando] = useState(false);
   const temp = useRef(null);
+  const tExito = useRef(null);
 
   const cargarInforme = useCallback(async () => {
-    try { setInforme((await api.get(`/api/clases/informe/${mes}`, { headers: h() })).data); }
-    catch { toast$('No se pudo cargar el mes', 'error'); }
-  }, [mes, api, h, toast$]);
+    setErrorMes(false);
+    try { setInforme((await conReintentos(() => api.get(`/api/clases/informe/${mes}`, { headers: h() }))).data); }
+    catch { setErrorMes(true); }
+  }, [mes, api, h]);
 
   // ¿Quedó el mes anterior sin confirmar? (lo normal a principios de mes)
   const comprobarPrevio = useCallback(async () => {
@@ -55,16 +62,18 @@ export default function VistaMisClases({ api, h, toast$, config }) {
     } catch { setMesPrevio(null); }
   }, [api, h]);
 
-  useEffect(() => {
-    api.get('/api/clases/catalogo', { headers: h() }).then(r => {
+  const [errorCatalogo, setErrorCatalogo] = useState(false);
+  const cargarCatalogo = useCallback(() => {
+    setErrorCatalogo(false);
+    conReintentos(() => api.get('/api/clases/catalogo', { headers: h() })).then(r => {
       setCatalogo(r.data);
       const ultimaDisc = recordada();
       setForm(f => ({ ...f, tipoId: f.tipoId || (r.data.tipos.some(t => t.id === ultimaDisc) ? ultimaDisc : '') }));
-    }).catch(() => toast$('No se pudo cargar el catálogo', 'error'));
-    comprobarPrevio();
-  }, []);
+    }).catch(() => setErrorCatalogo(true));
+  }, [api, h]);
+  useEffect(() => { cargarCatalogo(); comprobarPrevio(); }, []);
   useEffect(() => { cargarInforme(); setConfirmando(false); }, [cargarInforme]);
-  useEffect(() => () => clearTimeout(temp.current), []);
+  useEffect(() => () => { clearTimeout(temp.current); clearTimeout(tExito.current); }, []);
 
   const togglePrima = id => setForm(f => ({
     ...f, primaIds: f.primaIds.includes(id) ? f.primaIds.filter(x => x !== id) : [...f.primaIds, id],
@@ -88,8 +97,10 @@ export default function VistaMisClases({ api, h, toast$, config }) {
         setUltima({ id: r.data.id, texto: `${nombreDisc} · ${nh(horas)} h · ${form.fecha === hoyISO() ? 'hoy' : etiquetaDia(form.fecha)}` });
         temp.current = setTimeout(() => setUltima(null), 12000);
       } else { setUltima(null); toast$('Clase actualizada ✓', 'success'); }
-      setEditId(null); setOtraHora(false);
+      setEditId(null); setOtraHora(false); setVerNotas(false);
       setForm(f => ({ ...formVacio(), tipoId: f.tipoId, fecha: f.fecha }));
+      setExito(true); clearTimeout(tExito.current); tExito.current = setTimeout(() => setExito(false), 2600);
+      try { navigator.vibrate?.(40); } catch { /* sin vibración */ }
       if (form.fecha.slice(0, 7) !== mes) setMes(form.fecha.slice(0, 7)); else cargarInforme();
       comprobarPrevio();
     } catch (err) { toast$(err.response?.data?.error || 'Error al guardar', 'error'); }
@@ -103,7 +114,7 @@ export default function VistaMisClases({ api, h, toast$, config }) {
   };
 
   const editar = c => {
-    setEditId(c.id); setUltima(null);
+    setEditId(c.id); setUltima(null); setExito(false); setVerNotas(!!c.notas);
     setOtroDia(c.fecha !== hoyISO() && c.fecha !== ayerISO());
     setOtraHora(!HORAS_RAPIDAS.includes(String(c.horas)));
     setForm({ fecha: c.fecha, horas: String(c.horas), tipoId: c.tipoId, primaIds: c.primas.map(p => p.id), notas: c.notas || '' });
@@ -147,8 +158,13 @@ export default function VistaMisClases({ api, h, toast$, config }) {
         </div>
       )}
 
-      <form className="card" onSubmit={guardar}>
-        <h2>{editId ? 'Editar clase' : 'Cargar clase'}</h2>
+      <form className="card form-clase" onSubmit={guardar}>
+        {ultima && !editId ? (
+          <div className="ultima-carga" role="status" aria-live="polite">
+            <span><Icono n="check" size={18} /> Cargada: {ultima.texto}</span>
+            <button type="button" className="enlace-sutil" onClick={deshacer}>Deshacer</button>
+          </div>
+        ) : <h2>{editId ? 'Editar clase' : 'Cargar clase'}</h2>}
 
         <div className="form-group"><label id="cl-dia">Día</label>
           <div className="seg" role="group" aria-labelledby="cl-dia">
@@ -165,15 +181,16 @@ export default function VistaMisClases({ api, h, toast$, config }) {
               <button type="button" key={x} className={`chip chip-btn${!verOtra && String(form.horas) === x ? ' chip-on' : ''}`} aria-pressed={!verOtra && String(form.horas) === x}
                 onClick={() => { setOtraHora(false); setForm({ ...form, horas: x }); }}>{x.replace('.', ',')}</button>
             ))}
+            <button type="button" className={`chip chip-btn${verOtra ? ' chip-on' : ''}`} aria-pressed={verOtra} onClick={() => setOtraHora(true)}>Otra</button>
           </div>
-          {verOtra ? (
+          {verOtra && (
             <input type="number" inputMode="decimal" min="0.25" max="12" step="0.25" autoFocus={otraHora} aria-label="Otra cantidad de horas" placeholder="Otra cantidad, p. ej. 2,75"
               value={form.horas} onChange={e => setForm({ ...form, horas: e.target.value })} />
-          ) : <button type="button" className="enlace-sutil" onClick={() => setOtraHora(true)}>Otra cantidad…</button>}
+          )}
         </div>
 
         <div className="form-group"><label id="cl-disc">Disciplina</label>
-          {catalogo.tipos.length <= 5 ? (
+          {catalogo.tipos.length <= 3 ? (
             <div className="chips" role="radiogroup" aria-labelledby="cl-disc">
               {catalogo.tipos.map(t => (
                 <button type="button" key={t.id} role="radio" aria-checked={form.tipoId === t.id}
@@ -192,7 +209,7 @@ export default function VistaMisClases({ api, h, toast$, config }) {
 
         {catalogo.primas.length > 0 && (
           <div className="form-group"><label id="cl-primas">Primas <small>(solo si corresponden)</small></label>
-            <div className="chips" role="group" aria-labelledby="cl-primas">
+            <div className="chips chips-fila" role="group" aria-labelledby="cl-primas">
               {catalogo.primas.map(p => (
                 <button type="button" key={p.id} role="checkbox" aria-checked={form.primaIds.includes(p.id)}
                   className={`chip${form.primaIds.includes(p.id) ? ' chip-on' : ''}`} onClick={() => togglePrima(p.id)}>
@@ -203,20 +220,15 @@ export default function VistaMisClases({ api, h, toast$, config }) {
           </div>
         )}
 
-        <div className="form-group"><label htmlFor="cl-notas">Notas <small>(opcional)</small></label>
-          <input id="cl-notas" type="text" maxLength="300" enterKeyHint="done" value={form.notas} onChange={e => setForm({ ...form, notas: e.target.value })}
-            placeholder="Ej. grupo de niños, reserva #123" /></div>
-
-        {ultima && (
-          <div className="ultima-carga" role="status" aria-live="polite">
-            <span><Icono n="check" size={18} /> Cargada: {ultima.texto}</span>
-            <button type="button" className="enlace-sutil" onClick={deshacer}>Deshacer</button>
-          </div>
-        )}
+        {verNotas || form.notas ? (
+          <div className="form-group"><label htmlFor="cl-notas">Notas <small>(opcional)</small></label>
+            <input id="cl-notas" type="text" maxLength="300" enterKeyHint="done" autoFocus={verNotas && !form.notas} value={form.notas} onChange={e => setForm({ ...form, notas: e.target.value })}
+              placeholder="Ej. grupo de niños, reserva #123" /></div>
+        ) : <button type="button" className="enlace-sutil nota-mas" onClick={() => setVerNotas(true)}>+ Añadir una nota</button>}
 
         <div className="action-buttons">
-          <button className="btn-primary" type="submit" disabled={guardando || !!razon}>
-            {guardando ? 'Guardando…' : razon || (editId ? 'Guardar cambios' : `Cargar clase · ${nh(horas)} h`)}
+          <button className={`btn-primary${exito ? ' btn-exito' : ''}`} type="submit" disabled={guardando || (!!razon && !exito)}>
+            {guardando ? 'Guardando…' : exito ? <><Icono n="check" size={18} /> ¡Clase cargada!</> : razon || (editId ? 'Guardar cambios' : `Cargar clase · ${nh(horas)} h`)}
           </button>
           {editId && <button className="btn-ghost" type="button" onClick={cancelarEdicion}>Cancelar</button>}
         </div>
@@ -230,7 +242,16 @@ export default function VistaMisClases({ api, h, toast$, config }) {
           <button type="button" className="btn-ghost" onClick={() => setMes(mesDe(mes, 1))} disabled={mes >= mesActual()} aria-label="Mes siguiente">›</button>
         </div>
 
-        {!informe ? <p>Cargando…</p> : (
+        {errorMes && !informe && (
+          <div className="revision revision-rechazado" role="alert">
+            <strong>No se pudieron cargar las clases</strong>
+            <p>Revisa tu conexión e inténtalo de nuevo.</p>
+            <button type="button" className="btn-sm" onClick={cargarInforme}>Reintentar</button>
+          </div>
+        )}
+        {errorMes && informe && <p className="form-hint" role="status">Sin conexión con el servidor: se muestran los últimos datos. <button type="button" className="btn-sm" onClick={cargarInforme}>Reintentar</button></p>}
+        {errorCatalogo && <p className="form-hint" role="alert">No se cargaron las disciplinas. <button type="button" className="btn-sm" onClick={cargarCatalogo}>Reintentar</button></p>}
+        {!informe ? (errorMes ? null : <p>Cargando…</p>) : (
           <>
             <div className="resumen-clases">
               <div><strong>{nh(informe.totalHoras)} h</strong><small>{informe.detalle.length} {informe.detalle.length === 1 ? 'clase' : 'clases'} · {informe.diasConClases} {informe.diasConClases === 1 ? 'día' : 'días'}</small></div>

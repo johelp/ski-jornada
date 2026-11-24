@@ -6,6 +6,7 @@ import VistaComparativa from './VistaComparativa';
 
 const eur = n => (n == null ? '—' : `${n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`);
 const fechaCorta = f => { const [, m, d] = f.split('-'); return `${d}/${m}`; };
+const nh = n => String(Math.round(Number(n) * 100) / 100).replace('.', ',');
 const mesActual = () => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; };
 
 // Vista del administrador: resumen mensual por profesor (para cotejar con el planning) y
@@ -13,13 +14,16 @@ const mesActual = () => { const n = new Date(); return `${n.getFullYear()}-${Str
 export default function VistaAdminClases({ api, h, toast$, config }) {
   const [tab, setTab] = useState('resumen');
   const [mes, setMes] = useState(mesActual());
-  const [resumen, setResumen] = useState([]);
+  const [resumenCargado, setResumen] = useState(null); // null = aún cargando
+  const resumen = resumenCargado || [];
   const [detalle, setDetalle] = useState(null);
   const [tipos, setTipos] = useState([]);
   const [primas, setPrimas] = useState([]);
   const [nuevoTipo, setNuevoTipo] = useState('');
   const [notaRev, setNotaRev] = useState('');
   const refDetalle = useRef(null);
+  const [ocultarVacios, setOcultarVacios] = useState(true);
+  const [buscar, setBuscar] = useState('');
   const [nuevaPrima, setNuevaPrima] = useState({ nombre: '', importe: '', modo: 'POR_HORA' });
 
   const err = e => toast$(e.response?.data?.error || 'Error', 'error');
@@ -34,7 +38,7 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
     } catch (e) { err(e); }
   }, []);
 
-  useEffect(() => { setDetalle(null); cargarResumen(); }, [cargarResumen]);
+  useEffect(() => { setDetalle(null); setResumen(null); cargarResumen(); }, [cargarResumen]);
   useEffect(() => { cargarCatalogo(); }, [cargarCatalogo]);
   // Al abrir un profesor, llevar la vista hasta su detalle (se abre debajo de la tabla y, con lista larga o en el móvil, quedaba fuera de pantalla)
   const profesorAbierto = detalle?.profesor?.id;
@@ -88,42 +92,16 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
     a.download = `clases_${mes}.csv`; a.click(); URL.revokeObjectURL(a.href);
   };
 
-  return (
-    <div>
-      <div className="informe-tabs">
-        <button className={`btn-tab${tab === 'resumen' ? ' active' : ''}`} onClick={() => setTab('resumen')}>Horas por profesor</button>
-        <button className={`btn-tab${tab === 'cmp' ? ' active' : ''}`} onClick={() => setTab('cmp')}>Comparar con reservas</button>
-        <button className={`btn-tab${tab === 'config' ? ' active' : ''}`} onClick={() => setTab('config')}>Disciplinas y primas</button>
-      </div>
+  // Lista de control: por defecto solo quien tiene horas cargadas en el mes; se puede ver a todo el equipo
+  const sinHoras = resumen.filter(r => !r.totalHoras && !r.cantidadClases).length;
+  const q = buscar.trim().toLowerCase();
+  const visibles = resumen.filter(r => (!ocultarVacios || r.totalHoras || r.cantidadClases) && (!q || `${r.apellidos} ${r.nombre}`.toLowerCase().includes(q)));
+  const totalHorasMes = visibles.reduce((a, r) => a + (r.totalHoras || 0), 0);
+  const conImporte = visibles.some(r => r.importeTotal != null);
+  const totalImporte = conImporte ? visibles.reduce((a, r) => a + (r.importeTotal || 0), 0) : null;
+  const confirmados = visibles.filter(r => r.confirmado).length;
 
-      {tab === 'resumen' && (
-        <div className="card">
-          <div className="card-header">
-            <h2>Clases impartidas</h2>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <input type="month" value={mes} onChange={e => e.target.value && setMes(e.target.value)} />
-              <button className="btn-sm" onClick={exportarCSV}>CSV</button>
-            </div>
-          </div>
-          <div className="tabla-scroll">
-            <table className="tabla-clases">
-              <thead><tr><th>Profesor</th><th>Horas</th><th>Clases</th><th>Importe</th><th>Estado</th><th>Revisión</th><th /></tr></thead>
-              <tbody>
-                {resumen.map(r => (
-                  <tr key={r.id} className={detalle?.profesor?.id === r.id ? 'fila-sel' : undefined}>
-                    <td>{r.apellidos}, {r.nombre}</td>
-                    <td data-label="Horas">{r.totalHoras}</td><td data-label="Clases">{r.cantidadClases}</td>
-                    <td data-label="Importe">{eur(r.importeTotal)}</td>
-                    <td data-label="Estado"><span className={`estado-badge ${r.confirmado ? 'aprobado' : 'pendiente'}`}>{r.confirmado ? 'Confirmado' : 'Sin confirmar'}</span></td>
-                    <td data-label="Revisión">{r.revisionEstado ? <span className={`estado-badge ${REVISION[r.revisionEstado]?.clase}`}>{REVISION[r.revisionEstado]?.label}</span> : (r.confirmado ? <span className="estado-badge pendiente">Por revisar</span> : '—')}</td>
-                    <td><button className="btn-sm" onClick={() => verDetalle(r.id)} aria-expanded={detalle?.profesor?.id === r.id}>{detalle?.profesor?.id === r.id ? 'Abierto ↓' : 'Ver'}</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {detalle && (
+  const panelDetalle = detalle && (
             <div className="detalle-prof" ref={refDetalle}>
               <div className="card-header">
                 <h3>{detalle.profesor.nombre} {detalle.profesor.apellidos} — {detalle.totalHoras} h {detalle.importeTotal != null && `· ${eur(detalle.importeTotal)}`}</h3>
@@ -191,7 +169,55 @@ export default function VistaAdminClases({ api, h, toast$, config }) {
                 </div>
               )}
             </div>
-          )}
+  );
+
+  return (
+    <div>
+      <div className="informe-tabs">
+        <button className={`btn-tab${tab === 'resumen' ? ' active' : ''}`} onClick={() => setTab('resumen')}>Horas por profesor</button>
+        <button className={`btn-tab${tab === 'cmp' ? ' active' : ''}`} onClick={() => setTab('cmp')}>Comparar con reservas</button>
+        <button className={`btn-tab${tab === 'config' ? ' active' : ''}`} onClick={() => setTab('config')}>Disciplinas y primas</button>
+      </div>
+
+      {tab === 'resumen' && (
+        <div className="card">
+          <div className="card-header">
+            <h2>Clases impartidas</h2>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input type="month" value={mes} onChange={e => e.target.value && setMes(e.target.value)} />
+              <button className="btn-sm" onClick={exportarCSV}>CSV</button>
+            </div>
+          </div>
+          <div className="horas-barra">
+            <label className="horas-filtro"><input type="checkbox" checked={ocultarVacios} onChange={e => setOcultarVacios(e.target.checked)} /> Ocultar sin horas cargadas{sinHoras > 0 ? ` (${sinHoras})` : ''}</label>
+            <input type="search" aria-label="Buscar profesor" placeholder="Buscar profesor" value={buscar} onChange={e => setBuscar(e.target.value)} />
+          </div>
+          <p className="form-hint horas-totales">{visibles.length} de {resumen.length} profesores · <strong>{nh(totalHorasMes)} h</strong>{totalImporte != null && <> · <strong>{eur(totalImporte)}</strong></>} · {confirmados} confirmado{confirmados === 1 ? '' : 's'}</p>
+          {!visibles.length && <p className="empty-state">{resumenCargado === null ? 'Cargando…' : resumen.length ? 'Nadie con horas cargadas este mes. Desmarca «Ocultar sin horas» para ver a todo el equipo.' : 'Aún no hay profesores en el equipo.'}</p>}
+          <ul className="lista-horas">
+            <li className="lista-horas-cab" aria-hidden="true"><span>Profesor</span><span>Horas</span><span className="col-ext">Clases</span><span className="col-ext">Importe</span><span>Estado</span><span /></li>
+            {visibles.map(r => {
+              const abierto = detalle?.profesor?.id === r.id;
+              const rev = r.revisionEstado ? REVISION[r.revisionEstado] : null;
+              return (
+                <li key={r.id} className={`fila-horas${abierto ? ' abierta' : ''}${r.totalHoras ? '' : ' vacia'}`}>
+                  <button type="button" className="fila-horas-cab" onClick={() => (abierto ? setDetalle(null) : verDetalle(r.id))} aria-expanded={abierto}>
+                    <span className="fh-nombre">{r.apellidos}, {r.nombre}</span>
+                    <span className="fh-horas">{r.totalHoras ? `${nh(r.totalHoras)} h` : '—'}</span>
+                    <span className="col-ext">{r.cantidadClases || '—'}</span>
+                    <span className="col-ext">{r.cantidadClases ? eur(r.importeTotal) : '—'}</span>
+                    <span className="fh-estado">{r.cantidadClases ? <span className={`estado-badge ${rev ? rev.clase : r.confirmado ? 'aprobado' : 'pendiente'}`}>{rev ? rev.label.replace(' por administración', '') : r.confirmado ? 'Por revisar' : 'Sin confirmar'}</span> : <span className="fh-sin">Sin horas</span>}</span>
+                    <span className="fh-flecha" aria-hidden="true">{abierto ? '▲' : '▼'}</span>
+                  </button>
+                  {abierto && <div className="fila-horas-cuerpo" ref={refDetalle}>
+                    <p className="form-hint fh-resumen">{r.cantidadClases} clase{r.cantidadClases === 1 ? '' : 's'} en {r.diasConClases} día{r.diasConClases === 1 ? '' : 's'} · {r.confirmado ? `confirmado el ${new Date(r.confirmadoAt).toLocaleDateString('es-ES')}` : 'el profesor aún no confirmó el mes'}</p>
+                    {panelDetalle}
+                  </div>}
+                </li>
+              );
+            })}
+          </ul>
+
         </div>
       )}
 

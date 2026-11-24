@@ -52,6 +52,14 @@ Para la persona o el equipo que administra la plataforma en la escuela. Una guí
 - **Avisos:** a una persona o a todo el equipo (campana + correo).
 - **Documentos** (si el módulo está activo): sube nóminas, contratos y certificados por profesor; ve quién firmó y **si la firma es fiable**: *Firma electrónica íntegra* (certificado emitido por una autoridad; el PDF no se tocó), *Firmado, sin certificado reconocido* (firma digital con certificado propio), *Firmado, sin certificado* (p. ej. firma manuscrita escaneada), *Con cambios tras firmar* o *Firma sin comprobar*. También verás *Firmado en pantalla (recepción)*: el empleado dibujó su firma y se estampó en una página final del PDF; sirve como constancia de recepción y lectura, **no** como firma con certificado (revisa con tu asesor para qué documentos basta). Todos estos cuentan como firmados; solo el primero tiene respaldo de certificado. *Ver comprobación* muestra el firmante, el emisor y la vigencia del certificado. «Íntegra» **no** acredita que el certificado esté validado ante un prestador de confianza. Un PDF modificado después de firmarse se rechaza al subirlo. Solo tú y la persona dueña los veis.
 
+## 6aa. Prácticas de formación (opcional)
+
+Para personas recién tituladas que suman horas para acreditar su título. En *Usuarios* marca a la persona como **en prácticas** (al crearla o con *Editar*). Ella registra cada práctica (fecha, inicio, fin, tipo de clase y profesor/coordinador; las horas se calculan solas). En *Prácticas* ves a cada persona con sus horas y las que faltan; entra para registrar o corregir, indicar titulación, entidad y horas requeridas, escribir la **observación** y **descargar la planilla en PDF** para firmarla y sellarla. **Cerrar la planilla** impide que la persona cambie sus registros (puedes reabrirla). Guía completa: `PRACTICAS.md`.
+
+## 6ab. Control de horas por profesor
+
+*Clases → Horas por profesor.* Lista compacta del mes: cada fila muestra horas y estado; **toca una fila** y se despliega justo debajo el detalle (clases, cotejo con el planning, revisión y notas). **«Ocultar sin horas cargadas»** (activo por defecto) deja solo a quien tiene clases ese mes; desmárcalo para ver a todo el equipo. Con el buscador filtras por nombre; arriba ves el total de horas e importe de lo que se muestra.
+
 ## 6a. Bonos y giftcards (opcional)
 
 *Bonos → + Emitir.* Para clases ya cobradas (p. ej. al cerrar la estación) o tarjetas regalo, en **euros** o en **horas**, con código de seguimiento y vencimiento opcional (meses, días o fecha). Cuando la reserva ya está cargada en tu software de reservas, abre el bono y pulsa **Consumir** indicando la reserva. Puedes devolver saldo (reserva cancelada), editar el titular o el vencimiento, anular con motivo, copiar el código, imprimirlo y exportar todo a CSV. El panel avisa de los que vencen en 30 días. Guía completa: `BONOS.md`.
@@ -69,7 +77,7 @@ Cuenta de horas con escuelas y autónomos que cubren horas o a los que prestamos
 
 ## 6c. Apagar módulos que no usas
 
-*Config → Módulos:* desactiva fichaje, bonos, clases, días libres, documentos, comparativa, integraciones, avisos o colaboradores. Desaparecen del menú y del panel; los datos se conservan y puedes reactivarlos.
+*Config → Módulos:* desactiva fichaje, prácticas, bonos, clases, días libres, documentos, comparativa, integraciones, avisos o colaboradores. Desaparecen del menú y del panel; los datos se conservan y puedes reactivarlos.
 
 ## 7. Integraciones (opcional)
 

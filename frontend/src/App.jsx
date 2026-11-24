@@ -8,6 +8,7 @@ import InformeClases from './InformeClases';
 import VistaIntegraciones from './VistaIntegraciones';
 import VistaFlota from './VistaFlota';
 import VistaBonos from './VistaBonos';
+import VistaPracticas from './VistaPracticas';
 import ImportarLista from './ImportarLista';
 import InstalarBanner from './InstalarBanner';
 import { filaCsv } from './csv';
@@ -282,7 +283,7 @@ function App() {
   const [soloSinPlanning, setSoloSinPlanning]  = useState(false); // solicitudes: solo las aprobadas que faltan pasar a planning
   const [editAdminSol, setEditAdminSol]       = useState(null);   // solicitud (de cualquiera) que administración está editando
   const [mesInforme, setMesInforme] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; });
-  const [nuevoUsuario, setNuevoUsuario] = useState({ nombre: '', apellidos: '', email: '', tipoJornada: 'COMPLETA', horasContrato: 35, role: 'PROFESOR', telefono: '' });
+  const [nuevoUsuario, setNuevoUsuario] = useState({ nombre: '', apellidos: '', email: '', tipoJornada: 'COMPLETA', horasContrato: 35, role: 'PROFESOR', telefono: '', enPracticas: false });
   const [nuevaZona, setNuevaZona]       = useState({ nombre: '', descripcion: '', lat: '', lng: '', radio: 100, validationMode: 'TOTP_GPS' });
   const [qrGenerado, setQrGenerado]     = useState({});
   const [docNuevo, setDocNuevo]         = useState({ profesorId: '', tipo: 'NOMINA', nombre: '', mes: '', file: null });
@@ -757,7 +758,7 @@ function App() {
       await api.post('/api/admin/profesores', nuevoUsuario, { headers: h() });
       toast$('Usuario creado. Se envió la invitación por correo.', 'success', 5000);
       cargarProfesores();
-      setNuevoUsuario({ nombre: '', apellidos: '', email: '', tipoJornada: 'COMPLETA', horasContrato: 35, role: 'PROFESOR', telefono: '' });
+      setNuevoUsuario({ nombre: '', apellidos: '', email: '', tipoJornada: 'COMPLETA', horasContrato: 35, role: 'PROFESOR', telefono: '', enPracticas: false });
     } catch (err) { toast$(err.response?.data?.error || 'Error al crear usuario', 'error'); }
     finally { setCargando(false); }
   };
@@ -955,6 +956,9 @@ function App() {
 
   // ===== NAVEGACIÓN =====
   const docsOn = configEscuela?.documentosHabilitados !== false;
+  // Persona en prácticas (sin rol de administración): solo ve sus prácticas, sus documentos y su perfil
+  const enPracticasSolo = !!user?.enPracticas && user?.role !== 'ADMIN' && configEscuela?.modulos?.practicas !== false;
+  useEffect(() => { if (enPracticasSolo && ['dashboard', 'fichar', 'misclases', 'solicitar', 'informes'].includes(vista)) setVista('practicas'); }, [enPracticasSolo, vista]);
   const fichajeOn = configEscuela?.modulos?.fichaje !== false;
   // Si fichaje se apaga (o se entra por un atajo antiguo /?vista=fichar), no se deja la pantalla en blanco
   useEffect(() => { if (configEscuela && !fichajeOn && ['fichar', 'presencia', 'zonas'].includes(vista)) setVista('dashboard'); }, [configEscuela, fichajeOn, vista]);
@@ -970,11 +974,17 @@ function App() {
         { id: 'colaboradores', icon: '🤝', label: 'Colaboradores', badge: resumenAdmin?.colaboradores?.enRevision || 0 },
         { id: 'zonas',      icon: '📍', label: 'Zonas' },
         { id: 'avisos',     icon: '🔔', label: 'Avisos' },
+        { id: 'practicas',  icon: '🎓', label: 'Prácticas' },
         { id: 'bonos',      icon: '🎟', label: 'Bonos' },
         { id: 'integraciones', icon: '🔗', label: 'Integraciones' },
         ...(user?.esPrincipal && configEscuela?.flotaOn ? [{ id: 'flota', icon: '🛰', label: 'Flota' }] : []),
         { id: 'config',     icon: '🏔', label: 'Config' },
         { id: 'perfil',     icon: '👤', label: 'Mi Perfil' },
+      ]
+    : enPracticasSolo ? [
+        { id: 'practicas', icon: '🎓', label: 'Prácticas' },
+        { id: 'documentos', icon: '📁', label: 'Documentos', badge: misDocsPendientes },
+        { id: 'perfil',     icon: '⚙️', label: 'Mi perfil' },
       ]
     : [
         ...(!esAdmin ? [{ id: 'dashboard', icon: '📊', label: 'Inicio' }] : []),
@@ -987,15 +997,15 @@ function App() {
       ];
 
   // Módulos que administración apagó (y el de documentos, que además se puede apagar por despliegue)
-  const MODULO_DE = { bonos: 'bonos', documentos: 'documentos', clases: 'clases', misclases: 'clases', gestionar: 'libres', solicitar: 'libres', integraciones: 'integraciones', fichar: 'fichaje', presencia: 'fichaje', zonas: 'fichaje', avisos: 'avisos', colaboradores: 'colaboradores' };
+  const MODULO_DE = { practicas: 'practicas', bonos: 'bonos', documentos: 'documentos', clases: 'clases', misclases: 'clases', gestionar: 'libres', solicitar: 'libres', integraciones: 'integraciones', fichar: 'fichaje', presencia: 'fichaje', zonas: 'fichaje', avisos: 'avisos', colaboradores: 'colaboradores' };
   const modulos = configEscuela?.modulos;
   const navItems = navItemsTodos.filter(i => (i.id !== 'documentos' || docsOn) && modulos?.[MODULO_DE[i.id]] !== false);
 
   const ICONO_NAV = {
     dashboard: 'inicio', presencia: 'presencia', gestionar: 'solicitudes', clases: 'clases', informes: 'informe', documentos: 'docs',
-    usuarios: 'usuarios', colaboradores: 'usuarios', zonas: 'zonas', avisos: 'avisos', integraciones: 'enlace', bonos: 'bonos', flota: 'enlace', config: 'config', perfil: 'perfil', fichar: 'reloj', misclases: 'clases', solicitar: 'calendario',
+    usuarios: 'usuarios', colaboradores: 'usuarios', zonas: 'zonas', avisos: 'avisos', integraciones: 'enlace', practicas: 'informe', bonos: 'bonos', flota: 'enlace', config: 'config', perfil: 'perfil', fichar: 'reloj', misclases: 'clases', solicitar: 'calendario',
   };
-  const PRINCIPALES = esAdmin && !modoEmpleado ? ['dashboard', 'clases', 'usuarios', 'informes'] : ['dashboard', 'fichar', 'misclases', 'informes'];
+  const PRINCIPALES = enPracticasSolo ? ['practicas', 'documentos', 'perfil'] : esAdmin && !modoEmpleado ? ['dashboard', 'clases', 'usuarios', 'informes'] : ['dashboard', 'fichar', 'misclases', 'informes'];
   const navPrincipal = PRINCIPALES.map(id => navItems.find(i => i.id === id)).filter(Boolean);
   const navMas = navItems.filter(i => !PRINCIPALES.includes(i.id));
   const irA = (item) => {
@@ -1110,7 +1120,7 @@ function App() {
             <span>Ski Jornada</span>
           </div>
           <div className="topbar-right">
-            {estadoFichaje && (
+            {estadoFichaje && !enPracticasSolo && fichajeOn && (
               <span className={`chip-estado ${estadoFichaje === 'ENTRADA' ? 'dentro' : ''}`} role="status">
                 <span className="punto" />
                 {estadoFichaje === 'ENTRADA'
@@ -2128,6 +2138,10 @@ function App() {
               </div>
               <div className="form-group"><label>Horas/semana</label>
                 <input type="number" min="1" max="40" value={nuevoUsuario.horasContrato} onChange={e => setNuevoUsuario({ ...nuevoUsuario, horasContrato: parseInt(e.target.value) })} /></div>
+              {nuevoUsuario.role === 'PROFESOR' && modulos?.practicas !== false && <label className="check-practicas" style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '4px 0 10px' }}>
+                <input type="checkbox" checked={!!nuevoUsuario.enPracticas} onChange={e => setNuevoUsuario({ ...nuevoUsuario, enPracticas: e.target.checked })} />
+                Persona en prácticas (suma horas para acreditar su titulación)
+              </label>}
               <button onClick={agregarUsuario} disabled={cargando} className="btn-primary">+ Crear usuario</button>
               <p className="form-hint">Se enviará un email con un enlace para entrar (sin contraseña).</p>
             </div>}
@@ -2157,10 +2171,11 @@ function App() {
                         : p.adheridoAt ? <span className="estado-badge aprobado">Activo</span>
                         : <span className="estado-badge pendiente">Invitado · sin entrar</span>}
                       {p.esPrincipal && <span className="badge badge-admin">Principal</span>}
+                      {p.enPracticas && <span className="estado-badge pendiente">En prácticas</span>}
                       <div style={{ display: 'flex', gap: '0.4rem', marginTop: '4px', flexWrap: 'wrap' }}>
                         <button className="btn-sm" onClick={() => {
                           setProfesorEditId(profesorEditId === p.id ? null : p.id);
-                          setProfesorEditData({ nombre: p.nombre, apellidos: p.apellidos, tipoJornada: p.tipoJornada, horasContrato: p.horasContrato, telefono: p.telefono || '', horaRecordatorio: p.horaRecordatorio || '17:00', tarifaHora: p.tarifaHora ?? '', activo: p.activo });
+                          setProfesorEditData({ nombre: p.nombre, apellidos: p.apellidos, tipoJornada: p.tipoJornada, horasContrato: p.horasContrato, telefono: p.telefono || '', horaRecordatorio: p.horaRecordatorio || '17:00', tarifaHora: p.tarifaHora ?? '', activo: p.activo, enPracticas: !!p.enPracticas });
                         }}>
                           {profesorEditId === p.id ? 'Cerrar' : <><Icono n="editar" size={18} /> Editar</>}
                         </button>
@@ -2212,6 +2227,12 @@ function App() {
                             Usuario activo
                           </label>
                         </div>
+                        {p.role === 'PROFESOR' && modulos?.practicas !== false && <div className="form-group">
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                            <input type="checkbox" checked={!!profesorEditData.enPracticas} onChange={e => setProfesorEditData({ ...profesorEditData, enPracticas: e.target.checked })} />
+                            En prácticas (suma horas para acreditar su titulación)
+                          </label>
+                        </div>}
                         <div className="action-buttons">
                           <button className="btn-approve" onClick={guardarEdicionProfesor} disabled={cargando}>Guardar cambios</button>
                           <button className="btn-ghost" onClick={() => setProfesorEditId(null)}>Cancelar</button>
@@ -2446,6 +2467,12 @@ function App() {
         )}
         {esAdmin && !modoEmpleado && vista === 'colaboradores' && (
           <VistaColaboradores api={api} h={h} toast$={toast$} config={configEscuela} />
+        )}
+        {esAdmin && !modoEmpleado && vista === 'practicas' && (
+          <VistaPracticas modo="admin" api={api} h={h} toast$={toast$} config={configEscuela} />
+        )}
+        {enPracticasSolo && vista === 'practicas' && (
+          <VistaPracticas modo="propio" api={api} h={h} toast$={toast$} />
         )}
         {esAdmin && !modoEmpleado && vista === 'bonos' && (
           <VistaBonos api={api} h={h} toast$={toast$} config={configEscuela} />

@@ -754,6 +754,65 @@ const pdf = nombre => {
     check('al encenderlo vuelve a funcionar', (await http('GET', B, { token: admin })).status === 200);
   }
 
+  seccion('6u. Prácticas de formación');
+  {
+    const lib = require('../practicas');
+    check('(lógica) 09:30–11:00 son 1,5 h; fin anterior al inicio y más de 12 h se rechazan', lib.calcularHoras('09:30', '11:00').horas === 1.5 && !!lib.calcularHoras('10:00', '09:00').error && !!lib.calcularHoras('07:00', '20:00').error);
+    check('(lógica) dos prácticas seguidas no se solapan, pero 09:30 dentro de 09:00–10:00 sí', lib.solapa([{ id: 1, fecha: '2026-01-10', inicio: '09:00', fin: '10:00' }], { fecha: '2026-01-10', inicio: '10:00', fin: '11:00' }) === null && !!lib.solapa([{ id: 1, fecha: '2026-01-10', inicio: '09:00', fin: '10:00' }], { fecha: '2026-01-10', inicio: '09:30', fin: '11:00' }));
+    const idP = (await http('GET', '/api/auth/me', { token: prof2 })).data.id;
+    check('sin el modo prácticas, la cuenta no accede a sus prácticas → 403', (await http('GET', '/api/practicas/mis', { token: prof2 })).status === 403);
+    const marca = await http('PUT', `/api/admin/profesores/${idP}`, { token: admin, body: { enPracticas: true } });
+    check('administración marca a una persona como «en prácticas»', marca.status === 200 && marca.data.profesor.enPracticas === true);
+    await new Promise(r => setTimeout(r, 10500)); // la caché de usuarios dura 10 s
+    const hoy = lib.hoyISO(), ayer = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return lib.hoyISO(d); })();
+    const futuro = (() => { const d = new Date(); d.setDate(d.getDate() + 3); return lib.hoyISO(d); })();
+    const mis0 = await http('GET', '/api/practicas/mis', { token: prof2 });
+    check('la persona ve sus prácticas vacías y los 6 tipos de clase', mis0.status === 200 && mis0.data.tipos.length === 6 && mis0.data.resumen.totalHoras === 0 && mis0.data.planilla.observacion === undefined);
+    const nuevo = b => http('POST', '/api/practicas', { token: prof2, body: b });
+    check('rechaza fecha futura, tipo desconocido, sin coordinador y horas inválidas', (await nuevo({ fecha: futuro, inicio: '09:00', fin: '10:00', tipo: 'GRUPAL', supervisor: 'Ana' })).status === 400 && (await nuevo({ fecha: ayer, inicio: '09:00', fin: '10:00', tipo: 'OTRO', supervisor: 'Ana' })).status === 400 && (await nuevo({ fecha: ayer, inicio: '09:00', fin: '10:00', tipo: 'GRUPAL' })).status === 400 && (await nuevo({ fecha: ayer, inicio: '11:00', fin: '10:00', tipo: 'GRUPAL', supervisor: 'Ana' })).status === 400);
+    const r1 = await nuevo({ fecha: ayer, inicio: '09:00', fin: '10:30', tipo: 'grupal', supervisor: 'Ana Coordinadora', notas: 'Nivel iniciación' });
+    check('registra una práctica y las horas se calculan solas (1,5 h)', r1.status === 201 && r1.data.horas === 1.5 && r1.data.tipo === 'GRUPAL' && r1.data.creadoPorId === idP);
+    check('una práctica que se solapa el mismo día → 409', (await nuevo({ fecha: ayer, inicio: '10:00', fin: '11:00', tipo: 'PARTICULAR', supervisor: 'Ana' })).status === 409);
+    const r2 = await nuevo({ fecha: ayer, inicio: '10:30', fin: '12:00', tipo: 'CHIKIMOTION', supervisor: 'Luis' });
+    const r3 = await nuevo({ fecha: hoy, inicio: '09:00', fin: '10:00', tipo: 'COLEGIO', supervisor: 'Marta' });
+    check('registra otras dos (Chikimotion y Colegio) seguidas sin solaparse', r2.status === 201 && r3.status === 201);
+    const ed = await http('PUT', `/api/practicas/${r3.data.id}`, { token: prof2, body: { fin: '11:30', supervisor: 'Marta Ruiz' } });
+    check('edita una práctica propia y se recalculan las horas (2,5 h)', ed.status === 200 && ed.data.horas === 2.5 && ed.data.supervisor === 'Marta Ruiz');
+    const mis1 = (await http('GET', '/api/practicas/mis', { token: prof2 })).data;
+    check('el resumen suma 5,5 h y las reparte por tipo', mis1.resumen.totalHoras === 5.5 && mis1.resumen.porTipo.GRUPAL === 1.5 && mis1.resumen.porTipo.CHIKIMOTION === 1.5 && mis1.resumen.porTipo.COLEGIO === 2.5);
+    check('otra persona no ve ni toca estas prácticas → 403/404', (await http('GET', '/api/practicas/mis', { token: prof })).status === 403 && (await http('PUT', `/api/practicas/${r1.data.id}`, { token: prof, body: { fin: '10:00' } })).status === 403);
+    check('un profesor no entra a la gestión de administración → 403', (await http('GET', '/api/admin/practicas', { token: prof2 })).status === 403);
+
+    const lista = (await http('GET', '/api/admin/practicas', { token: admin })).data;
+    const fila = lista.personas.find(p => p.id === idP);
+    check('administración ve a la persona en prácticas con sus horas', fila && fila.totalHoras === 5.5 && fila.registros === 3 && fila.requeridas === null, JSON.stringify(fila));
+    check('rechaza horas requeridas inválidas', (await http('PUT', `/api/admin/practicas/${idP}/planilla`, { token: admin, body: { horasRequeridas: -4 } })).status === 400);
+    const pl = await http('PUT', `/api/admin/practicas/${idP}/planilla`, { token: admin, body: { titulacion: 'Técnico Deportivo en Esquí Alpino', entidad: 'Consejería de Deportes', horasRequeridas: 8, observacion: 'Realizó las prácticas con aprovechamiento.' } });
+    check('administración guarda titulación, entidad, horas requeridas y observación', pl.status === 200 && pl.data.observacion.startsWith('Realizó') && pl.data.horasRequeridas === 8);
+    const det = (await http('GET', `/api/admin/practicas/${idP}`, { token: admin })).data;
+    check('el detalle de administración incluye la observación y faltan 2,5 h', det.planilla.observacion.startsWith('Realizó') && det.resumen.restantes === 2.5 && det.registros.length === 3);
+    check('la persona ve titulación y horas requeridas, pero no la observación', (await http('GET', '/api/practicas/mis', { token: prof2 })).data.planilla.observacion === undefined && (await http('GET', '/api/practicas/mis', { token: prof2 })).data.planilla.horasRequeridas === 8);
+    const ra = await http('POST', `/api/admin/practicas/${idP}`, { token: admin, body: { fecha: ayer, inicio: '13:00', fin: '15:30', tipo: 'CAMPAMENTO', supervisor: 'Coordinación' } });
+    check('administración también registra prácticas por la persona; completa las 8 h', ra.status === 201 && (await http('GET', `/api/admin/practicas/${idP}`, { token: admin })).data.resumen.completa === true);
+    const cierre = await http('PUT', `/api/admin/practicas/${idP}/planilla`, { token: admin, body: { cerrada: true } });
+    check('al cerrar la planilla, la persona ya no puede cambiar ni borrar → 409', cierre.data.cerrada === true && (await nuevo({ fecha: ayer, inicio: '16:00', fin: '17:00', tipo: 'CLUB', supervisor: 'X' })).status === 409 && (await http('DELETE', `/api/practicas/${r2.data.id}`, { token: prof2 })).status === 409 && (await http('PUT', `/api/practicas/${r2.data.id}`, { token: prof2, body: { fin: '11:00' } })).status === 409);
+    check('administración sí puede corregir con la planilla cerrada', (await http('PUT', `/api/admin/practicas/${idP}/registro/${r2.data.id}`, { token: admin, body: { notas: 'Corregido por administración' } })).status === 200);
+    await http('PUT', `/api/admin/practicas/${idP}/planilla`, { token: admin, body: { cerrada: false } });
+    check('reabierta, la persona puede borrar una práctica propia', (await http('DELETE', `/api/practicas/${r2.data.id}`, { token: prof2 })).status === 200 && (await http('GET', '/api/practicas/mis', { token: prof2 })).data.registros.length === 3);
+    const aud = (await http('GET', '/api/admin/auditoria?limit=300', { token: admin })).data || [];
+    check('el registro de actividad anota planilla, cierre, reapertura y altas de administración', ['practicas.planilla', 'practicas.cerrar', 'practicas.reabrir', 'practicas.registrar'].every(a => aud.some(x => x.accion === a)));
+    const mods = (await http('GET', '/api/admin/modulos', { token: admin })).data;
+    const offAntes = mods.filter(m => !m.activo && !m.bloqueadoPorDespliegue).map(m => m.clave);
+    check('el catálogo de módulos incluye prácticas, activo por defecto', mods.find(m => m.clave === 'practicas')?.activo === true);
+    await http('PUT', '/api/admin/modulos', { token: admin, body: { off: [...new Set([...offAntes, 'practicas'])] } });
+    check('con el módulo apagado las prácticas responden 404', (await http('GET', '/api/practicas/mis', { token: prof2 })).status === 404 && (await http('GET', '/api/admin/practicas', { token: admin })).status === 404);
+    await http('PUT', '/api/admin/modulos', { token: admin, body: { off: offAntes } });
+    // Limpieza: se quita la marca y se borran los registros de prueba
+    await http('PUT', `/api/admin/practicas/${idP}/planilla`, { token: admin, body: { cerrada: false } });
+    for (const r of (await http('GET', `/api/admin/practicas/${idP}`, { token: admin })).data.registros) await http('DELETE', `/api/admin/practicas/${idP}/registro/${r.id}`, { token: admin });
+    await http('PUT', `/api/admin/profesores/${idP}`, { token: admin, body: { enPracticas: false } });
+  }
+
   seccion('7. Limpieza');
   await http('POST', '/api/admin/clases/reabrir', { token: admin, body: { profesorId: me.id, mes: MES } });
   check('elimina la clase de prueba', (await http('DELETE', `/api/clases/${claseId}`, { token: prof })).status === 200);

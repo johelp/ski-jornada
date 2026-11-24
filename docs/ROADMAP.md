@@ -27,6 +27,9 @@ Consulta pública del saldo por el cliente con su código (con límite de intent
 3. **Verificar el envío de correos en producción** (Resend + DNS) y plantilla visual de los correos.
 4. **Backups automáticos** de `prod.db` y `uploads`.
 
+## Pendiente: bucle en el Inicio de una cuenta de administración (reportado el 24/11/2026)
+Reporte: «al agregar a inicio la cuenta de un usuario admin genera un loop infinito y no carga». **No se pudo reproducir** en local (ni en desarrollo ni con el build de producción) ni se ve nada raro en los registros del servidor. Hace falta saber: dispositivo y navegador, si fue con «Añadir a pantalla de inicio» y abrir la app instalada, si el bucle es de recarga constante o de «Cargando panel…», y si ocurre solo con esa cuenta. Pistas a revisar si se confirma: sesión no compartida entre Safari y la app instalada en iPhone (hay que entrar con el código de 6 dígitos), service worker con versión vieja (botón *Actualizar*).
+
 ## Pendiente de diseñar: quién activa los módulos (decisión del 18/11/2026)
 Hoy cualquier administración de la escuela apaga o enciende los módulos (*Config → Módulos*). Para vender por funciones, **la activación debe depender del proveedor**, no del cliente:
 - **Idea:** dos niveles. Lo **contratado** lo fija el proveedor; el cliente solo puede apagar, dentro de lo contratado, lo que no use (nunca encender lo que no contrató).
